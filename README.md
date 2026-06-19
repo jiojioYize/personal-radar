@@ -2,6 +2,12 @@
 
 Personal Radar is a lightweight Cloudflare Workers project for scheduled information radar reports, public daily briefings, and personal push delivery.
 
+## Live Site
+
+- Public radar: <https://personal-radar.jiojioyizeradar.workers.dev>
+- Report archive: <https://personal-radar.jiojioyizeradar.workers.dev/reports>
+- Latest sample report: <https://personal-radar.jiojioyizeradar.workers.dev/reports/skill-radar/2026-06-19>
+
 The project intentionally separates four jobs:
 
 - Codex Automation does the high-intelligence deep dive and recommendation writing.
