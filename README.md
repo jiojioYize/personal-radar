@@ -8,7 +8,7 @@ Open the public radar site:
 
 <https://personal-radar.jiojioyizeradar.workers.dev>
 
-The site shows public reports only. Private reports and secrets are never stored in this GitHub repository.
+The site publishes daily radar reports generated from the current public channels.
 
 ## 中文使用指南
 
