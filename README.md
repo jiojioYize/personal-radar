@@ -6,7 +6,7 @@ Personal Radar is a small system for publishing AI-assisted daily radar reports.
 
 Open the public radar site:
 
-<https://personal-radar.jiojioyizeradar.workers.dev>
+<https://radar.dailyingest.cn/>
 
 The site publishes daily radar reports generated from the current public channels.
 
@@ -26,7 +26,7 @@ Personal Radar 可以帮你做两件事：
 直接访问：
 
 ```text
-https://personal-radar.jiojioyizeradar.workers.dev
+https://radar.dailyingest.cn
 ```
 
 网页默认显示中文。如果报告包含英文版本，可以在页面上切换到 English。
@@ -187,7 +187,7 @@ The current example channel is `skill-radar`, which discovers practical AI-agent
 Open:
 
 ```text
-https://personal-radar.jiojioyizeradar.workers.dev
+https://radar.dailyingest.cn
 ```
 
 Pages default to Chinese. If an English version is available, use the page language switch.

@@ -1,6 +1,6 @@
 param(
   [string]$AutomationId = "skill-radar",
-  [string]$WorkerUrl = "https://personal-radar.jiojioyizeradar.workers.dev",
+  [string]$WorkerUrl = "https://radar.dailyingest.cn",
   [string]$SecretsPath = (Join-Path (Resolve-Path ".") ".secrets.local"),
   [string]$StatePath = (Join-Path (Resolve-Path ".") ".codex-forwarder-state.json"),
   [string]$CodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }),

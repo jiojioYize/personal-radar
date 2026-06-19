@@ -15,7 +15,7 @@ The user wants practical recommendations that are worth installing, adapting, wa
 ## Current Architecture
 
 - Cloudflare Worker project path: `C:\Users\Zander Sun\personal-radar`
-- Worker URL: `https://personal-radar.jiojioyizeradar.workers.dev`
+- Worker URL: `https://radar.dailyingest.cn/`
 - Stable push channel: PushPlus
 - KV binding: `RADAR_STATE`
 - Main Worker role: stable scheduled radar delivery
