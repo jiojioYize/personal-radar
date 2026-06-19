@@ -1,0 +1,18 @@
+﻿name = "personal-radar"
+main = "src/index.js"
+compatibility_date = "2026-06-18"
+workers_dev = true
+preview_urls = false
+
+# Cloudflare cron expressions use UTC.
+# This wakes the Worker daily at 08:00 Beijing time / 00:00 UTC.
+[triggers]
+crons = ["0 0 * * *"]
+
+[vars]
+RADAR_CHANNELS = "skill-radar"
+
+[[kv_namespaces]]
+binding = "RADAR_STATE"
+id = "7ed67f3d3014490784991ed15e41604e"
+preview_id = "91d71da0ab954ca087a79c61ee7e21ab"
