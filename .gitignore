@@ -2,4 +2,6 @@
 .wrangler/
 .dev.vars
 .secrets.local
+.codex-forwarder-state.json
+.codex-forwarder-pending.json
 .DS_Store
