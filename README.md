@@ -41,7 +41,7 @@ This keeps your personal content out of GitHub while still allowing the Worker t
 - `POST /ingest-report`: accepts a protected report, stores it in KV, deduplicates it, and sends PushPlus/Telegram if configured.
 - `GET /`: renders the latest public report from KV.
 - `GET /reports`: renders public report history.
-- Cloudflare Cron can run the Worker-native radar job.
+- Worker-native `/run` is kept as a manual dry-run/debug endpoint; production reports come through `/ingest-report`.
 - PushPlus adapter sends Markdown reports to WeChat through PushPlus.
 - Local Codex forwarder can POST Codex Automation reports to the Worker from the user's machine.
 
@@ -64,7 +64,7 @@ http://localhost:8787/run
 npm run deploy
 ```
 
-Cloudflare cron schedules use UTC. The current config runs daily at 00:00 UTC, which is 08:00 Beijing time.
+Cloudflare Cron is intentionally disabled in `wrangler.toml`. The production pipeline is Codex Automation -> local forwarder -> Worker `/ingest-report`; this avoids lower-quality Worker-native search pushing duplicate reports.
 
 ## Worker Secrets
 

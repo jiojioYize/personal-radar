@@ -4,11 +4,6 @@ compatibility_date = "2026-06-18"
 workers_dev = true
 preview_urls = false
 
-# Cloudflare cron expressions use UTC.
-# This wakes the Worker daily at 08:00 Beijing time / 00:00 UTC.
-[triggers]
-crons = ["0 0 * * *"]
-
 [vars]
 RADAR_CHANNELS = "skill-radar"
 
