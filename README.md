@@ -123,6 +123,12 @@ Payload fields:
 - `generatedAt`: ISO timestamp; defaults to ingest time.
 - `sourceRunId`: unique producer run id used for duplicate protection.
 
+Time zone:
+
+- `RADAR_TIME_ZONE` is set to `Asia/Shanghai` in `wrangler.toml`.
+- Report history dates and public archive URLs use the configured time zone, not UTC.
+- The Windows forwarder task is scheduled at local Beijing time 08:20.
+
 Deduplication rules:
 
 - The same `sourceRunId` is accepted once.

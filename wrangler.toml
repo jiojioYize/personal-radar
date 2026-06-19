@@ -6,6 +6,7 @@ preview_urls = false
 
 [vars]
 RADAR_CHANNELS = "skill-radar"
+RADAR_TIME_ZONE = "Asia/Shanghai"
 
 [[kv_namespaces]]
 binding = "RADAR_STATE"

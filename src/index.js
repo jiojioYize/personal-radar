@@ -3,6 +3,7 @@ import { CHANNELS } from "./channels.js";
 const GITHUB_SEARCH_URL = "https://api.github.com/search/repositories";
 const DEFAULT_USER_AGENT = "personal-radar/0.1";
 const DEFAULT_CATEGORY = "skill-radar";
+const DEFAULT_TIME_ZONE = "Asia/Shanghai";
 const REPORT_INDEX_LIMIT = 60;
 
 export default {
@@ -408,10 +409,10 @@ async function sendTelegram(env, report) {
 
 async function storeReport(env, report) {
   if (!env.RADAR_STATE) {
-    return { duplicate: false, report: reportMeta(report) };
+    return { duplicate: false, report: reportMeta(report, env) };
   }
 
-  const meta = reportMeta(report);
+  const meta = reportMeta(report, env);
   const reportKey = reportStorageKey(meta.category, meta.date);
 
   if (meta.sourceRunId) {
@@ -443,14 +444,16 @@ async function storeReport(env, report) {
   return { duplicate: false, report: meta };
 }
 
-function reportMeta(report) {
+function reportMeta(report, env = {}) {
   const generatedAt = normalizeIsoDate(report.generatedAt);
+  const timeZone = report.timeZone || env.RADAR_TIME_ZONE || DEFAULT_TIME_ZONE;
   return {
     title: report.title,
     category: normalizeSegment(report.category || DEFAULT_CATEGORY),
     visibility: report.visibility === "public" ? "public" : "private",
     generatedAt,
-    date: generatedAt.slice(0, 10),
+    date: formatDateInTimeZone(generatedAt, timeZone),
+    timeZone,
     sourceRunId: report.sourceRunId || null,
   };
 }
@@ -477,7 +480,7 @@ async function renderReportsIndex(env, request) {
   const publicReports = reports.filter((report) => report.visibility === "public");
   const items = publicReports.map((report) => {
     const href = `/reports/${encodeURIComponent(report.category)}/${encodeURIComponent(report.date)}`;
-    return `<li><a href="${href}">${escapeHtml(report.title)}</a><span>${escapeHtml(report.date)}</span></li>`;
+    return `<li><a href="${href}">${escapeHtml(report.title)}</a><span>${escapeHtml(formatMetaDate(report))}</span></li>`;
   }).join("");
   const body = [
     '<section class="page-head"><p>Archive</p><h1>Personal Radar Reports</h1><a href="/">Latest</a></section>',
@@ -495,7 +498,7 @@ async function renderStoredReport(env, category, date, request) {
   }
 
   const body = [
-    `<section class="page-head"><p>${escapeHtml(stored.meta.category)} · ${escapeHtml(stored.meta.date)}</p><h1>${escapeHtml(stored.meta.title)}</h1><a href="/reports">Archive</a></section>`,
+    `<section class="page-head"><p>${escapeHtml(stored.meta.category)} · ${escapeHtml(formatMetaDate(stored.meta))}</p><h1>${escapeHtml(stored.meta.title)}</h1><a href="/reports">Archive</a></section>`,
     `<article class="markdown">${renderMarkdown(stored.content)}</article>`,
   ].join("\n");
   return htmlResponse(renderPage(stored.meta.title, body));
@@ -647,6 +650,27 @@ function normalizeIsoDate(value) {
   const date = new Date(value || Date.now());
   if (Number.isNaN(date.getTime())) return new Date().toISOString();
   return date.toISOString();
+}
+
+function formatDateInTimeZone(value, timeZone = DEFAULT_TIME_ZONE) {
+  const date = new Date(value || Date.now());
+  if (Number.isNaN(date.getTime())) return formatDateInTimeZone(new Date().toISOString(), timeZone);
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
+}
+
+function formatMetaDate(meta) {
+  return meta.timeZone ? `${meta.date} ${meta.timeZone}` : meta.date;
 }
 
 function extractMarkdownTitle(markdown) {
