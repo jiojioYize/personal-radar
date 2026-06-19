@@ -45,8 +45,9 @@ This keeps your personal content out of GitHub while still allowing the Worker t
 - `POST /ingest-report`: accepts a protected report, stores it in KV, deduplicates it, and sends PushPlus/Telegram if configured.
 - `GET /`: renders the latest public report from KV.
 - `GET /reports`: renders public report history.
+- Public report pages default to Chinese and provide a Chinese/English switch when both versions are ingested.
 - Worker-native `/run` is kept as a manual dry-run/debug endpoint; production reports come through `/ingest-report`.
-- PushPlus adapter sends Markdown reports to WeChat through PushPlus.
+- PushPlus adapter sends the Chinese Markdown report to WeChat when `contentZh` is available.
 - Local Codex forwarder can POST Codex Automation reports to the Worker from the user's machine.
 
 ## Local Development
@@ -110,7 +111,9 @@ Invoke-RestMethod `
   -ContentType "application/json" `
   -Body (@{
     title = "Skill Radar Deep Dive"
-    content = "# Report body"
+    contentZh = "# 中文报告正文"
+    contentEn = "# English report body"
+    pushLanguage = "zh"
     category = "skill-radar"
     visibility = "public"
     generatedAt = "2026-06-19T00:00:00.000Z"
@@ -121,7 +124,10 @@ Invoke-RestMethod `
 Payload fields:
 
 - `title`: display and push title.
-- `content`: Markdown report body.
+- `contentZh`: Chinese Markdown report body, used for PushPlus by default.
+- `contentEn`: English Markdown report body, used by the website English view.
+- `content`: legacy single-language Markdown body; still accepted as a fallback.
+- `pushLanguage`: `zh` or `en`; defaults to `zh`.
 - `category`: report namespace, defaults to `skill-radar`.
 - `visibility`: `public` or `private`; defaults to `private` for safety.
 - `generatedAt`: ISO timestamp; defaults to ingest time.
@@ -160,6 +166,7 @@ The forwarder:
 
 - reads `DEEP_REPORT_INGEST_KEY` from `.secrets.local`;
 - scans recent Codex session JSONL files for the latest `skill-radar` report;
+- extracts `<!-- zh -->...<!-- /zh -->` and `<!-- en -->...<!-- /en -->` sections when present;
 - POSTs it to `/ingest-report`;
 - writes `.codex-forwarder-state.json` so the same report is not sent twice;
 - records failed attempts for retry/debugging.

@@ -81,7 +81,10 @@ function Get-TextFromJson {
 function Select-ReportMarkdown {
   param([string]$Text)
   if (-not $Text) { return $null }
-  $start = $Text.IndexOf("# Skill Radar Deep Dive")
+  $start = $Text.IndexOf("<!-- zh -->")
+  if ($start -lt 0) {
+    $start = $Text.IndexOf("# Skill Radar Deep Dive")
+  }
   if ($start -lt 0) {
     $start = $Text.IndexOf("# Personal Radar")
   }
@@ -92,6 +95,34 @@ function Select-ReportMarkdown {
   if ($report.Length -lt 300) { return $null }
   if ($report -notmatch "##\s+1\." -and $report -notmatch "## Suggested Next Installs") { return $null }
   return $report
+}
+
+function Get-MarkedSection {
+  param([string]$Text, [string]$Name)
+  $pattern = "(?s)<!--\s*$([regex]::Escape($Name))\s*-->\s*(.*?)\s*<!--\s*/$([regex]::Escape($Name))\s*-->"
+  $match = [regex]::Match($Text, $pattern)
+  if ($match.Success) {
+    return $match.Groups[1].Value.Trim()
+  }
+  return $null
+}
+
+function Split-ReportLanguages {
+  param([string]$Content)
+  $zh = Get-MarkedSection -Text $Content -Name "zh"
+  $en = Get-MarkedSection -Text $Content -Name "en"
+  if ($zh -or $en) {
+    return [ordered]@{
+      contentZh = $zh
+      contentEn = $en
+      content = $(if ($zh) { $zh } else { $en })
+    }
+  }
+  return [ordered]@{
+    contentZh = $null
+    contentEn = $Content
+    content = $Content
+  }
 }
 
 function Get-ReportFromJsonlFile {
@@ -179,17 +210,23 @@ if ($ReportPath) {
   $report = Find-LatestCodexReport -CodexHome $CodexHome -AutomationId $AutomationId -LookbackHours $LookbackHours
 }
 
-$hash = Get-ReportHash -Content $report.content
+$localized = Split-ReportLanguages -Content $report.content
+$hashSourceZh = if ($localized.contentZh) { $localized.contentZh } else { "" }
+$hashSourceEn = if ($localized.contentEn) { $localized.contentEn } else { "" }
+$hash = Get-ReportHash -Content ($hashSourceZh + "`n---EN---`n" + $hashSourceEn)
 $sourceRunId = "$AutomationId-$hash"
 if ($state.sent.ContainsKey($sourceRunId)) {
   Write-Host "Already forwarded $sourceRunId"
   return
 }
 
-$title = if ($report.content -match "(?m)^#\s+(.+)$") { $Matches[1].Trim() } else { "Skill Radar Deep Dive" }
+$title = if ($localized.content -match "(?m)^#\s+(.+)$") { $Matches[1].Trim() } else { "Skill Radar Deep Dive" }
 $payload = @{
   title = $title
-  content = $report.content
+  content = $localized.content
+  contentZh = $localized.contentZh
+  contentEn = $localized.contentEn
+  pushLanguage = "zh"
   category = $Category
   visibility = $Visibility
   generatedAt = $report.generatedAt

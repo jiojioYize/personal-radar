@@ -4,6 +4,20 @@ This is a local bridge for Codex Automation reports. It exists because Codex Aut
 
 The script scans recent local Codex session JSONL files, extracts the latest radar-like Markdown report, and POSTs it to the Worker `/ingest-report` endpoint. It keeps local sent state so the same report is not forwarded twice.
 
+When the Codex report includes these markers, the forwarder sends both language versions:
+
+```markdown
+<!-- zh -->
+# 中文报告
+<!-- /zh -->
+
+<!-- en -->
+# English report
+<!-- /en -->
+```
+
+Push delivery defaults to Chinese (`pushLanguage = "zh"`). The public website can switch between Chinese and English when both sections are present.
+
 ## Usage
 
 Run from the repository root:

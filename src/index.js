@@ -1,9 +1,10 @@
-import { CHANNELS } from "./channels.js";
+﻿import { CHANNELS } from "./channels.js";
 
 const GITHUB_SEARCH_URL = "https://api.github.com/search/repositories";
 const DEFAULT_USER_AGENT = "personal-radar/0.1";
 const DEFAULT_CATEGORY = "skill-radar";
 const DEFAULT_TIME_ZONE = "Asia/Shanghai";
+const DEFAULT_LANGUAGE = "zh";
 const REPORT_INDEX_LIMIT = 60;
 
 export default {
@@ -66,7 +67,7 @@ export default {
         return Response.json({ ok: true, stored: false, pushed: false, duplicate: true, reason: stored.reason, report: stored.report });
       }
 
-      await pushReport(env, report.content);
+      await pushReport(env, getPushContent(report));
       return Response.json({ ok: true, stored: true, pushed: true, report: stored.report });
     }
 
@@ -325,14 +326,18 @@ async function readIngestedReport(request) {
   if (contentType.includes("application/json")) {
     const payload = await request.json();
     const title = payload.title || "Skill Radar Deep Dive";
-    const content = payload.content || payload.report || "";
-    if (!content.trim()) {
+    const contentEn = payload.contentEn || payload.content_en || payload.englishContent || payload.content || payload.report || "";
+    const contentZh = payload.contentZh || payload.content_zh || payload.chineseContent || "";
+    if (!contentEn.trim() && !contentZh.trim()) {
       throw new Error("Empty report content");
     }
     const generatedAt = payload.generatedAt || payload.generated_at || new Date().toISOString();
     return {
       title,
-      content: normalizeReportContent(title, content),
+      content: normalizeReportContent(title, contentZh || contentEn),
+      contentEn: contentEn.trim() ? normalizeReportContent(title, contentEn) : null,
+      contentZh: contentZh.trim() ? normalizeReportContent(title, contentZh) : null,
+      pushLanguage: normalizeLanguage(payload.pushLanguage || payload.push_language || DEFAULT_LANGUAGE),
       category: normalizeSegment(payload.category || payload.channel || DEFAULT_CATEGORY),
       visibility: payload.visibility === "public" ? "public" : "private",
       generatedAt: normalizeIsoDate(generatedAt),
@@ -347,6 +352,9 @@ async function readIngestedReport(request) {
   return {
     title: extractMarkdownTitle(text) || "Skill Radar Deep Dive",
     content: text,
+    contentEn: text,
+    contentZh: null,
+    pushLanguage: DEFAULT_LANGUAGE,
     category: DEFAULT_CATEGORY,
     visibility: "private",
     generatedAt: new Date().toISOString(),
@@ -431,7 +439,7 @@ async function storeReport(env, report) {
   const stored = {
     version: 1,
     meta,
-    content: report.content,
+    content: normalizeStoredContent(report),
   };
   await env.RADAR_STATE.put(reportKey, JSON.stringify(stored));
   await updateReportIndex(env, meta);
@@ -455,6 +463,7 @@ function reportMeta(report, env = {}) {
     date: formatDateInTimeZone(generatedAt, timeZone),
     timeZone,
     sourceRunId: report.sourceRunId || null,
+    languages: availableLanguages(report),
   };
 }
 
@@ -466,30 +475,36 @@ async function updateReportIndex(env, meta) {
 }
 
 async function renderHome(env, request) {
-  const category = normalizeSegment(new URL(request.url).searchParams.get("category") || DEFAULT_CATEGORY);
+  const url = new URL(request.url);
+  const category = normalizeSegment(url.searchParams.get("category") || DEFAULT_CATEGORY);
+  const language = normalizeLanguage(url.searchParams.get("lang") || DEFAULT_LANGUAGE);
   const meta = env.RADAR_STATE ? await env.RADAR_STATE.get(latestStorageKey(category, "public"), "json") : null;
   if (!meta) {
     return htmlResponse(renderPage("Personal Radar", emptyStateHtml("No public reports yet.", "Run the Codex automation and forward a public report to publish the first page.")));
   }
-  return renderStoredReport(env, meta.category, meta.date, request);
+  return renderStoredReport(env, meta.category, meta.date, new Request(`${url.origin}/reports/${meta.category}/${meta.date}?lang=${language}`));
 }
 
 async function renderReportsIndex(env, request) {
-  const category = normalizeSegment(new URL(request.url).searchParams.get("category") || DEFAULT_CATEGORY);
+  const url = new URL(request.url);
+  const category = normalizeSegment(url.searchParams.get("category") || DEFAULT_CATEGORY);
+  const language = normalizeLanguage(url.searchParams.get("lang") || DEFAULT_LANGUAGE);
   const reports = env.RADAR_STATE ? ((await env.RADAR_STATE.get(reportIndexStorageKey(category), "json")) || []) : [];
   const publicReports = reports.filter((report) => report.visibility === "public");
   const items = publicReports.map((report) => {
-    const href = `/reports/${encodeURIComponent(report.category)}/${encodeURIComponent(report.date)}`;
+    const href = `/reports/${encodeURIComponent(report.category)}/${encodeURIComponent(report.date)}?lang=${language}`;
     return `<li><a href="${href}">${escapeHtml(report.title)}</a><span>${escapeHtml(formatMetaDate(report))}</span></li>`;
   }).join("");
   const body = [
-    '<section class="page-head"><p>Archive</p><h1>Personal Radar Reports</h1><a href="/">Latest</a></section>',
+    `<section class="page-head"><p>Archive</p><h1>Personal Radar Reports</h1><div class="nav-row"><a href="/?lang=${language}">Latest</a>${renderLanguageSwitch(language, "/reports")}</div></section>`,
     items ? `<ol class="report-list">${items}</ol>` : emptyStateHtml("No public reports yet.", "Only reports ingested with visibility=public are listed here."),
   ].join("\n");
   return htmlResponse(renderPage("Personal Radar Reports", body));
 }
 
 async function renderStoredReport(env, category, date, request) {
+  const url = new URL(request.url);
+  const language = normalizeLanguage(url.searchParams.get("lang") || DEFAULT_LANGUAGE);
   const normalizedCategory = normalizeSegment(category);
   const normalizedDate = normalizeDateSegment(date);
   const stored = env.RADAR_STATE ? await env.RADAR_STATE.get(reportStorageKey(normalizedCategory, normalizedDate), "json") : null;
@@ -497,9 +512,11 @@ async function renderStoredReport(env, category, date, request) {
     return htmlResponse(renderPage("Report not found", emptyStateHtml("Report not found.", "The report may be private or unavailable.")), 404);
   }
 
+  const content = selectStoredContent(stored, language);
+  const switchPath = `/reports/${encodeURIComponent(stored.meta.category)}/${encodeURIComponent(stored.meta.date)}`;
   const body = [
-    `<section class="page-head"><p>${escapeHtml(stored.meta.category)} · ${escapeHtml(formatMetaDate(stored.meta))}</p><h1>${escapeHtml(stored.meta.title)}</h1><a href="/reports">Archive</a></section>`,
-    `<article class="markdown">${renderMarkdown(stored.content)}</article>`,
+    `<section class="page-head"><p>${escapeHtml(stored.meta.category)} · ${escapeHtml(formatMetaDate(stored.meta))}</p><h1>${escapeHtml(stored.meta.title)}</h1><div class="nav-row"><a href="/reports?lang=${language}">Archive</a>${renderLanguageSwitch(language, switchPath)}</div></section>`,
+    `<article class="markdown">${renderMarkdown(content)}</article>`,
   ].join("\n");
   return htmlResponse(renderPage(stored.meta.title, body));
 }
@@ -521,6 +538,10 @@ function renderPage(title, body) {
     .page-head p { color: var(--accent-2); font-size: 13px; font-weight: 700; margin: 0; text-transform: uppercase; }
     .page-head h1 { font-size: clamp(30px, 4vw, 48px); line-height: 1.08; margin: 0; letter-spacing: 0; }
     .page-head a { justify-self: start; font-weight: 650; }
+    .nav-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+    .language-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+    .language-switch a { padding: 5px 10px; text-decoration: none; color: var(--muted); font-size: 13px; font-weight: 700; }
+    .language-switch a.active { background: #edf1eb; color: var(--ink); }
     .markdown { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: clamp(18px, 3vw, 34px); }
     .markdown h1:first-child { display: none; }
     .markdown h2 { border-top: 1px solid var(--line); padding-top: 22px; margin-top: 28px; }
@@ -630,6 +651,43 @@ function sourceRunStorageKey(sourceRunId) {
   return `source-run:${sourceRunId}`;
 }
 
+function normalizeStoredContent(report) {
+  return {
+    en: report.contentEn || report.content || null,
+    zh: report.contentZh || null,
+  };
+}
+
+function selectStoredContent(stored, language) {
+  if (typeof stored.content === "string") return stored.content;
+  const content = stored.content || {};
+  if (language === "en") return content.en || content.zh || "";
+  return content.zh || content.en || "";
+}
+
+function getPushContent(report) {
+  const language = normalizeLanguage(report.pushLanguage || DEFAULT_LANGUAGE);
+  if (language === "en") return report.contentEn || report.content || report.contentZh || "";
+  return report.contentZh || report.content || report.contentEn || "";
+}
+
+function availableLanguages(report) {
+  const languages = [];
+  if (report.contentZh) languages.push("zh");
+  if (report.contentEn || report.content) languages.push("en");
+  return languages.length ? languages : ["en"];
+}
+
+function normalizeLanguage(value) {
+  return value === "en" ? "en" : "zh";
+}
+
+function renderLanguageSwitch(language, path) {
+  const zhClass = language === "zh" ? "active" : "";
+  const enClass = language === "en" ? "active" : "";
+  return `<span class="language-switch"><a class="${zhClass}" href="${path}?lang=zh">中文</a><a class="${enClass}" href="${path}?lang=en">English</a></span>`;
+}
+
 function normalizeReportContent(title, content) {
   const trimmed = content.trim();
   if (trimmed.startsWith("# ")) return trimmed;
@@ -685,3 +743,4 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
