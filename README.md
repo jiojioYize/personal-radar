@@ -5,8 +5,6 @@ Personal Radar is a lightweight Cloudflare Workers project for scheduled informa
 ## Live Site
 
 - Public radar: <https://personal-radar.jiojioyizeradar.workers.dev>
-- Report archive: <https://personal-radar.jiojioyizeradar.workers.dev/reports>
-- Latest sample report: <https://personal-radar.jiojioyizeradar.workers.dev/reports/skill-radar/2026-06-19>
 
 The project intentionally separates four jobs:
 
