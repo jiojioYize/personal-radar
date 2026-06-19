@@ -1,66 +1,83 @@
 # Personal Radar
 
+Personal Radar is a small system for publishing AI-assisted daily radar reports. It combines Codex Automation for research, a Cloudflare Worker for storage and publishing, and PushPlus for personal WeChat delivery.
+
 ## Live Site
 
-- Public radar: <https://personal-radar.jiojioyizeradar.workers.dev>
+Open the public radar site:
 
-## 中文说明
+<https://personal-radar.jiojioyizeradar.workers.dev>
 
-Personal Radar 是一个个人信息雷达工具，用来定时发现、整理、发布和推送高价值信息。当前主频道是 `skill-radar`，聚焦真正可复用的 AI-agent skills 和规则包，例如 Codex skills、Claude/Claude Code skills、Cursor rules、Cline/Roo rules，以及可以直接迁移的 agent rule packs。
+The site shows public reports only. Private reports and secrets are never stored in this GitHub repository.
 
-这个项目把智能推荐、稳定投递和公开展示拆成几层：
+## 中文使用指南
 
-- Codex Automation 负责高质量搜索、筛选和撰写报告。
-- Cloudflare Worker 负责接收报告、写入 KV、渲染公开网站，并推送消息。
-- 本地 Codex forwarder 负责把 Codex 自动化产出的报告转发到 Worker，绕过自动化 shell 网络受限的问题。
-- GitHub 仓库只放代码、文档和示例配置，不存放私人报告、密钥或个人偏好。
+### 这个项目能做什么
 
-### 公开日报
+Personal Radar 可以帮你做两件事：
 
-Worker 会展示公开报告：
+- **看公开日报**：直接打开上面的 Live Site，查看已经发布的公开报告。
+- **搭建自己的个人雷达**：用你自己的 Cloudflare Worker、PushPlus 和 Codex Automation，定时生成报告并推送到微信。
 
-- `GET /`: 最新公开报告。
-- `GET /reports`: 历史报告列表。
-- `GET /reports/:category/:date`: 单篇历史报告。
+当前示例频道是 `skill-radar`，专门发现和筛选 AI-agent skills、Cursor/Cline/Roo rules、Claude/Claude Code skills、Codex skills，以及其他可以迁移复用的 agent rule packs。
 
-只有 `visibility: "public"` 的报告会展示在网站上。`private` 报告可以被推送和存储，但不会出现在公开页面。
+### 如果你只是想看报告
 
-公开页面默认显示中文；如果报告包含英文版本，可以通过 `?lang=en` 切换。
-
-### 个人推送
-
-自部署时的生产链路是：
+直接访问：
 
 ```text
-Codex Automation -> local forwarder -> Worker /ingest-report -> KV + website + PushPlus
+https://personal-radar.jiojioyizeradar.workers.dev
 ```
 
-PushPlus 默认推送中文内容。如果 ingest payload 里提供了 `contentZh`，微信推送会优先使用中文；网页则可以在中文和英文之间切换。
+网页默认显示中文。如果报告包含英文版本，可以在页面上切换到 English。
 
-### 本地开发
+### 如果你想部署自己的版本
+
+1. Fork 或 clone 这个仓库。
+2. 创建 Cloudflare KV namespace，并把 id 写入 `wrangler.toml`。
+3. 设置 Worker secrets。
+4. 部署 Worker。
+5. 配置 Codex Automation 生成报告。
+6. 配置本地 forwarder，把 Codex 报告转发到 Worker。
+7. 配置 Windows Task Scheduler，让 forwarder 定时运行。
+
+最小生产链路是：
+
+```text
+Codex Automation -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
+```
+
+### 安装依赖
 
 ```powershell
 npm install
+```
+
+本地运行：
+
+```powershell
 npm run dev
 ```
 
-然后打开：
+打开：
 
 ```text
 http://localhost:8787/run
 ```
 
-### 部署
+`/run` 只用于手动 dry-run/debug，不是生产推送入口。
+
+### 部署 Worker
 
 ```powershell
 npm run deploy
 ```
 
-Cloudflare Cron 已在 `wrangler.toml` 中关闭。Worker 自带的 `/run` 只保留为手动 dry-run/debug 入口；生产报告通过 `/ingest-report` 写入。
+Cloudflare Cron 默认关闭。推荐让 Codex Automation 负责智能搜索和写报告，让 Worker 只负责接收、存储、展示和推送。
 
-### Worker Secrets
+### 配置 Worker secrets
 
-设置 PushPlus token：
+PushPlus token：
 
 ```powershell
 npx wrangler secret put PUSHPLUS_TOKEN
@@ -72,7 +89,7 @@ npx wrangler secret put PUSHPLUS_TOKEN
 npx wrangler secret put PUSHPLUS_CHANNEL
 ```
 
-设置 ingest key：
+报告 ingest key：
 
 ```powershell
 npx wrangler secret put DEEP_REPORT_INGEST_KEY
@@ -84,13 +101,13 @@ npx wrangler secret put DEEP_REPORT_INGEST_KEY
 npx wrangler secret put RADAR_TEST_KEY
 ```
 
-### Deep Report Ingest
+### 推送一篇报告
 
-发送双语报告到 Worker：
+Worker 接收双语 Markdown。中文用于微信推送，网页可以在中文和英文之间切换。
 
 ```powershell
 Invoke-RestMethod `
-  -Uri "https://personal-radar.jiojioyizeradar.workers.dev/ingest-report" `
+  -Uri "https://<your-worker-url>/ingest-report" `
   -Method Post `
   -Headers @{ "x-radar-ingest-key" = "<your-ingest-key>" } `
   -ContentType "application/json" `
@@ -106,54 +123,45 @@ Invoke-RestMethod `
   } | ConvertTo-Json)
 ```
 
-字段说明：
+常用字段：
 
-- `title`: 报告标题。
-- `contentZh`: 中文 Markdown 正文，默认用于 PushPlus 推送。
-- `contentEn`: 英文 Markdown 正文，用于网页英文视图。
-- `content`: 兼容旧版的单语言 Markdown 正文。
+- `contentZh`: 中文 Markdown，默认用于 PushPlus。
+- `contentEn`: 英文 Markdown，用于网页 English 视图。
 - `pushLanguage`: `zh` 或 `en`，默认 `zh`。
-- `category`: 报告命名空间，默认 `skill-radar`。
-- `visibility`: `public` 或 `private`，默认 `private`。
-- `generatedAt`: ISO 时间戳，默认 ingest 时间。
-- `sourceRunId`: 生产者运行 ID，用于防重复。
+- `visibility`: `public` 会展示在网站上，`private` 不会公开展示。
+- `sourceRunId`: 用于防重复推送。
 
-时间和去重：
+### 配置 Codex forwarder
 
-- `RADAR_TIME_ZONE` 在 `wrangler.toml` 中设置为 `Asia/Shanghai`。
-- 历史归档日期和公开 URL 使用配置的业务时区，不直接使用 UTC 日期。
-- 同一个 `sourceRunId` 只接受一次。
-- 同一个 `category + date` 只接受一次。
-
-KV key：
-
-- `report:<category>:<YYYY-MM-DD>`
-- `latest:<category>:public`
-- `latest:<category>:private`
-- `reports:index:<category>`
-- `source-run:<sourceRunId>`
-
-### Codex Local Forwarder
-
-从仓库根目录运行：
+forwarder 会从本地 Codex session 里找最新报告，并 POST 到 Worker。
 
 ```powershell
 .\tools\codex-forwarder\forward-codex-report.ps1
 ```
 
-forwarder 会：
+报告里如果包含下面的标记，forwarder 会自动拆成中英双语：
 
-- 从 `.secrets.local` 读取 `DEEP_REPORT_INGEST_KEY`。
-- 扫描本地 Codex session JSONL，寻找最新 `skill-radar` 报告。
-- 识别 `<!-- zh -->...<!-- /zh -->` 和 `<!-- en -->...<!-- /en -->` 双语区块。
-- POST 到 Worker `/ingest-report`。
-- 写入 `.codex-forwarder-state.json`，避免重复转发。
+```markdown
+<!-- zh -->
+# 中文报告
+<!-- /zh -->
+
+<!-- en -->
+# English report
+<!-- /en -->
+```
+
+本地需要有 `.secrets.local`：
+
+```text
+DEEP_REPORT_INGEST_KEY=replace-with-your-ingest-key
+```
 
 Windows Task Scheduler 设置见 [`tools/codex-forwarder/README.md`](tools/codex-forwarder/README.md)。
 
-### 仓库卫生
+### 数据和隐私
 
-不要提交：
+不要提交这些文件或内容：
 
 - `.secrets.local`
 - `.dev.vars`
@@ -161,45 +169,54 @@ Windows Task Scheduler 设置见 [`tools/codex-forwarder/README.md`](tools/codex
 - 生成的私人报告
 - PushPlus、Telegram、Worker 或 Codex tokens
 
-使用 `.secrets.local.example` 作为本地密钥模板。
+GitHub 仓库应该只包含代码、文档和示例配置。
 
-## English
+## English Guide
 
-Personal Radar is a lightweight personal information radar for scheduled discovery, publication, and push delivery. The current primary channel is `skill-radar`, focused on practical AI-agent skills and portable rule packs such as Codex skills, Claude/Claude Code skills, Cursor rules, Cline/Roo rules, and reusable agent rule packs.
+### What This Project Does
 
-The project separates intelligence, delivery, and publishing:
+Personal Radar supports two use cases:
 
-- Codex Automation performs high-quality research, filtering, and report writing.
-- Cloudflare Worker receives reports, stores them in KV, renders the public site, and sends push messages.
-- The local Codex forwarder bridges Codex Automation output into the Worker when the automation shell cannot reach remote endpoints.
-- GitHub stores code, docs, and example configuration only; it does not store private reports, secrets, or personal preferences.
+- **Read the public daily radar**: open the Live Site and browse published reports.
+- **Run your own personal radar**: deploy your own Worker, connect PushPlus, and use Codex Automation to generate and deliver reports.
 
-### Public Daily Radar
+The current example channel is `skill-radar`, which discovers practical AI-agent skills, Cursor/Cline/Roo rules, Claude/Claude Code skills, Codex skills, and portable agent rule packs.
 
-The Worker serves public reports:
+### Read the Public Site
 
-- `GET /`: latest public report.
-- `GET /reports`: public report archive.
-- `GET /reports/:category/:date`: one stored report.
-
-Only reports ingested with `visibility: "public"` are shown on the website. Private reports can still be stored and pushed, but are not rendered publicly.
-
-Public pages default to Chinese. When an English version is available, use `?lang=en` to switch.
-
-### Personal Push
-
-The production pipeline is:
+Open:
 
 ```text
-Codex Automation -> local forwarder -> Worker /ingest-report -> KV + website + PushPlus
+https://personal-radar.jiojioyizeradar.workers.dev
 ```
 
-PushPlus uses Chinese content by default. When `contentZh` is present, it is used for WeChat push delivery; the website can switch between Chinese and English.
+Pages default to Chinese. If an English version is available, use the page language switch.
 
-### Local Development
+### Deploy Your Own
+
+1. Fork or clone this repository.
+2. Create a Cloudflare KV namespace and update `wrangler.toml`.
+3. Set Worker secrets.
+4. Deploy the Worker.
+5. Configure Codex Automation to generate reports.
+6. Configure the local forwarder to send Codex reports to the Worker.
+7. Configure Windows Task Scheduler to run the forwarder automatically.
+
+Production flow:
+
+```text
+Codex Automation -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
+```
+
+### Install
 
 ```powershell
 npm install
+```
+
+Run locally:
+
+```powershell
 npm run dev
 ```
 
@@ -209,17 +226,19 @@ Open:
 http://localhost:8787/run
 ```
 
-### Deployment
+`/run` is only a manual dry-run/debug endpoint. Production publishing uses `/ingest-report`.
+
+### Deploy
 
 ```powershell
 npm run deploy
 ```
 
-Cloudflare Cron is intentionally disabled in `wrangler.toml`. Worker-native `/run` remains only as a manual dry-run/debug endpoint; production reports are published through `/ingest-report`.
+Cloudflare Cron is disabled by default. Codex Automation handles intelligent search and report writing; the Worker handles ingest, storage, rendering, and push delivery.
 
 ### Worker Secrets
 
-Set the PushPlus token:
+PushPlus token:
 
 ```powershell
 npx wrangler secret put PUSHPLUS_TOKEN
@@ -231,7 +250,7 @@ Optional PushPlus channel:
 npx wrangler secret put PUSHPLUS_CHANNEL
 ```
 
-Set the ingest key:
+Report ingest key:
 
 ```powershell
 npx wrangler secret put DEEP_REPORT_INGEST_KEY
@@ -243,13 +262,13 @@ Optional test key:
 npx wrangler secret put RADAR_TEST_KEY
 ```
 
-### Deep Report Ingest
+### Publish a Report
 
-Send a bilingual report:
+The Worker accepts bilingual Markdown. Chinese content is used for PushPlus by default, and the website can switch between Chinese and English.
 
 ```powershell
 Invoke-RestMethod `
-  -Uri "https://personal-radar.jiojioyizeradar.workers.dev/ingest-report" `
+  -Uri "https://<your-worker-url>/ingest-report" `
   -Method Post `
   -Headers @{ "x-radar-ingest-key" = "<your-ingest-key>" } `
   -ContentType "application/json" `
@@ -265,52 +284,43 @@ Invoke-RestMethod `
   } | ConvertTo-Json)
 ```
 
-Payload fields:
+Useful fields:
 
-- `title`: report title.
-- `contentZh`: Chinese Markdown body, used for PushPlus by default.
-- `contentEn`: English Markdown body, used by the website English view.
-- `content`: legacy single-language Markdown fallback.
+- `contentZh`: Chinese Markdown, used for PushPlus by default.
+- `contentEn`: English Markdown, used by the website English view.
 - `pushLanguage`: `zh` or `en`; defaults to `zh`.
-- `category`: report namespace; defaults to `skill-radar`.
-- `visibility`: `public` or `private`; defaults to `private`.
-- `generatedAt`: ISO timestamp; defaults to ingest time.
-- `sourceRunId`: producer run ID for deduplication.
+- `visibility`: `public` appears on the website; `private` does not.
+- `sourceRunId`: prevents duplicate delivery.
 
-Time and deduplication:
+### Configure the Codex Forwarder
 
-- `RADAR_TIME_ZONE` is set to `Asia/Shanghai` in `wrangler.toml`.
-- Archive dates and public URLs use the configured business time zone rather than raw UTC dates.
-- The same `sourceRunId` is accepted once.
-- The same `category + date` is accepted once.
-
-KV keys:
-
-- `report:<category>:<YYYY-MM-DD>`
-- `latest:<category>:public`
-- `latest:<category>:private`
-- `reports:index:<category>`
-- `source-run:<sourceRunId>`
-
-### Codex Local Forwarder
-
-Run from the repository root:
+The forwarder reads the latest Codex report from local sessions and POSTs it to the Worker.
 
 ```powershell
 .\tools\codex-forwarder\forward-codex-report.ps1
 ```
 
-The forwarder:
+If the report contains these markers, the forwarder sends both language versions:
 
-- reads `DEEP_REPORT_INGEST_KEY` from `.secrets.local`;
-- scans local Codex session JSONL files for the latest `skill-radar` report;
-- extracts `<!-- zh -->...<!-- /zh -->` and `<!-- en -->...<!-- /en -->` sections when present;
-- POSTs the report to `/ingest-report`;
-- writes `.codex-forwarder-state.json` to avoid duplicate forwarding.
+```markdown
+<!-- zh -->
+# 中文报告
+<!-- /zh -->
+
+<!-- en -->
+# English report
+<!-- /en -->
+```
+
+Create `.secrets.local`:
+
+```text
+DEEP_REPORT_INGEST_KEY=replace-with-your-ingest-key
+```
 
 See [`tools/codex-forwarder/README.md`](tools/codex-forwarder/README.md) for Windows Task Scheduler setup.
 
-### Repository Hygiene
+### Data and Privacy
 
 Do not commit:
 
@@ -320,12 +330,4 @@ Do not commit:
 - generated private reports
 - PushPlus, Telegram, Worker, or Codex tokens
 
-Use `.secrets.local.example` as the local secrets template.
-
-## Future Extension Points
-
-- Replace the local forwarder with Codex Cloud or another remote Codex runtime if it can reliably POST to the Worker.
-- Add D1 when multi-user preferences, feedback, and search need relational queries.
-- Add R2 when long-term Markdown/HTML archives outgrow KV.
-- Add protected history endpoints so Codex deep dives can avoid repeating recently recommended items.
-- Add preference memory so useful/not useful feedback adjusts future ranking.
+This repository should contain only code, docs, and example configuration.
