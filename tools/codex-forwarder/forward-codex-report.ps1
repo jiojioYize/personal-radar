@@ -258,7 +258,11 @@ try {
   }
   $state.pending = @($state.pending | Where-Object { $_.sourceRunId -ne $sourceRunId })
   Write-State -Path $StatePath -State $state
-  Write-Log "Forwarded $sourceRunId to $endpoint"
+  $stored = if ($null -ne $response.stored) { $response.stored } else { "unknown" }
+  $pushed = if ($null -ne $response.pushed) { $response.pushed } else { "unknown" }
+  $duplicate = if ($null -ne $response.duplicate) { $response.duplicate } else { "false" }
+  $reason = if ($response.reason) { " reason=$($response.reason)" } else { "" }
+  Write-Log "Worker accepted $sourceRunId. stored=$stored pushed=$pushed duplicate=$duplicate$reason endpoint=$endpoint"
 } catch {
   $state.pending = @($state.pending | Where-Object { $_.sourceRunId -ne $sourceRunId })
   $state.pending += [ordered]@{
