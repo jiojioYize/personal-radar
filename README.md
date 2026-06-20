@@ -23,13 +23,13 @@ Personal Radar 支持两条使用路径：
 
 ### 当前推荐架构
 
-当前推荐主线是本地 Codex Automation：
+当前推荐主线是本地 Codex Automation 加本地 forwarder：
 
 ```text
-Local Codex Automation -> Worker /ingest-report -> KV + public site + PushPlus
+Local Codex Automation -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
 ```
 
-原因是 Codex Automation 目前更适合在本地/工作树环境里创建和调度。Cloud 执行链路已经验证可用，但 Cloud Automation 创建/调度目前不是稳定主路径。
+原因是 Codex Automation 目前更适合在本地/工作树环境里创建和调度，但自动化 shell 的网络出站可能失败。让 Codex Automation 只生成报告，再由普通 Windows PowerShell 运行 forwarder 负责联网推送，是当前最稳的生产路径。
 
 Cloud 相关 prompt 和低权限 key 仍然保留，作为未来备用路径和手动测试路径。
 
@@ -69,7 +69,7 @@ DEEP_REPORT_INGEST_KEY=replace-with-your-ingest-key
 
 不要提交这个文件。
 
-本地自动化会优先从环境变量读取 `DEEP_REPORT_INGEST_KEY`，如果没有，再从 `.secrets.local` 读取。任务回复只能报告 key 是否存在和 key 长度，不能打印 key。
+本地 Codex Automation 不需要读取这个 key。forwarder 会从 `.secrets.local` 读取 `DEEP_REPORT_INGEST_KEY` 并转发报告，不能打印 key。
 
 ### Worker secrets
 
@@ -145,9 +145,9 @@ Invoke-RestMethod `
 
 ### Codex forwarder
 
-`tools/codex-forwarder/` 是本地桥接备用方案。它会扫描本地 Codex session，提取最新报告并 POST 到 Worker。
+`tools/codex-forwarder/` 是当前生产桥接方案。它会扫描本地 Codex session，提取最新报告并 POST 到 Worker。
 
-推荐先尝试本地 Codex Automation 直接执行 `prompts/skill-radar-local.md`。如果自动化任务能生成报告但沙盒网络无法 POST，再启用 forwarder 作为补救。
+本地 Codex Automation 负责执行 `prompts/skill-radar-local.md` 并输出完整报告。forwarder 负责在稍后读取报告并推送。
 
 运行：
 
@@ -183,13 +183,13 @@ The current example channel is `skill-radar`, which discovers practical AI-agent
 
 ### Recommended Architecture
 
-The current recommended path uses local Codex Automation:
+The current recommended path uses local Codex Automation plus the local forwarder:
 
 ```text
-Local Codex Automation -> Worker /ingest-report -> KV + public site + PushPlus
+Local Codex Automation -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
 ```
 
-Cloud execution has been verified manually, but Cloud Automation creation and scheduling are not the stable primary path for this project yet. Cloud prompts and the low-privilege key remain available as a future or test path.
+Local Codex Automation is suitable for scheduled research and report generation, but its shell network access may fail. The forwarder runs from normal Windows PowerShell and handles network delivery to the Worker. Cloud prompts and the low-privilege key remain available as a future or test path.
 
 ### Prompt Files
 
@@ -227,7 +227,7 @@ DEEP_REPORT_INGEST_KEY=replace-with-your-ingest-key
 
 Do not commit this file.
 
-The local automation prompt first checks `DEEP_REPORT_INGEST_KEY` from the environment. If it is missing, it reads `.secrets.local`. It must never print the key.
+The local Codex Automation prompt does not need this key. The forwarder reads `DEEP_REPORT_INGEST_KEY` from `.secrets.local` and must never print it.
 
 ### Worker Secrets
 
@@ -303,9 +303,9 @@ Useful fields:
 
 ### Codex Forwarder
 
-`tools/codex-forwarder/` is a fallback local bridge. It scans local Codex sessions, extracts the latest report, and POSTs it to the Worker.
+`tools/codex-forwarder/` is the production local bridge. It scans local Codex sessions, extracts the latest report, and POSTs it to the Worker.
 
-Try the local automation prompt first. Use the forwarder only if the automation can generate a report but cannot POST to the Worker because of sandbox networking.
+Run it after the Codex Automation schedule. The local state file prevents duplicate forwarding.
 
 ```powershell
 .\tools\codex-forwarder\forward-codex-report.ps1

@@ -19,21 +19,22 @@ The user wants practical recommendations that are worth installing, adapting, wa
 - Stable push channel: PushPlus
 - KV binding: `RADAR_STATE`
 - Main Worker role: ingest reports, store them in KV, render the public site, and send PushPlus notifications.
-- Main automation role: run the intelligent search/deep-dive, write the bilingual report, and POST it to `/ingest-report`.
+- Main automation role: run the intelligent search/deep-dive and write the bilingual report.
+- Main forwarder role: read the completed Codex report from local sessions and POST it to `/ingest-report`.
 
 Current recommended production flow:
 
 ```text
-Local Codex Automation -> Worker /ingest-report -> KV + public site + PushPlus
+Local Codex Automation -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
 ```
 
-Cloud execution has been verified manually, but Cloud Automation creation and scheduling are not the stable primary path for this project yet. Keep Cloud-related prompts and `CLOUD_REPORT_INGEST_KEY` as optional backup/test tooling.
+Cloud execution has been verified manually, but Cloud Automation creation and scheduling are not the stable primary path for this project yet. Local Codex Automation can read project files and run on schedule, but its shell network access may fail. Treat the local forwarder as the production delivery bridge.
 
 ## Schedule
 
 - Desired Codex deep-dive schedule: daily at Beijing time 08:05.
 - Worker cron publishing is disabled. If a Worker cron trigger fires, it should be ignored.
-- The local forwarder, if used as a fallback, should run after the Codex automation schedule, for example 08:20 Beijing time.
+- The local forwarder should run after the Codex automation schedule, for example 08:20 Beijing time.
 
 If Codex automations are tested again, create or update them from this `personal-radar` workspace rather than from the old coursework `submission` workspace.
 
@@ -62,7 +63,7 @@ Known local-only files:
 
 Cloudflare secrets are managed through Wrangler or the Cloudflare dashboard. PushPlus token, test key, and ingest keys should stay out of Git.
 
-Local automation should prefer `DEEP_REPORT_INGEST_KEY`. It may read that value from the environment or from the repository root `.secrets.local`, but it must never print the key.
+Local automation should not read ingest keys. The forwarder reads `DEEP_REPORT_INGEST_KEY` from `.secrets.local` and must never print the key.
 
 ## Existing Endpoints
 
@@ -99,6 +100,7 @@ Avoid recommending:
 ## Operational Notes
 
 - Use Codex Automation for richer analysis, synthesis, and adaptation ideas.
+- Use the forwarder for dependable local network delivery from Codex output to the Worker.
 - Use the Worker for dependable ingest, storage, website rendering, and PushPlus delivery.
 - When testing delivery, avoid creating duplicate PushPlus messages unless intentionally checking push behavior.
 - After changing Worker code or `wrangler.toml`, deploy with Wrangler and verify `/health`.

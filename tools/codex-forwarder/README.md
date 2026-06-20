@@ -1,8 +1,8 @@
 # Codex Forwarder
 
-This is a fallback local bridge for Codex Automation reports.
+This is the production local bridge for Codex Automation reports.
 
-The recommended production path is now `prompts/skill-radar-local.md`, where local Codex Automation reads `.secrets.local` and POSTs directly to the Worker. Use this forwarder only if Automation can generate a report but cannot POST to the public Worker endpoint because of sandbox networking.
+The recommended production path is `prompts/skill-radar-local.md`, where local Codex Automation generates the bilingual report but does not POST to the Worker. This forwarder reads the completed report from local Codex session output and POSTs it to the public Worker endpoint from a normal Windows PowerShell process.
 
 The script scans recent local Codex session JSONL files, extracts the latest radar-like Markdown report, and POSTs it to the Worker `/ingest-report` endpoint. It keeps local sent state so the same report is not forwarded twice.
 
