@@ -75,7 +75,11 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(runRadar(env, { trigger: "cron", scheduledTime: event.scheduledTime }));
+    ctx.waitUntil(
+      Promise.resolve().then(() => {
+        console.log(`Cron trigger ignored at ${new Date(event.scheduledTime || Date.now()).toISOString()}; publishing uses /ingest-report.`);
+      }),
+    );
   },
 };
 
@@ -425,13 +429,13 @@ async function storeReport(env, report) {
 
   if (meta.sourceRunId) {
     const runKey = sourceRunStorageKey(meta.sourceRunId);
-    const previousRun = await env.RADAR_STATE.get(runKey, "json");
+    const previousRun = await getJsonFromKV(env.RADAR_STATE, runKey);
     if (previousRun) {
       return { duplicate: true, reason: "sourceRunId", report: previousRun };
     }
   }
 
-  const existing = await env.RADAR_STATE.get(reportKey, "json");
+  const existing = await getJsonFromKV(env.RADAR_STATE, reportKey);
   if (existing) {
     return { duplicate: true, reason: "category-date", report: existing.meta || meta };
   }
@@ -469,7 +473,7 @@ function reportMeta(report, env = {}) {
 
 async function updateReportIndex(env, meta) {
   const key = reportIndexStorageKey(meta.category);
-  const existing = (await env.RADAR_STATE.get(key, "json")) || [];
+  const existing = (await getJsonFromKV(env.RADAR_STATE, key)) || [];
   const next = [meta, ...existing.filter((item) => item.date !== meta.date || item.category !== meta.category)].slice(0, REPORT_INDEX_LIMIT);
   await env.RADAR_STATE.put(key, JSON.stringify(next));
 }
@@ -478,7 +482,7 @@ async function renderHome(env, request) {
   const url = new URL(request.url);
   const category = normalizeSegment(url.searchParams.get("category") || DEFAULT_CATEGORY);
   const language = normalizeLanguage(url.searchParams.get("lang") || DEFAULT_LANGUAGE);
-  const meta = env.RADAR_STATE ? await env.RADAR_STATE.get(latestStorageKey(category, "public"), "json") : null;
+  const meta = env.RADAR_STATE ? await getJsonFromKV(env.RADAR_STATE, latestStorageKey(category, "public")) : null;
   if (!meta) {
     return htmlResponse(renderPage("Personal Radar", emptyStateHtml("No public reports yet.", "Run the Codex automation and forward a public report to publish the first page.")));
   }
@@ -489,7 +493,7 @@ async function renderReportsIndex(env, request) {
   const url = new URL(request.url);
   const category = normalizeSegment(url.searchParams.get("category") || DEFAULT_CATEGORY);
   const language = normalizeLanguage(url.searchParams.get("lang") || DEFAULT_LANGUAGE);
-  const reports = env.RADAR_STATE ? ((await env.RADAR_STATE.get(reportIndexStorageKey(category), "json")) || []) : [];
+  const reports = env.RADAR_STATE ? ((await getJsonFromKV(env.RADAR_STATE, reportIndexStorageKey(category))) || []) : [];
   const publicReports = reports.filter((report) => report.visibility === "public");
   const items = publicReports.map((report) => {
     const href = `/reports/${encodeURIComponent(report.category)}/${encodeURIComponent(report.date)}?lang=${language}`;
@@ -507,7 +511,7 @@ async function renderStoredReport(env, category, date, request) {
   const language = normalizeLanguage(url.searchParams.get("lang") || DEFAULT_LANGUAGE);
   const normalizedCategory = normalizeSegment(category);
   const normalizedDate = normalizeDateSegment(date);
-  const stored = env.RADAR_STATE ? await env.RADAR_STATE.get(reportStorageKey(normalizedCategory, normalizedDate), "json") : null;
+  const stored = env.RADAR_STATE ? await getJsonFromKV(env.RADAR_STATE, reportStorageKey(normalizedCategory, normalizedDate)) : null;
   if (!stored || stored.meta?.visibility !== "public") {
     return htmlResponse(renderPage("Report not found", emptyStateHtml("Report not found.", "The report may be private or unavailable.")), 404);
   }
@@ -637,6 +641,12 @@ function htmlResponse(html, status = 200) {
 
 function reportStorageKey(category, date) {
   return `report:${normalizeSegment(category)}:${normalizeDateSegment(date)}`;
+}
+
+async function getJsonFromKV(namespace, key) {
+  const raw = await namespace.get(key, "text");
+  if (!raw) return null;
+  return JSON.parse(raw.replace(/^\uFEFF/, ""));
 }
 
 function latestStorageKey(category, visibility) {

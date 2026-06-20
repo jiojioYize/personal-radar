@@ -82,18 +82,14 @@ function Select-ReportMarkdown {
   param([string]$Text)
   if (-not $Text) { return $null }
   $start = $Text.IndexOf("<!-- zh -->")
-  if ($start -lt 0) {
-    $start = $Text.IndexOf("# Skill Radar Deep Dive")
-  }
-  if ($start -lt 0) {
-    $start = $Text.IndexOf("# Personal Radar")
-  }
   if ($start -lt 0) { return $null }
 
   $report = $Text.Substring($start).Trim()
   $report = [regex]::Replace($report, "(?m)^::inbox-item\{.*\}\s*$", "").Trim()
   if ($report.Length -lt 300) { return $null }
-  if ($report -notmatch "##\s+1\." -and $report -notmatch "## Suggested Next Installs") { return $null }
+  if ($report -notmatch "(?s)<!--\s*zh\s*-->.*<!--\s*/zh\s*-->") { return $null }
+  if ($report -notmatch "(?s)<!--\s*en\s*-->.*<!--\s*/en\s*-->") { return $null }
+  if ($report -notmatch "(?m)^#\s+Skill Radar Deep Dive\s+-\s+\d{4}-\d{2}-\d{2}\s*$") { return $null }
   return $report
 }
 
@@ -207,7 +203,15 @@ if ($ReportPath) {
     generatedAt = (Get-Item -LiteralPath $ReportPath).LastWriteTimeUtc.ToString("o")
   }
 } else {
-  $report = Find-LatestCodexReport -CodexHome $CodexHome -AutomationId $AutomationId -LookbackHours $LookbackHours
+  try {
+    $report = Find-LatestCodexReport -CodexHome $CodexHome -AutomationId $AutomationId -LookbackHours $LookbackHours
+  } catch {
+    if ($_.Exception.Message -like "No recent Codex report found*") {
+      Write-Host $_.Exception.Message
+      return
+    }
+    throw
+  }
 }
 
 $localized = Split-ReportLanguages -Content $report.content
