@@ -19,7 +19,13 @@ Only report whether a key was found and its length. Never print the key value.
 
 ## Request
 
-POST this JSON to:
+Preferred execution path: run the repository script from the project root:
+
+```powershell
+.\tools\automation\send-e2e-test-report.ps1
+```
+
+If the script cannot be run, POST this JSON manually to:
 
 ```text
 https://radar.dailyingest.cn/ingest-report
