@@ -98,12 +98,28 @@ function getIngestAuth(env, key) {
 }
 
 function restrictCloudReport(report) {
+  validateCloudReport(report);
   return {
     ...report,
     category: DEFAULT_CATEGORY,
     visibility: "public",
     pushLanguage: DEFAULT_LANGUAGE,
   };
+}
+
+function validateCloudReport(report) {
+  const contentZh = report.contentZh || "";
+  const contentEn = report.contentEn || report.content || "";
+  const hasTitle = report.title === "Skill Radar Deep Dive" || /^Skill Radar Deep Dive - \d{4}-\d{2}-\d{2}$/.test(report.title);
+  if (!hasTitle) {
+    throw new Error("Cloud reports must use the Skill Radar Deep Dive title");
+  }
+  if (contentZh.length < 1200 || contentEn.length < 1200) {
+    throw new Error("Cloud reports must include full zh/en report content");
+  }
+  if (!contentZh.includes("Codex") || !contentEn.includes("Codex")) {
+    throw new Error("Cloud reports must look like skill-radar content");
+  }
 }
 
 async function runRadar(env, context = {}) {
