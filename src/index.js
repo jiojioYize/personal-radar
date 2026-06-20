@@ -578,7 +578,7 @@ function renderPage(title, body) {
     a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
     main { width: min(920px, calc(100% - 32px)); margin: 0 auto; padding: 36px 0 56px; }
     .page-head { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 20px; display: grid; gap: 8px; }
-    .page-head p { color: var(--accent-2); font-size: 13px; font-weight: 700; margin: 0; text-transform: uppercase; }
+    .page-head p { color: var(--accent-2); font-size: 13px; font-weight: 700; margin: 0; }
     .page-head h1 { font-size: clamp(30px, 4vw, 48px); line-height: 1.08; margin: 0; letter-spacing: 0; }
     .page-head a { justify-self: start; font-weight: 650; }
     .nav-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
@@ -777,7 +777,30 @@ function formatDateInTimeZone(value, timeZone = DEFAULT_TIME_ZONE) {
 }
 
 function formatMetaDate(meta) {
-  return meta.timeZone ? `${meta.date} ${meta.timeZone}` : meta.date;
+  const timeZone = meta.timeZone || DEFAULT_TIME_ZONE;
+  const value = meta.generatedAt || meta.date;
+  const date = new Date(value || Date.now());
+  if (Number.isNaN(date.getTime())) return meta.date || "";
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute} ${formatTimeZoneLabel(timeZone)}`;
+  } catch {
+    return meta.date || date.toISOString().slice(0, 10);
+  }
+}
+
+function formatTimeZoneLabel(timeZone) {
+  if (timeZone === "Asia/Shanghai") return "Beijing Time";
+  return timeZone;
 }
 
 function extractMarkdownTitle(markdown) {
