@@ -3,6 +3,7 @@
 const GITHUB_SEARCH_URL = "https://api.github.com/search/repositories";
 const DEFAULT_USER_AGENT = "personal-radar/0.1";
 const DEFAULT_CATEGORY = "skill-radar";
+const CLOUD_TEST_CATEGORY = "cloud-test-radar";
 const DEFAULT_TIME_ZONE = "Asia/Shanghai";
 const DEFAULT_LANGUAGE = "zh";
 const REPORT_INDEX_LIMIT = 60;
@@ -98,18 +99,36 @@ function getIngestAuth(env, key) {
 }
 
 function restrictCloudReport(report) {
-  validateCloudReport(report);
+  const category = normalizeCloudCategory(report.category);
+  validateCloudReport(report, category);
   return {
     ...report,
-    category: DEFAULT_CATEGORY,
+    category,
     visibility: "public",
     pushLanguage: DEFAULT_LANGUAGE,
   };
 }
 
-function validateCloudReport(report) {
+function normalizeCloudCategory(category) {
+  const normalized = normalizeSegment(category || DEFAULT_CATEGORY);
+  if (normalized === CLOUD_TEST_CATEGORY) return CLOUD_TEST_CATEGORY;
+  return DEFAULT_CATEGORY;
+}
+
+function validateCloudReport(report, category) {
   const contentZh = report.contentZh || "";
   const contentEn = report.contentEn || report.content || "";
+  if (category === CLOUD_TEST_CATEGORY) {
+    const hasTestTitle = /^Cloud Test Radar - \d{4}-\d{2}-\d{2}/.test(report.title);
+    if (!hasTestTitle) {
+      throw new Error("Cloud test reports must use the Cloud Test Radar title");
+    }
+    if (contentZh.length < 120 || contentEn.length < 120) {
+      throw new Error("Cloud test reports must include zh/en content");
+    }
+    return;
+  }
+
   const hasTitle = report.title === "Skill Radar Deep Dive" || /^Skill Radar Deep Dive - \d{4}-\d{2}-\d{2}$/.test(report.title);
   if (!hasTitle) {
     throw new Error("Cloud reports must use the Skill Radar Deep Dive title");
