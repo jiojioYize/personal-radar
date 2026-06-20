@@ -256,6 +256,14 @@ Report ingest key:
 npx wrangler secret put DEEP_REPORT_INGEST_KEY
 ```
 
+Codex Cloud low-privilege ingest key:
+
+```powershell
+npx wrangler secret put CLOUD_REPORT_INGEST_KEY
+```
+
+When this key is used, the Worker forces `category=skill-radar`, `visibility=public`, and `pushLanguage=zh`.
+
 Optional test key:
 
 ```powershell

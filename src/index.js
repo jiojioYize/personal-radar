@@ -51,13 +51,17 @@ export default {
       }
 
       const key = request.headers.get("x-radar-ingest-key") || "";
-      if (!env.DEEP_REPORT_INGEST_KEY || key !== env.DEEP_REPORT_INGEST_KEY) {
+      const auth = getIngestAuth(env, key);
+      if (!auth.ok) {
         return new Response("Unauthorized", { status: 401 });
       }
 
       let report;
       try {
         report = await readIngestedReport(request);
+        if (auth.scope === "cloud") {
+          report = restrictCloudReport(report);
+        }
       } catch (error) {
         return Response.json({ ok: false, error: error.message }, { status: 400 });
       }
@@ -82,6 +86,25 @@ export default {
     );
   },
 };
+
+function getIngestAuth(env, key) {
+  if (env.DEEP_REPORT_INGEST_KEY && key === env.DEEP_REPORT_INGEST_KEY) {
+    return { ok: true, scope: "primary" };
+  }
+  if (env.CLOUD_REPORT_INGEST_KEY && key === env.CLOUD_REPORT_INGEST_KEY) {
+    return { ok: true, scope: "cloud" };
+  }
+  return { ok: false, scope: "none" };
+}
+
+function restrictCloudReport(report) {
+  return {
+    ...report,
+    category: DEFAULT_CATEGORY,
+    visibility: "public",
+    pushLanguage: DEFAULT_LANGUAGE,
+  };
+}
 
 async function runRadar(env, context = {}) {
   const shouldRun = await shouldRunNow(env, context);
