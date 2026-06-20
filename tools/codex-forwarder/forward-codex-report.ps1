@@ -3,6 +3,7 @@ param(
   [string]$WorkerUrl = "https://radar.dailyingest.cn",
   [string]$SecretsPath = (Join-Path (Resolve-Path ".") ".secrets.local"),
   [string]$StatePath = (Join-Path (Resolve-Path ".") ".codex-forwarder-state.json"),
+  [string]$LogPath = (Join-Path (Resolve-Path ".") ".codex-forwarder.log"),
   [string]$CodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }),
   [string]$ReportPath = "",
   [string]$Category = "skill-radar",
@@ -12,6 +13,13 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Write-Log {
+  param([string]$Message)
+  $line = "[$((Get-Date).ToString("yyyy-MM-dd HH:mm:ss zzz"))] $Message"
+  Write-Host $line
+  Add-Content -LiteralPath $LogPath -Value $line -Encoding UTF8
+}
 
 function Read-DotEnvValue {
   param([string]$Path, [string]$Name)
@@ -192,6 +200,7 @@ function Send-Report {
 
 $ingestKey = Read-DotEnvValue -Path $SecretsPath -Name "DEEP_REPORT_INGEST_KEY"
 $state = Read-State -Path $StatePath
+Write-Log "Forwarder started. AutomationId=$AutomationId Category=$Category Visibility=$Visibility LookbackHours=$LookbackHours"
 
 if ($ReportPath) {
   if (-not (Test-Path -LiteralPath $ReportPath)) {
@@ -207,7 +216,7 @@ if ($ReportPath) {
     $report = Find-LatestCodexReport -CodexHome $CodexHome -AutomationId $AutomationId -LookbackHours $LookbackHours
   } catch {
     if ($_.Exception.Message -like "No recent Codex report found*") {
-      Write-Host $_.Exception.Message
+      Write-Log $_.Exception.Message
       return
     }
     throw
@@ -220,7 +229,7 @@ $hashSourceEn = if ($localized.contentEn) { $localized.contentEn } else { "" }
 $hash = Get-ReportHash -Content ($hashSourceZh + "`n---EN---`n" + $hashSourceEn)
 $sourceRunId = "$AutomationId-$hash"
 if ($state.sent.ContainsKey($sourceRunId)) {
-  Write-Host "Already forwarded $sourceRunId"
+  Write-Log "Already forwarded $sourceRunId"
   return
 }
 
@@ -249,7 +258,7 @@ try {
   }
   $state.pending = @($state.pending | Where-Object { $_.sourceRunId -ne $sourceRunId })
   Write-State -Path $StatePath -State $state
-  Write-Host "Forwarded $sourceRunId to $endpoint"
+  Write-Log "Forwarded $sourceRunId to $endpoint"
 } catch {
   $state.pending = @($state.pending | Where-Object { $_.sourceRunId -ne $sourceRunId })
   $state.pending += [ordered]@{
@@ -261,5 +270,6 @@ try {
     error = $_.Exception.Message
   }
   Write-State -Path $StatePath -State $state
+  Write-Log "Failed to forward $sourceRunId`: $($_.Exception.Message)"
   throw
 }

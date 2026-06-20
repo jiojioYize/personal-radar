@@ -76,3 +76,13 @@ C:\Users\Zander Sun\personal-radar
 ```
 
 For more resilience, run it every 10 minutes during the morning window. The local state file prevents duplicate forwarding.
+
+## Logs
+
+Task Scheduler runs in the background, so you may not see a console window. The forwarder writes a local log file:
+
+```text
+.codex-forwarder.log
+```
+
+This file is ignored by Git.

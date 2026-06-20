@@ -4,4 +4,5 @@
 .secrets.local
 .codex-forwarder-state.json
 .codex-forwarder-pending.json
+.codex-forwarder.log
 .DS_Store
