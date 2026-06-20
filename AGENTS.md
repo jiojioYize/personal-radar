@@ -18,17 +18,36 @@ The user wants practical recommendations that are worth installing, adapting, wa
 - Worker URL: `https://radar.dailyingest.cn/`
 - Stable push channel: PushPlus
 - KV binding: `RADAR_STATE`
-- Main Worker role: stable scheduled radar delivery
-- Codex automation role: smarter GitHub/public-source deep dives and higher-quality narrative recommendations
+- Main Worker role: ingest reports, store them in KV, render the public site, and send PushPlus notifications.
+- Main automation role: run the intelligent search/deep-dive, write the bilingual report, and POST it to `/ingest-report`.
 
-The Cloudflare Worker is the reliable production path. Codex automations are useful for higher-intelligence exploration, but should be treated as less proven until scheduling is verified in this project workspace.
+Current recommended production flow:
+
+```text
+Local Codex Automation -> Worker /ingest-report -> KV + public site + PushPlus
+```
+
+Cloud execution has been verified manually, but Cloud Automation creation and scheduling are not the stable primary path for this project yet. Keep Cloud-related prompts and `CLOUD_REPORT_INGEST_KEY` as optional backup/test tooling.
 
 ## Schedule
 
-- Worker push schedule: daily at Beijing time 08:00.
 - Desired Codex deep-dive schedule: daily at Beijing time 08:05.
+- Worker cron publishing is disabled. If a Worker cron trigger fires, it should be ignored.
+- The local forwarder, if used as a fallback, should run after the Codex automation schedule, for example 08:20 Beijing time.
 
 If Codex automations are tested again, create or update them from this `personal-radar` workspace rather than from the old coursework `submission` workspace.
+
+## Prompts
+
+- `prompts/skill-radar-local.md`: recommended production prompt for local Codex Automation.
+- `prompts/skill-radar-cloud.md`: backup prompt for Cloud or remote environments.
+- `prompts/cloud-test-radar.md`: end-to-end test prompt that publishes under the `cloud-test-radar` test category.
+
+Formal daily automation should read and execute:
+
+```text
+prompts/skill-radar-local.md
+```
 
 ## Secrets
 
@@ -37,16 +56,23 @@ Do not print, commit, or expose tokens.
 Known local-only files:
 
 - `.secrets.local`
-- `.secrets.local.example`
+- `.dev.vars`
+- `.codex-forwarder-state.json`
+- `.codex-forwarder-pending.json`
 
-Cloudflare secrets are managed through Wrangler or the Cloudflare dashboard. PushPlus token, test key, and ingest key should stay out of Git.
+Cloudflare secrets are managed through Wrangler or the Cloudflare dashboard. PushPlus token, test key, and ingest keys should stay out of Git.
+
+Local automation should prefer `DEEP_REPORT_INGEST_KEY`. It may read that value from the environment or from the repository root `.secrets.local`, but it must never print the key.
 
 ## Existing Endpoints
 
 - `/health`: health check.
+- `/`: latest public report page.
+- `/reports`: public report archive.
+- `/reports/:category/:date`: dated public report page.
 - `/run`: generate a Markdown preview without pushing.
 - `/test-push?key=...`: send a PushPlus test message.
-- `/ingest-report`: receive a Codex-generated report and forward it through PushPlus. Requires the ingest key in the `x-radar-ingest-key` header.
+- `/ingest-report`: receive a Codex-generated report, store it, and forward it through PushPlus. Requires the ingest key in the `x-radar-ingest-key` header.
 
 ## Recommendation Quality Rules
 
@@ -72,7 +98,7 @@ Avoid recommending:
 
 ## Operational Notes
 
-- Use the Worker for dependable scheduled delivery.
-- Use Codex for richer analysis, synthesis, and adaptation ideas.
+- Use Codex Automation for richer analysis, synthesis, and adaptation ideas.
+- Use the Worker for dependable ingest, storage, website rendering, and PushPlus delivery.
 - When testing delivery, avoid creating duplicate PushPlus messages unless intentionally checking push behavior.
-- After changing Worker code or `wrangler.toml`, deploy with Wrangler and verify `/health` and `/run`.
+- After changing Worker code or `wrangler.toml`, deploy with Wrangler and verify `/health`.

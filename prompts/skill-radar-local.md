@@ -1,8 +1,8 @@
-# Personal Radar Cloud Prompt: Skill Radar
-
-This is a backup prompt for Cloud or remote environments. The current recommended production path is `prompts/skill-radar-local.md`.
+# Personal Radar Local Prompt: Skill Radar
 
 Run a deep-dive radar for true AI-agent skills and rules only.
+
+This prompt is the recommended production path for local Codex Automation.
 
 Before writing the report, determine the current Beijing date (`Asia/Shanghai`) and use that date consistently in:
 
@@ -11,7 +11,17 @@ Before writing the report, determine the current Beijing date (`Asia/Shanghai`) 
 - `sourceRunId`
 
 Do not modify repository files.
-Do not print or reveal `CLOUD_REPORT_INGEST_KEY`.
+Do not print or reveal any ingest key.
+
+## Secret Lookup
+
+Use the first available key in this order:
+
+1. `DEEP_REPORT_INGEST_KEY` from the environment.
+2. `DEEP_REPORT_INGEST_KEY` parsed from the repository root `.secrets.local`.
+3. `CLOUD_REPORT_INGEST_KEY` parsed from the repository root `.secrets.local`.
+
+Only report whether a key was found and its length. Never print the key value.
 
 ## Scope
 
@@ -80,13 +90,13 @@ English report body here.
 After the report is complete, POST it to:
 
 ```text
-https://personal-radar.jiojioyizeradar.workers.dev/ingest-report
+https://radar.dailyingest.cn/ingest-report
 ```
 
 Use:
 
-- `CLOUD_REPORT_INGEST_KEY` from the environment as the `x-radar-ingest-key` header.
-- a normal `User-Agent`, for example `personal-radar-cloud-skill-radar/1.0`.
+- the selected ingest key as the `x-radar-ingest-key` header.
+- a normal `User-Agent`, for example `personal-radar-local-skill-radar/1.0`.
 
 POST JSON with:
 
@@ -97,12 +107,14 @@ POST JSON with:
 - `visibility`: `public`
 - `pushLanguage`: `zh`
 - `generatedAt`: current ISO timestamp
-- `sourceRunId`: `cloud-skill-radar-YYYY-MM-DD`
+- `sourceRunId`: `local-skill-radar-YYYY-MM-DD`
 
 If the Worker returns `duplicate=true`, do not retry with a different date.
 
 Report only:
 
+- key source: `env`, `.secrets.local`, or `missing`
+- key length
 - HTTP status
 - response is JSON
 - ok
