@@ -4,7 +4,7 @@ Run a deep-dive radar for true AI-agent skills and rules only.
 
 This prompt is the recommended production path for local Codex Automation.
 
-The automation shell may not have outbound network access. Do not POST to the Worker from this task. The local forwarder will read the completed report from Codex session output and send it to the Worker.
+The automation shell may not have outbound network access. Do not POST to the Worker from this task. Write the completed report to the outbox file path below; the local forwarder will read that file and send it to the Worker.
 
 Before writing the report, determine the current Beijing date (`Asia/Shanghai`) and use that date consistently in:
 
@@ -12,7 +12,7 @@ Before writing the report, determine the current Beijing date (`Asia/Shanghai`) 
 - `generatedAt`
 - `sourceRunId`
 
-Do not modify repository files.
+Do not modify repository files except for writing the report file under `reports/outbox/`.
 Do not read, print, or reveal any ingest key.
 Do not attempt to call `/ingest-report`.
 
@@ -62,7 +62,7 @@ For each item, include:
 
 ## Output Format
 
-Write a concise bilingual Markdown report using this exact structure. The final answer must include the complete report body, because the local forwarder extracts the report from Codex session output.
+Write a concise bilingual Markdown report using this exact structure.
 
 ```markdown
 <!-- zh -->
@@ -78,9 +78,24 @@ English report body here.
 <!-- /en -->
 ```
 
+## Required File Output
+
+Create or overwrite this UTF-8 Markdown file:
+
+```text
+reports/outbox/skill-radar-YYYY-MM-DD.md
+```
+
+Replace `YYYY-MM-DD` with the current Beijing date.
+
+The file must contain only the complete bilingual report, starting with `<!-- zh -->` and ending with `<!-- /en -->`. Do not include status notes, code fences, logs, or any wrapper text inside the file.
+
+The report file is ignored by Git and will be consumed by the local forwarder.
+
 After the report, add a short status note:
 
 - report generated: yes
+- report file path
 - date used
 - whether repository files changed
 - forwarding: handled by local forwarder, not this automation

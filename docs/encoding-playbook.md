@@ -3,7 +3,7 @@
 This project moves report text through several boundaries:
 
 ```text
-Codex session JSONL -> PowerShell forwarder -> JSON HTTP request -> Worker KV -> website + PushPlus
+Codex report file -> PowerShell forwarder -> JSON HTTP request -> Worker KV -> website + PushPlus
 ```
 
 Any boundary can corrupt Chinese text if UTF-8 is not explicit.
@@ -20,7 +20,7 @@ If these strings appear in a Chinese report, the content was probably read as a 
 
 ## Root Cause Found
 
-Codex session files are UTF-8 JSONL. Windows PowerShell 5.1 `Get-Content` can default to the system ANSI code page when `-Encoding` is omitted.
+Codex report files and session files are UTF-8. Windows PowerShell 5.1 `Get-Content` can default to the system ANSI code page when `-Encoding` is omitted.
 
 That means this is unsafe for Codex session files:
 
@@ -59,10 +59,20 @@ Invoke-RestMethod `
 
 The forwarder should refuse to send a report if it sees repeated mojibake markers before ingest. A failed forward is easier to fix than a corrupted public report plus a corrupted PushPlus message.
 
+## Output File Rule
+
+Prefer explicit report files over scraping Codex session logs:
+
+```text
+reports/outbox/skill-radar-YYYY-MM-DD.md
+```
+
+Session scanning is useful as a fallback, but it can accidentally match prompt templates, intermediate drafts, or status text. A dedicated outbox file is the production boundary.
+
 ## Debug Checklist
 
-1. Check the source Codex session with explicit UTF-8.
+1. Check the source outbox file with explicit UTF-8.
 2. Check the forwarder log.
 3. Check `.codex-forwarder-state.json` for Worker response fields.
 4. If Worker says `stored=true pushed=true` but content is corrupted, inspect the client-side read/send encoding before changing Worker rendering.
-5. If the source session is already corrupted, fix the automation prompt/output path instead.
+5. If the source outbox file is already corrupted, fix the automation prompt/output path instead.

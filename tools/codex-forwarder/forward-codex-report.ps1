@@ -4,6 +4,7 @@ param(
   [string]$SecretsPath = (Join-Path (Resolve-Path ".") ".secrets.local"),
   [string]$StatePath = (Join-Path (Resolve-Path ".") ".codex-forwarder-state.json"),
   [string]$LogPath = (Join-Path (Resolve-Path ".") ".codex-forwarder.log"),
+  [string]$OutboxDir = (Join-Path (Resolve-Path ".") "reports\outbox"),
   [string]$CodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }),
   [string]$ReportPath = "",
   [string]$Category = "skill-radar",
@@ -194,6 +195,32 @@ function Find-LatestCodexReport {
   throw "No recent Codex report found for $AutomationId"
 }
 
+function Find-LatestOutboxReport {
+  param([string]$OutboxDir, [int]$LookbackHours)
+  if (-not (Test-Path -LiteralPath $OutboxDir)) {
+    return $null
+  }
+
+  $since = (Get-Date).AddHours(-1 * $LookbackHours)
+  $files = Get-ChildItem -LiteralPath $OutboxDir -File -Filter "*.md" |
+    Where-Object { $_.LastWriteTime -ge $since } |
+    Sort-Object LastWriteTime -Descending
+
+  foreach ($file in $files) {
+    $content = Get-Content -Raw -Encoding UTF8 -LiteralPath $file.FullName
+    $report = Select-ReportMarkdown -Text $content
+    if ($report) {
+      return [ordered]@{
+        content = $report
+        source = $file.FullName
+        generatedAt = $file.LastWriteTimeUtc.ToString("o")
+      }
+    }
+  }
+
+  return $null
+}
+
 function Get-ReportHash {
   param([string]$Content)
   $sha = [System.Security.Cryptography.SHA256]::Create()
@@ -219,7 +246,7 @@ function Send-Report {
 
 $ingestKey = Read-DotEnvValue -Path $SecretsPath -Name "DEEP_REPORT_INGEST_KEY"
 $state = Read-State -Path $StatePath
-Write-Log "Forwarder started. AutomationId=$AutomationId Category=$Category Visibility=$Visibility LookbackHours=$LookbackHours"
+Write-Log "Forwarder started. AutomationId=$AutomationId Category=$Category Visibility=$Visibility LookbackHours=$LookbackHours OutboxDir=$OutboxDir"
 
 if ($ReportPath) {
   if (-not (Test-Path -LiteralPath $ReportPath)) {
@@ -231,14 +258,20 @@ if ($ReportPath) {
     generatedAt = (Get-Item -LiteralPath $ReportPath).LastWriteTimeUtc.ToString("o")
   }
 } else {
-  try {
-    $report = Find-LatestCodexReport -CodexHome $CodexHome -AutomationId $AutomationId -LookbackHours $LookbackHours
-  } catch {
-    if ($_.Exception.Message -like "No recent Codex report found*") {
-      Write-Log $_.Exception.Message
-      return
+  $report = Find-LatestOutboxReport -OutboxDir $OutboxDir -LookbackHours $LookbackHours
+  if ($report) {
+    Write-Log "Using outbox report: $($report.source)"
+  } else {
+    try {
+      $report = Find-LatestCodexReport -CodexHome $CodexHome -AutomationId $AutomationId -LookbackHours $LookbackHours
+      Write-Log "Using session report: $($report.source)"
+    } catch {
+      if ($_.Exception.Message -like "No recent Codex report found*") {
+        Write-Log "No recent outbox or Codex session report found for $AutomationId"
+        return
+      }
+      throw
     }
-    throw
   }
 }
 

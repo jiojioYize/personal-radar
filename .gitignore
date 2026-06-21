@@ -5,4 +5,5 @@
 .codex-forwarder-state.json
 .codex-forwarder-pending.json
 .codex-forwarder.log
+reports/outbox/*.md
 .DS_Store

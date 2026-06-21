@@ -19,16 +19,16 @@ The user wants practical recommendations that are worth installing, adapting, wa
 - Stable push channel: PushPlus
 - KV binding: `RADAR_STATE`
 - Main Worker role: ingest reports, store them in KV, render the public site, and send PushPlus notifications.
-- Main automation role: run the intelligent search/deep-dive and write the bilingual report.
-- Main forwarder role: read the completed Codex report from local sessions and POST it to `/ingest-report`.
+- Main automation role: run the intelligent search/deep-dive and write the bilingual report to `reports/outbox/`.
+- Main forwarder role: read the completed report file and POST it to `/ingest-report`.
 
 Current recommended production flow:
 
 ```text
-Local Codex Automation -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
+Local Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
 ```
 
-Cloud execution has been verified manually, but Cloud Automation creation and scheduling are not the stable primary path for this project yet. Local Codex Automation can read project files and run on schedule, but its shell network access may fail. Treat the local forwarder as the production delivery bridge.
+Cloud execution has been verified manually, but Cloud Automation creation and scheduling are not the stable primary path for this project yet. Local Codex Automation can read/write project files and run on schedule, but its shell network access may fail. Treat the local forwarder as the production delivery bridge.
 
 ## Schedule
 
@@ -50,6 +50,12 @@ Formal daily automation should read and execute:
 prompts/skill-radar-local.md
 ```
 
+That prompt should write:
+
+```text
+reports/outbox/skill-radar-YYYY-MM-DD.md
+```
+
 ## Secrets
 
 Do not print, commit, or expose tokens.
@@ -60,6 +66,7 @@ Known local-only files:
 - `.dev.vars`
 - `.codex-forwarder-state.json`
 - `.codex-forwarder-pending.json`
+- `reports/outbox/*.md`
 
 Cloudflare secrets are managed through Wrangler or the Cloudflare dashboard. PushPlus token, test key, and ingest keys should stay out of Git.
 
@@ -100,7 +107,7 @@ Avoid recommending:
 ## Operational Notes
 
 - Use Codex Automation for richer analysis, synthesis, and adaptation ideas.
-- Use the forwarder for dependable local network delivery from Codex output to the Worker.
+- Use the forwarder for dependable local network delivery from outbox report files to the Worker.
 - Use the Worker for dependable ingest, storage, website rendering, and PushPlus delivery.
 - When testing delivery, avoid creating duplicate PushPlus messages unless intentionally checking push behavior.
 - After changing Worker code or `wrangler.toml`, deploy with Wrangler and verify `/health`.
