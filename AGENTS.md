@@ -28,7 +28,7 @@ Current recommended production flow:
 Local Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
 ```
 
-Cloud execution has been verified manually, but Cloud Automation creation and scheduling are not the stable primary path for this project yet. Local Codex Automation can read/write project files and run on schedule, but its shell network access may fail. Treat the local forwarder as the production delivery bridge.
+Local Codex Automation can read/write project files and run on schedule, but its shell network access may fail. Treat the local forwarder as the production delivery bridge.
 
 ## Schedule
 
@@ -40,9 +40,7 @@ If Codex automations are tested again, create or update them from this `personal
 
 ## Prompts
 
-- `prompts/skill-radar-local.md`: recommended production prompt for local Codex Automation.
-- `prompts/skill-radar-cloud.md`: backup prompt for Cloud or remote environments.
-- `prompts/cloud-test-radar.md`: end-to-end test prompt that publishes under the `cloud-test-radar` test category.
+- `prompts/skill-radar-local.md`: production prompt for local Codex Automation.
 
 Formal daily automation should read and execute:
 
@@ -79,7 +77,6 @@ Local automation should not read ingest keys. The forwarder reads `DEEP_REPORT_I
 - `/reports`: public report archive.
 - `/reports/:category/:date`: dated public report page.
 - `/run`: generate a Markdown preview without pushing.
-- `/test-push?key=...`: send a PushPlus test message.
 - `/ingest-report`: receive a Codex-generated report, store it, and forward it through PushPlus. Requires the ingest key in the `x-radar-ingest-key` header.
 
 ## Recommendation Quality Rules

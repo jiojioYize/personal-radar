@@ -3,7 +3,6 @@
 const GITHUB_SEARCH_URL = "https://api.github.com/search/repositories";
 const DEFAULT_USER_AGENT = "personal-radar/0.1";
 const DEFAULT_CATEGORY = "skill-radar";
-const CLOUD_TEST_CATEGORY = "cloud-test-radar";
 const DEFAULT_TIME_ZONE = "Asia/Shanghai";
 const DEFAULT_LANGUAGE = "zh";
 const REPORT_INDEX_LIMIT = 60;
@@ -36,16 +35,6 @@ export default {
       });
     }
 
-    if (url.pathname === "/test-push") {
-      const key = url.searchParams.get("key") || "";
-      if (!env.RADAR_TEST_KEY || key !== env.RADAR_TEST_KEY) {
-        return new Response("Unauthorized", { status: 401 });
-      }
-      const report = renderTestReport();
-      await pushReport(env, report);
-      return new Response("Push test sent", { status: 200 });
-    }
-
     if (url.pathname === "/ingest-report") {
       if (request.method !== "POST") {
         return new Response("Method not allowed", { status: 405 });
@@ -60,9 +49,6 @@ export default {
       let report;
       try {
         report = await readIngestedReport(request);
-        if (auth.scope === "cloud") {
-          report = restrictCloudReport(report);
-        }
       } catch (error) {
         return Response.json({ ok: false, error: error.message }, { status: 400 });
       }
@@ -90,55 +76,9 @@ export default {
 
 function getIngestAuth(env, key) {
   if (env.DEEP_REPORT_INGEST_KEY && key === env.DEEP_REPORT_INGEST_KEY) {
-    return { ok: true, scope: "primary" };
+    return { ok: true };
   }
-  if (env.CLOUD_REPORT_INGEST_KEY && key === env.CLOUD_REPORT_INGEST_KEY) {
-    return { ok: true, scope: "cloud" };
-  }
-  return { ok: false, scope: "none" };
-}
-
-function restrictCloudReport(report) {
-  const category = normalizeCloudCategory(report.category);
-  validateCloudReport(report, category);
-  return {
-    ...report,
-    category,
-    visibility: "public",
-    pushLanguage: DEFAULT_LANGUAGE,
-  };
-}
-
-function normalizeCloudCategory(category) {
-  const normalized = normalizeSegment(category || DEFAULT_CATEGORY);
-  if (normalized === CLOUD_TEST_CATEGORY) return CLOUD_TEST_CATEGORY;
-  return DEFAULT_CATEGORY;
-}
-
-function validateCloudReport(report, category) {
-  const contentZh = report.contentZh || "";
-  const contentEn = report.contentEn || report.content || "";
-  if (category === CLOUD_TEST_CATEGORY) {
-    const hasTestTitle = /^Cloud Test Radar - \d{4}-\d{2}-\d{2}/.test(report.title);
-    if (!hasTestTitle) {
-      throw new Error("Cloud test reports must use the Cloud Test Radar title");
-    }
-    if (contentZh.length < 120 || contentEn.length < 120) {
-      throw new Error("Cloud test reports must include zh/en content");
-    }
-    return;
-  }
-
-  const hasTitle = report.title === "Skill Radar Deep Dive" || /^Skill Radar Deep Dive - \d{4}-\d{2}-\d{2}$/.test(report.title);
-  if (!hasTitle) {
-    throw new Error("Cloud reports must use the Skill Radar Deep Dive title");
-  }
-  if (contentZh.length < 1200 || contentEn.length < 1200) {
-    throw new Error("Cloud reports must include full zh/en report content");
-  }
-  if (!contentZh.includes("Codex") || !contentEn.includes("Codex")) {
-    throw new Error("Cloud reports must look like skill-radar content");
-  }
+  return { ok: false };
 }
 
 async function runRadar(env, context = {}) {
@@ -370,16 +310,6 @@ function renderChannel(channel, items) {
 
 function renderSkippedReport(reason, nextRunAt) {
   return ["# Personal Radar", "", `Skipped: ${reason}`, nextRunAt ? `Next eligible run: ${nextRunAt}` : null].filter(Boolean).join("\n");
-}
-
-function renderTestReport() {
-  return [
-    "# Personal Radar Test",
-    "",
-    `Generated: ${new Date().toISOString()}`,
-    "",
-    "PushPlus is connected successfully.",
-  ].join("\n");
 }
 
 async function readIngestedReport(request) {
