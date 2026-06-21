@@ -86,3 +86,9 @@ Task Scheduler runs in the background, so you may not see a console window. The 
 ```
 
 This file is ignored by Git.
+
+## Encoding Safety
+
+Codex session files are UTF-8. The forwarder reads session and report files with explicit `-Encoding UTF8`, sends JSON as UTF-8 bytes, and refuses to send reports that look mojibaked.
+
+See [`../../docs/encoding-playbook.md`](../../docs/encoding-playbook.md).

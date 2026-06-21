@@ -26,7 +26,7 @@ function Read-DotEnvValue {
   if (-not (Test-Path -LiteralPath $Path)) {
     throw "Secrets file not found: $Path"
   }
-  foreach ($line in Get-Content -LiteralPath $Path) {
+  foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $Path) {
     if ($line -match "^\s*#") { continue }
     if ($line -match "^\s*$([regex]::Escape($Name))\s*=\s*(.+?)\s*$") {
       return $Matches[1].Trim().Trim('"').Trim("'")
@@ -40,7 +40,7 @@ function Read-State {
   if (-not (Test-Path -LiteralPath $Path)) {
     return @{ sent = @{}; pending = @() }
   }
-  $state = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
+  $state = Get-Content -Raw -Encoding UTF8 -LiteralPath $Path | ConvertFrom-Json
   $sent = @{}
   if ($state.sent) {
     foreach ($property in $state.sent.PSObject.Properties) {
@@ -98,7 +98,22 @@ function Select-ReportMarkdown {
   if ($report -notmatch "(?s)<!--\s*zh\s*-->.*<!--\s*/zh\s*-->") { return $null }
   if ($report -notmatch "(?s)<!--\s*en\s*-->.*<!--\s*/en\s*-->") { return $null }
   if ($report -notmatch "(?m)^#\s+Skill Radar Deep Dive\s+-\s+\d{4}-\d{2}-\d{2}\s*$") { return $null }
+  $zh = Get-MarkedSection -Text $report -Name "zh"
+  $en = Get-MarkedSection -Text $report -Name "en"
+  if (-not $zh -or -not $en) { return $null }
+  if ($zh.Length -lt 1200 -or $en.Length -lt 1200) { return $null }
   return $report
+}
+
+function Assert-ReadableReport {
+  param([string]$Content)
+  $mojibakeMarkers = @(0x6D93, 0x93B6, 0x935B, 0x9428, 0x7EDB, 0x6769, 0x93C4, 0x6D60, 0x9359, 0x5BEE, 0x20AC) |
+    ForEach-Object { [string][char]$_ }
+  $pattern = ($mojibakeMarkers | ForEach-Object { [regex]::Escape($_) }) -join "|"
+  $mojibakeMatches = [regex]::Matches($Content, $pattern).Count
+  if ($mojibakeMatches -ge 5) {
+    throw "Report looks mojibaked before ingest; refusing to send. Check UTF-8 decoding."
+  }
 }
 
 function Get-MarkedSection {
@@ -132,7 +147,7 @@ function Split-ReportLanguages {
 function Get-ReportFromJsonlFile {
   param([System.IO.FileInfo]$File, [string]$AutomationId)
   $best = $null
-  foreach ($line in Get-Content -LiteralPath $File.FullName -ErrorAction SilentlyContinue) {
+  foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $File.FullName -ErrorAction SilentlyContinue) {
     if (-not $line.Trim()) { continue }
     try {
       $json = $line | ConvertFrom-Json -ErrorAction Stop
@@ -145,7 +160,9 @@ function Get-ReportFromJsonlFile {
       if (-not $report) { continue }
       $looksLikeAutomation = $report -match [regex]::Escape($AutomationId) -or $report -match "Codex|Claude|Cursor|Cline|Roo|SKILL\.md"
       if ($looksLikeAutomation) {
-        $best = $report
+        if (-not $best -or $report.Length -gt $best.Length) {
+          $best = $report
+        }
       }
     }
   }
@@ -190,12 +207,14 @@ function Send-Report {
     [string]$Key,
     [hashtable]$Payload
   )
+  $json = $Payload | ConvertTo-Json -Depth 8
+  $bodyBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($json)
   Invoke-RestMethod `
     -Uri $Endpoint `
     -Method Post `
     -Headers @{ "x-radar-ingest-key" = $Key } `
-    -ContentType "application/json" `
-    -Body ($Payload | ConvertTo-Json -Depth 8)
+    -ContentType "application/json; charset=utf-8" `
+    -Body $bodyBytes
 }
 
 $ingestKey = Read-DotEnvValue -Path $SecretsPath -Name "DEEP_REPORT_INGEST_KEY"
@@ -207,7 +226,7 @@ if ($ReportPath) {
     throw "Report file not found: $ReportPath"
   }
   $report = [ordered]@{
-    content = Get-Content -Raw -LiteralPath $ReportPath
+    content = Get-Content -Raw -Encoding UTF8 -LiteralPath $ReportPath
     source = (Resolve-Path -LiteralPath $ReportPath).Path
     generatedAt = (Get-Item -LiteralPath $ReportPath).LastWriteTimeUtc.ToString("o")
   }
@@ -224,6 +243,7 @@ if ($ReportPath) {
 }
 
 $localized = Split-ReportLanguages -Content $report.content
+Assert-ReadableReport -Content ($localized.contentZh + "`n" + $localized.contentEn)
 $hashSourceZh = if ($localized.contentZh) { $localized.contentZh } else { "" }
 $hashSourceEn = if ($localized.contentEn) { $localized.contentEn } else { "" }
 $hash = Get-ReportHash -Content ($hashSourceZh + "`n---EN---`n" + $hashSourceEn)
