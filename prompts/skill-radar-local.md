@@ -6,11 +6,19 @@ This prompt is the recommended production path for local Codex Automation.
 
 The automation shell may not have outbound network access. Do not POST to the Worker from this task. Write the completed report to the outbox file path below; the local forwarder will read that file and send it to the Worker.
 
-Before writing the report, determine the current Beijing date (`Asia/Shanghai`) and use that date consistently in:
+Before writing the report, determine the current Beijing date and time in Beijing time (`Asia/Shanghai`).
+
+Use the date in:
 
 - the report title
-- `generatedAt`
-- `sourceRunId`
+- the outbox file name
+
+Use a human-readable timestamp near the top of each language section, for example:
+
+- Chinese: `生成时间：2026-06-22 08:05 北京时间`
+- English: `Generated: 2026-06-22 08:05 Beijing Time`
+
+Do not write machine metadata such as `generatedAt`, `sourceRunId`, `Asia/Shanghai`, JSON fields, or raw key/value status lines inside the report body.
 
 Do not modify repository files except for writing the report file under `reports/outbox/`.
 Do not read, print, or reveal any ingest key.
@@ -68,11 +76,15 @@ Write a concise bilingual Markdown report using this exact structure.
 <!-- zh -->
 # Skill Radar Deep Dive - YYYY-MM-DD
 
+生成时间：YYYY-MM-DD HH:mm 北京时间
+
 Chinese report body here. Write natural, concise Chinese. Keep product names, repository names, skill names, file names, commands, URLs, and technical identifiers in English. Translate explanations, caveats, recommendations, and summaries into Chinese.
 <!-- /zh -->
 
 <!-- en -->
 # Skill Radar Deep Dive - YYYY-MM-DD
+
+Generated: YYYY-MM-DD HH:mm Beijing Time
 
 English report body here.
 <!-- /en -->
