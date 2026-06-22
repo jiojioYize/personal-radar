@@ -62,6 +62,32 @@ export default {
       return Response.json({ ok: true, stored: true, pushed: true, report: stored.report });
     }
 
+    if (url.pathname === "/admin/prune-reports") {
+      if (request.method !== "POST") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+
+      const key = request.headers.get("x-radar-ingest-key") || "";
+      const auth = getIngestAuth(env, key);
+      if (!auth.ok) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return Response.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+      }
+
+      try {
+        const result = await pruneReports(env, payload);
+        return Response.json({ ok: true, ...result });
+      } catch (error) {
+        return Response.json({ ok: false, error: error.message }, { status: 400 });
+      }
+    }
+
     return new Response("Not found", { status: 404 });
   },
 
@@ -464,6 +490,43 @@ async function updateReportIndex(env, meta) {
   const existing = (await getJsonFromKV(env.RADAR_STATE, key)) || [];
   const next = [meta, ...existing.filter((item) => item.date !== meta.date || item.category !== meta.category)].slice(0, REPORT_INDEX_LIMIT);
   await env.RADAR_STATE.put(key, JSON.stringify(next));
+}
+
+async function pruneReports(env, payload) {
+  if (!env.RADAR_STATE) {
+    return { deleted: [], remaining: [] };
+  }
+
+  const category = normalizeSegment(payload.category || DEFAULT_CATEGORY);
+  const dates = Array.isArray(payload.dates) ? payload.dates.map(normalizeDateSegment).filter(Boolean) : [];
+  const uniqueDates = [...new Set(dates)];
+  if (uniqueDates.length === 0) {
+    throw new Error("No dates provided");
+  }
+
+  const indexKey = reportIndexStorageKey(category);
+  const existing = (await getJsonFromKV(env.RADAR_STATE, indexKey)) || [];
+  const deleted = [];
+
+  for (const date of uniqueDates) {
+    await env.RADAR_STATE.delete(reportStorageKey(category, date));
+    deleted.push({ category, date });
+  }
+
+  const remaining = existing.filter((item) => item.category !== category || !uniqueDates.includes(item.date));
+  await env.RADAR_STATE.put(indexKey, JSON.stringify(remaining));
+
+  const publicLatest = remaining.find((item) => item.visibility === "public");
+  if (publicLatest) {
+    await env.RADAR_STATE.put(latestStorageKey(category, "public"), JSON.stringify(publicLatest));
+  }
+
+  const privateLatest = remaining.find((item) => item.visibility !== "public");
+  if (privateLatest) {
+    await env.RADAR_STATE.put(latestStorageKey(category, "private"), JSON.stringify(privateLatest));
+  }
+
+  return { deleted, remaining: remaining.map((item) => ({ category: item.category, date: item.date, visibility: item.visibility })) };
 }
 
 async function renderHome(env, request) {
