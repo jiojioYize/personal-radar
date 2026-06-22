@@ -13,12 +13,9 @@ Use the date in:
 - the report title
 - the outbox file name
 
-Use a human-readable timestamp near the top of each language section, for example:
+Do not write a generated-time line inside the report body. The Worker website already displays the report timestamp above the title.
 
-- Chinese: `生成时间：2026-06-22 08:05 北京时间`
-- English: `Generated: 2026-06-22 08:05 Beijing Time`
-
-Do not write machine metadata such as `generatedAt`, `sourceRunId`, `Asia/Shanghai`, JSON fields, or raw key/value status lines inside the report body.
+Do not write machine metadata such as `generatedAt`, `sourceRunId`, `Asia/Shanghai`, `Generated:`, `生成时间：`, JSON fields, or raw key/value status lines inside the report body.
 
 Do not modify repository files except for writing the report file under `reports/outbox/`.
 Do not read, print, or reveal any ingest key.
@@ -76,15 +73,11 @@ Write a concise bilingual Markdown report using this exact structure.
 <!-- zh -->
 # Skill Radar Deep Dive - YYYY-MM-DD
 
-生成时间：YYYY-MM-DD HH:mm 北京时间
-
 Chinese report body here. Write natural, concise Chinese. Keep product names, repository names, skill names, file names, commands, URLs, and technical identifiers in English. Translate explanations, caveats, recommendations, and summaries into Chinese.
 <!-- /zh -->
 
 <!-- en -->
 # Skill Radar Deep Dive - YYYY-MM-DD
-
-Generated: YYYY-MM-DD HH:mm Beijing Time
 
 English report body here.
 <!-- /en -->

@@ -657,16 +657,16 @@ function normalizeStoredContent(report) {
 }
 
 function selectStoredContent(stored, language) {
-  if (typeof stored.content === "string") return stored.content;
+  if (typeof stored.content === "string") return stripReportBodyMetadata(stored.content);
   const content = stored.content || {};
-  if (language === "en") return content.en || content.zh || "";
-  return content.zh || content.en || "";
+  const selected = language === "en" ? content.en || content.zh || "" : content.zh || content.en || "";
+  return stripReportBodyMetadata(selected);
 }
 
 function getPushContent(report) {
   const language = normalizeLanguage(report.pushLanguage || DEFAULT_LANGUAGE);
-  if (language === "en") return report.contentEn || report.content || report.contentZh || "";
-  return report.contentZh || report.content || report.contentEn || "";
+  const selected = language === "en" ? report.contentEn || report.content || report.contentZh || "" : report.contentZh || report.content || report.contentEn || "";
+  return stripReportBodyMetadata(selected);
 }
 
 function availableLanguages(report) {
@@ -690,6 +690,14 @@ function normalizeReportContent(title, content) {
   const trimmed = content.trim();
   if (trimmed.startsWith("# ")) return trimmed;
   return `# ${title}\n\n${trimmed}`;
+}
+
+function stripReportBodyMetadata(content) {
+  return String(content || "")
+    .replace(/^\s*(生成时间：|生成时间:)\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s*北京时间\s*$/gim, "")
+    .replace(/^\s*Generated:\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s*Beijing Time\s*$/gim, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function normalizeSegment(value) {
