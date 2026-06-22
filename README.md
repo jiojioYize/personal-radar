@@ -12,6 +12,7 @@ The site publishes public AI-agent skill and rule radar reports. Pages default t
 
 ## Project Notes
 
+- [Portfolio Case Study](docs/portfolio-personal-radar.md): portfolio-ready case study for AI product internship applications.
 - [MVP Stage 1 Record](docs/mvp-stage-1.md): current production flow, completed scope, operational checklist, and next-stage candidates.
 - [Encoding Playbook](docs/encoding-playbook.md): UTF-8 and PowerShell lessons from the report delivery chain.
 
