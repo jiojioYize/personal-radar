@@ -10,7 +10,11 @@ param(
   [string]$Category = "skill-radar",
   [ValidateSet("public", "private")]
   [string]$Visibility = "public",
-  [int]$LookbackHours = 36
+  [int]$LookbackHours = 36,
+  [ValidateRange(1, 10)]
+  [int]$MaxSendAttempts = 3,
+  [ValidateRange(1, 300)]
+  [int]$RetryDelaySeconds = 15
 )
 
 $ErrorActionPreference = "Stop"
@@ -244,6 +248,29 @@ function Send-Report {
     -Body $bodyBytes
 }
 
+function Send-ReportWithRetry {
+  param(
+    [string]$Endpoint,
+    [string]$Key,
+    [hashtable]$Payload,
+    [int]$MaxAttempts,
+    [int]$DelaySeconds
+  )
+
+  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+    try {
+      return Send-Report -Endpoint $Endpoint -Key $Key -Payload $Payload
+    } catch {
+      if ($attempt -ge $MaxAttempts) {
+        throw
+      }
+      $waitSeconds = $DelaySeconds * $attempt
+      Write-Log "Send attempt $attempt/$MaxAttempts failed: $($_.Exception.Message). Retrying in $waitSeconds seconds."
+      Start-Sleep -Seconds $waitSeconds
+    }
+  }
+}
+
 $ingestKey = Read-DotEnvValue -Path $SecretsPath -Name "DEEP_REPORT_INGEST_KEY"
 $state = Read-State -Path $StatePath
 Write-Log "Forwarder started. AutomationId=$AutomationId Category=$Category Visibility=$Visibility LookbackHours=$LookbackHours OutboxDir=$OutboxDir"
@@ -301,7 +328,12 @@ $payload = @{
 $endpoint = "$($WorkerUrl.TrimEnd('/'))/ingest-report"
 
 try {
-  $response = Send-Report -Endpoint $endpoint -Key $ingestKey -Payload $payload
+  $response = Send-ReportWithRetry `
+    -Endpoint $endpoint `
+    -Key $ingestKey `
+    -Payload $payload `
+    -MaxAttempts $MaxSendAttempts `
+    -DelaySeconds $RetryDelaySeconds
   $state.sent[$sourceRunId] = [ordered]@{
     sentAt = (Get-Date).ToUniversalTime().ToString("o")
     source = $report.source

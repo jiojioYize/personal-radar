@@ -1,6 +1,6 @@
 # Personal Radar MVP Stage 1 Record
 
-Last updated: 2026-06-22
+Last updated: 2026-06-27
 
 ## Status
 
@@ -142,10 +142,36 @@ If the report was already sent that day, `duplicate=true` can be normal.
 ## Known Risks
 
 - Codex Automation scheduling UI and runtime behavior may change.
+- Codex research still depends on internet access through the user's local proxy.
 - Local Windows Task Scheduler must remain enabled.
+- A single daily forwarder trigger can delay delivery when the network fails at that exact time.
 - Worker KV is simple and sufficient for MVP, but not ideal for richer search, feedback, or analytics.
 - `/run` still exists as legacy debug logic.
 - The forwarder still has session fallback, which is no longer the desired primary path.
+
+## Incident Record
+
+### 2026-06-26: Report Generation Missed
+
+- The Codex Automation could not complete its internet research because the local
+  proxy was unavailable.
+- No `skill-radar-2026-06-26.md` outbox file was generated.
+- The forwarder ran at 08:15, found the already-sent 2026-06-25 report, and
+  correctly skipped it.
+- Classification: external runtime/network incident, not a report parsing or
+  delivery regression.
+
+### 2026-06-27: Delivery Delayed
+
+- Codex Automation successfully generated the report at 08:03.
+- Windows Task Scheduler started the forwarder at 08:15 with no missed run.
+- The Worker connection closed during the POST, so the task exited with result
+  code `1` and recorded the report in local `pending` state.
+- The report was manually retried at 21:06 and Worker returned
+  `stored=true`, `pushed=true`, `duplicate=false`.
+- The forwarder now retries transient sends three times within one run.
+- Classification: transient delivery network incident, not a scheduling or
+  content-generation regression.
 
 ## Stage 2 Candidates
 
@@ -170,4 +196,3 @@ Stage 1 is considered complete because:
 - The current stable report archive starts at 2026-06-22.
 - Encoding and duplicated timestamp issues have been fixed.
 - Obsolete Cloud test paths have been cleaned up.
-

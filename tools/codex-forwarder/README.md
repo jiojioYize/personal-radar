@@ -49,6 +49,15 @@ To override the outbox directory:
 .\tools\codex-forwarder\forward-codex-report.ps1 -OutboxDir "C:\path\to\outbox"
 ```
 
+The forwarder retries transient send failures three times by default. The delay
+increases from 15 to 30 seconds. Both values can be adjusted:
+
+```powershell
+.\tools\codex-forwarder\forward-codex-report.ps1 `
+  -MaxSendAttempts 5 `
+  -RetryDelaySeconds 30
+```
+
 ## Required Secret
 
 Create `.secrets.local` in the repository root:
@@ -81,7 +90,10 @@ Start in:
 C:\Users\Zander Sun\personal-radar
 ```
 
-For more resilience, run it every 10 minutes during the morning window. The local state file prevents duplicate forwarding.
+For more resilience, run it every 10 minutes during the morning window, or
+configure Task Scheduler to restart the task after failure. The local state file
+prevents duplicate forwarding, while failed reports remain in local `pending`
+state until a later successful run.
 
 ## Logs
 
