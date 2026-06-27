@@ -169,7 +169,6 @@ If the report was already sent that day, `duplicate=true` can be normal.
   code `1` and recorded the report in local `pending` state.
 - The report was manually retried at 21:06 and Worker returned
   `stored=true`, `pushed=true`, `duplicate=false`.
-- The forwarder now retries transient sends three times within one run.
 - Classification: transient delivery network incident, not a scheduling or
   content-generation regression.
 
