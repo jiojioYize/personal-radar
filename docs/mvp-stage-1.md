@@ -1,10 +1,10 @@
 # Personal Radar MVP Stage 1 Record
 
-Last updated: 2026-06-27
+Last updated: 2026-06-28
 
 ## Status
 
-Stage 1 MVP is complete.
+Stage 1 MVP is complete and formally accepted as of 2026-06-28.
 
 Personal Radar can now run as a daily personal radar system:
 
@@ -13,6 +13,22 @@ Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-report -
 ```
 
 The first stable public report date is 2026-06-22. Earlier 2026-06-19 to 2026-06-21 test and malformed reports were removed from the public archive.
+
+## Final Acceptance
+
+The MVP was observed in daily use from 2026-06-22 through 2026-06-28.
+
+On 2026-06-28, the complete production flow ran normally:
+
+- Codex Automation created `skill-radar-2026-06-28.md` at 08:04 Beijing time.
+- Windows Task Scheduler started the forwarder at 08:15.
+- Worker returned `stored=true`, `pushed=true`, and `duplicate=false` at 08:15.
+- The public website updated successfully.
+- The Chinese PushPlus message arrived successfully.
+
+The 2026-06-26 generation miss and 2026-06-27 delivery failure remain recorded
+as isolated external runtime incidents. They do not change the acceptance result
+and did not reveal a report-format, storage, or product-logic regression.
 
 ## What Works
 
@@ -185,7 +201,7 @@ Recommended next work:
 
 ## Completion Definition
 
-Stage 1 is considered complete because:
+Stage 1 is formally accepted because:
 
 - Daily report generation works.
 - Delivery to Worker works.
@@ -195,3 +211,4 @@ Stage 1 is considered complete because:
 - The current stable report archive starts at 2026-06-22.
 - Encoding and duplicated timestamp issues have been fixed.
 - Obsolete Cloud test paths have been cleaned up.
+- The full production flow was observed completing normally again on 2026-06-28.
