@@ -90,10 +90,10 @@ npm run dev
 打开：
 
 ```text
-http://localhost:8787/run
+http://localhost:8787/health
 ```
 
-`/run` 只用于手动 dry-run/debug；生产发布入口是 `/ingest-report`。
+生产发布入口是 `/ingest-report`。Worker 不负责搜索或生成报告。
 
 ### 部署 Worker
 
@@ -135,7 +135,7 @@ Invoke-RestMethod `
 
 ### Codex forwarder
 
-`tools/codex-forwarder/` 是当前生产桥接方案。它会扫描本地 Codex session，提取最新报告并 POST 到 Worker。
+`tools/codex-forwarder/` 是当前生产桥接方案。它会读取 `reports/outbox/` 中最新的完整报告并 POST 到 Worker。
 
 本地 Codex Automation 负责执行 `prompts/skill-radar-local.md` 并输出完整报告。forwarder 负责在稍后读取报告并推送。
 
@@ -235,10 +235,10 @@ npm run dev
 Open:
 
 ```text
-http://localhost:8787/run
+http://localhost:8787/health
 ```
 
-`/run` is only a manual dry-run/debug endpoint. Production publishing uses `/ingest-report`.
+Production publishing uses `/ingest-report`. The Worker does not search for or generate reports.
 
 ### Deploy
 
@@ -280,7 +280,7 @@ Useful fields:
 
 ### Codex Forwarder
 
-`tools/codex-forwarder/` is the production local bridge. It scans local Codex sessions, extracts the latest report, and POSTs it to the Worker.
+`tools/codex-forwarder/` is the production local bridge. It reads the latest complete report from `reports/outbox/` and POSTs it to the Worker.
 
 Run it after the Codex Automation schedule. The local state file prevents duplicate forwarding.
 

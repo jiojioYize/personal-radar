@@ -76,7 +76,6 @@ Local automation should not read ingest keys. The forwarder reads `DEEP_REPORT_I
 - `/`: latest public report page.
 - `/reports`: public report archive.
 - `/reports/:category/:date`: dated public report page.
-- `/run`: generate a Markdown preview without pushing.
 - `/ingest-report`: receive a Codex-generated report, store it, and forward it through PushPlus. Requires the ingest key in the `x-radar-ingest-key` header.
 
 ## Recommendation Quality Rules

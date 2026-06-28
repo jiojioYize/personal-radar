@@ -4,7 +4,7 @@ This is the production local bridge for Codex Automation reports.
 
 The recommended production path is `prompts/skill-radar-local.md`, where local Codex Automation generates the bilingual report but does not POST to the Worker. The automation writes a report file under `reports/outbox/`, and this forwarder POSTs that file to the public Worker endpoint from a normal Windows PowerShell process.
 
-The script first scans `reports/outbox/*.md` for the latest valid report. If no outbox report is found, it falls back to recent local Codex session JSONL files. It keeps local sent state so the same report is not forwarded twice.
+The script scans `reports/outbox/*.md` for the latest valid report. It keeps local sent state so the same report is not forwarded twice.
 
 When the Codex report includes these markers, the forwarder sends both language versions:
 
@@ -37,7 +37,7 @@ Useful options:
   -Category skill-radar
 ```
 
-To forward a specific Markdown file instead of scanning Codex sessions:
+To forward a specific Markdown file instead of scanning the outbox:
 
 ```powershell
 .\tools\codex-forwarder\forward-codex-report.ps1 -ReportPath "C:\path\to\report.md"
@@ -95,6 +95,6 @@ This file is ignored by Git.
 
 ## Encoding Safety
 
-Codex session files are UTF-8. The forwarder reads session and report files with explicit `-Encoding UTF8`, sends JSON as UTF-8 bytes, and refuses to send reports that look mojibaked.
+Codex report files are UTF-8. The forwarder reads report files with explicit `-Encoding UTF8`, sends JSON as UTF-8 bytes, and refuses to send reports that look mojibaked.
 
 See [`../../docs/encoding-playbook.md`](../../docs/encoding-playbook.md).

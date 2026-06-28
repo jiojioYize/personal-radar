@@ -5,7 +5,6 @@ param(
   [string]$StatePath = (Join-Path (Resolve-Path ".") ".codex-forwarder-state.json"),
   [string]$LogPath = (Join-Path (Resolve-Path ".") ".codex-forwarder.log"),
   [string]$OutboxDir = (Join-Path (Resolve-Path ".") "reports\outbox"),
-  [string]$CodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }),
   [string]$ReportPath = "",
   [string]$Category = "skill-radar",
   [ValidateSet("public", "private")]
@@ -65,28 +64,6 @@ function Write-State {
   $payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Path -Encoding UTF8
 }
 
-function Get-TextFromJson {
-  param($Value)
-  if ($null -eq $Value) { return @() }
-  if ($Value -is [string]) { return @($Value) }
-  if ($Value -is [System.Collections.IEnumerable] -and -not ($Value -is [string])) {
-    $items = @()
-    foreach ($item in $Value) {
-      $items += Get-TextFromJson $item
-    }
-    return $items
-  }
-  if ($Value.PSObject.Properties) {
-    $items = @()
-    foreach ($property in $Value.PSObject.Properties) {
-      if ($property.Name -in @("encrypted_content", "arguments")) { continue }
-      $items += Get-TextFromJson $property.Value
-    }
-    return $items
-  }
-  return @()
-}
-
 function Select-ReportMarkdown {
   param([string]$Text)
   if (-not $Text) { return $null }
@@ -143,56 +120,6 @@ function Split-ReportLanguages {
     contentEn = $Content
     content = $Content
   }
-}
-
-function Get-ReportFromJsonlFile {
-  param([System.IO.FileInfo]$File, [string]$AutomationId)
-  $best = $null
-  foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $File.FullName -ErrorAction SilentlyContinue) {
-    if (-not $line.Trim()) { continue }
-    try {
-      $json = $line | ConvertFrom-Json -ErrorAction Stop
-    } catch {
-      continue
-    }
-    $texts = Get-TextFromJson $json
-    foreach ($text in $texts) {
-      $report = Select-ReportMarkdown -Text $text
-      if (-not $report) { continue }
-      $looksLikeAutomation = $report -match [regex]::Escape($AutomationId) -or $report -match "Codex|Claude|Cursor|Cline|Roo|SKILL\.md"
-      if ($looksLikeAutomation) {
-        if (-not $best -or $report.Length -gt $best.Length) {
-          $best = $report
-        }
-      }
-    }
-  }
-  return $best
-}
-
-function Find-LatestCodexReport {
-  param([string]$CodexHome, [string]$AutomationId, [int]$LookbackHours)
-  $sessionsRoot = Join-Path $CodexHome "sessions"
-  if (-not (Test-Path -LiteralPath $sessionsRoot)) {
-    throw "Codex sessions directory not found: $sessionsRoot"
-  }
-  $since = (Get-Date).AddHours(-1 * $LookbackHours)
-  $files = Get-ChildItem -LiteralPath $sessionsRoot -Recurse -File -Filter "*.jsonl" |
-    Where-Object { $_.LastWriteTime -ge $since } |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 80
-
-  foreach ($file in $files) {
-    $report = Get-ReportFromJsonlFile -File $file -AutomationId $AutomationId
-    if ($report) {
-      return [ordered]@{
-        content = $report
-        source = $file.FullName
-        generatedAt = $file.LastWriteTimeUtc.ToString("o")
-      }
-    }
-  }
-  throw "No recent Codex report found for $AutomationId"
 }
 
 function Find-LatestOutboxReport {
@@ -262,16 +189,8 @@ if ($ReportPath) {
   if ($report) {
     Write-Log "Using outbox report: $($report.source)"
   } else {
-    try {
-      $report = Find-LatestCodexReport -CodexHome $CodexHome -AutomationId $AutomationId -LookbackHours $LookbackHours
-      Write-Log "Using session report: $($report.source)"
-    } catch {
-      if ($_.Exception.Message -like "No recent Codex report found*") {
-        Write-Log "No recent outbox or Codex session report found for $AutomationId"
-        return
-      }
-      throw
-    }
+    Write-Log "No recent outbox report found for $AutomationId"
+    return
   }
 }
 

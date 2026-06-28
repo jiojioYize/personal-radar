@@ -67,7 +67,6 @@ Public endpoints:
 
 Debug or maintenance endpoints:
 
-- `/run`: legacy dry-run/debug preview. Not part of the daily production flow.
 - `/admin/prune-reports`: protected date-based cleanup endpoint.
 
 ## Design Decisions
@@ -86,7 +85,7 @@ Keeping those responsibilities separate made the system more reliable:
 
 The first implementation tried to recover reports from Codex session output. That was fragile because status lines, UI text, or encoding issues could be mistaken for report content.
 
-The production path now writes a dedicated UTF-8 Markdown file under `reports/outbox/`. The forwarder reads that file first. Session fallback remains temporarily, but should be removed after several more stable days.
+The production path now writes a dedicated UTF-8 Markdown file under `reports/outbox/`. The forwarder reads only that explicit handoff file.
 
 ### Local Forwarder Over Direct Automation POST
 
@@ -135,12 +134,11 @@ Removed obsolete Cloud or direct-test paths:
 - `/test-push`
 - `cloud-test-radar`
 
-Kept temporarily:
+Also removed after the outbox path proved stable:
 
-- `/run` dry-run/debug logic.
+- `/run` Worker-side report generation.
+- `src/channels.js`.
 - forwarder session fallback.
-
-These should be removed only after the outbox path remains stable for several days.
 
 ## Operational Checklist
 
@@ -162,8 +160,6 @@ If the report was already sent that day, `duplicate=true` can be normal.
 - Local Windows Task Scheduler must remain enabled.
 - A single daily forwarder trigger can delay delivery when the network fails at that exact time.
 - Worker KV is simple and sufficient for MVP, but not ideal for richer search, feedback, or analytics.
-- `/run` still exists as legacy debug logic.
-- The forwarder still has session fallback, which is no longer the desired primary path.
 
 ## Incident Record
 
@@ -197,7 +193,7 @@ Recommended next work:
 3. Add preference memory for useful/not useful feedback.
 4. Improve public archive browsing and category presentation.
 5. Add a small operational status page for last ingest, last push, and last report date.
-6. Remove session fallback and `/run` after the outbox path stays stable.
+6. Add a shared channel registry and channel-specific outbox directories before expanding beyond `skill-radar`.
 
 ## Completion Definition
 
