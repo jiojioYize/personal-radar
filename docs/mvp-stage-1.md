@@ -163,26 +163,10 @@ If the report was already sent that day, `duplicate=true` can be normal.
 
 ## Incident Record
 
-### 2026-06-26: Report Generation Missed
-
-- The Codex Automation could not complete its internet research because the local
-  proxy was unavailable.
-- No `skill-radar-2026-06-26.md` outbox file was generated.
-- The forwarder ran at 08:15, found the already-sent 2026-06-25 report, and
-  correctly skipped it.
-- Classification: external runtime/network incident, not a report parsing or
-  delivery regression.
-
-### 2026-06-27: Delivery Delayed
-
-- Codex Automation successfully generated the report at 08:03.
-- Windows Task Scheduler started the forwarder at 08:15 with no missed run.
-- The Worker connection closed during the POST, so the task exited with result
-  code `1` and recorded the report in local `pending` state.
-- The report was manually retried at 21:06 and Worker returned
-  `stored=true`, `pushed=true`, `duplicate=false`.
-- Classification: transient delivery network incident, not a scheduling or
-  content-generation regression.
+Production exceptions are maintained in
+[`docs/incident-log.md`](incident-log.md). The 2026-06-26 generation miss,
+2026-06-27 delivery delay, and 2026-06-30 late generation were isolated external
+runtime incidents and do not change the Stage 1 acceptance result.
 
 ## Stage 2 Candidates
 
