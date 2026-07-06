@@ -20,7 +20,7 @@ The user wants practical recommendations that are worth installing, adapting, wa
 - KV binding: `RADAR_STATE`
 - Main Worker role: ingest reports, store them in KV, render the public site, and send PushPlus notifications.
 - Main automation role: run the intelligent search/deep-dive and write the bilingual report to `reports/outbox/`.
-- Main forwarder role: read the completed report file and POST it to `/ingest-report`.
+- Main forwarder role: validate the completed Markdown and quality Sidecar pair and POST both to `/ingest-report`.
 
 Current recommended production flow:
 
@@ -51,6 +51,7 @@ prompts/skill-radar-local.md
 That prompt should write:
 
 ```text
+reports/outbox/skill-radar-YYYY-MM-DD.quality.json
 reports/outbox/skill-radar-YYYY-MM-DD.md
 ```
 
@@ -65,6 +66,11 @@ Known local-only files:
 - `.codex-forwarder-state.json`
 - `.codex-forwarder-pending.json`
 - `reports/outbox/*.md`
+- `reports/outbox/*.quality.json`
+- `reports/state/*`
+- `reports/feedback/*`
+- `reports/inbox/*`
+- `reports/quality/*`
 
 Cloudflare secrets are managed through Wrangler or the Cloudflare dashboard. PushPlus token, test key, and ingest keys should stay out of Git.
 
@@ -96,9 +102,20 @@ Avoid recommending:
 
 ## Roadmap
 
-1. Add 30-day cross-run deduplication in Cloudflare Worker using KV to record pushed URLs and skip or down-rank recently seen items.
-2. Let Codex Deep Dive share the same history, either by letting Worker parse ingested report links or exposing protected history endpoints.
-3. Add preference memory so useful/not useful feedback adjusts future ranking.
+Long-term product positioning, user states, website evolution, and storage
+decisions are maintained in `docs/product-strategy.md`.
+
+Stage 2 implementation and acceptance are maintained in
+`docs/stage-2-content-quality.md`.
+
+Current Stage 2 production rules:
+
+1. The quality Sidecar is the source of truth; Markdown is generated from it.
+2. One to six qualified items produce `published`; zero produces `no_update`.
+3. System failures must not be represented as `no_update`.
+4. X is an auxiliary web-search and inbox source; no scraper or X API is used.
+5. KV remains the production store and supports version 1 and version 2 reports.
+6. PushPlus stays on Markdown until the real-device HTML comparison is accepted.
 
 ## Operational Notes
 

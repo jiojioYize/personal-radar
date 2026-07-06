@@ -4,7 +4,10 @@ This is the production local bridge for Codex Automation reports.
 
 The recommended production path is `prompts/skill-radar-local.md`, where local Codex Automation generates the bilingual report but does not POST to the Worker. The automation writes a report file under `reports/outbox/`, and this forwarder POSTs that file to the public Worker endpoint from a normal Windows PowerShell process.
 
-The script scans `reports/outbox/*.md` for the latest valid report. It keeps local sent state so the same report is not forwarded twice.
+The script scans `reports/outbox/*.md` for the latest valid report and requires a
+matching `.quality.json` Sidecar. It checks the date, status, item count, item
+order, and source links before sending both artifacts. It keeps local sent state
+so the same report is not forwarded twice.
 
 When the Codex report includes these markers, the forwarder sends both language versions:
 
@@ -47,6 +50,14 @@ To override the outbox directory:
 
 ```powershell
 .\tools\codex-forwarder\forward-codex-report.ps1 -OutboxDir "C:\path\to\outbox"
+```
+
+To validate a report pair without reading secrets or sending a request:
+
+```powershell
+.\tools\codex-forwarder\forward-codex-report.ps1 `
+  -ReportPath "reports\outbox\skill-radar-YYYY-MM-DD.md" `
+  -ValidateOnly
 ```
 
 ## Required Secret
@@ -92,6 +103,18 @@ Task Scheduler runs in the background, so you may not see a console window. The 
 ```
 
 This file is ignored by Git.
+
+## Stage 2 Quality Files
+
+The automation prepares local context and creates:
+
+```text
+reports/outbox/skill-radar-YYYY-MM-DD.quality.json
+reports/outbox/skill-radar-YYYY-MM-DD.md
+```
+
+The forwarder refuses to send a Markdown-only Stage 2 report. Invalid drafts
+remain under `reports/state/` and cannot be selected by the scheduled task.
 
 ## Encoding Safety
 

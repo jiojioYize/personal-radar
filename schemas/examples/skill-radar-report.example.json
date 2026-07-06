@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "status": "published",
+  "channel": "skill-radar",
+  "reportDate": "2026-07-06",
+  "summary": {
+    "zh": "今日重点关注可验证、可迁移的技能工作流。",
+    "en": "Today focuses on verifiable and portable skill workflows."
+  },
+  "conclusion": {
+    "zh": "优先采用经过审计的小型技能，不要整包盲装。",
+    "en": "Prefer small audited skills over blind full-package installs."
+  },
+  "stats": {
+    "reviewedCount": 8,
+    "selectedCount": 1,
+    "duplicateCount": 1,
+    "rejectedCount": 6,
+    "sourceCounts": {
+      "github": 7,
+      "x": 1
+    }
+  },
+  "items": [
+    {
+      "id": "src_a9bb5331",
+      "rank": 1,
+      "title": "example/agent-skill",
+      "category": "coding workflow",
+      "sourceUrl": "https://github.com/example/agent-skill",
+      "canonicalUrl": "https://github.com/example/agent-skill",
+      "recommendation": "adapt",
+      "discovery": {
+        "type": "github",
+        "url": "https://github.com/example/agent-skill",
+        "author": null,
+        "publishedAt": null
+      },
+      "display": {
+        "zh": {
+          "oneLiner": "把重复的代码审查步骤固化为可验证工作流。",
+          "whyNow": "近期增加了测试样例和明确的停止条件。",
+          "bestFor": "希望统一代理代码审查流程的团队。",
+          "action": "先抽取审查流程并在一个仓库中验证。",
+          "primaryCaution": "安装前需要审查附带脚本和权限。",
+          "problem": "减少代理跳过测试或安全检查的情况。",
+          "usability": "指令可以直接阅读，脚本需要按项目适配。",
+          "adaptation": "将工具名替换为Codex现有能力并保留验收门。",
+          "trust": "固定commit，逐个审查脚本，不授予不必要权限。"
+        },
+        "en": {
+          "oneLiner": "Turns repeated code-review steps into a verifiable workflow.",
+          "whyNow": "Recent updates added fixtures and explicit stop conditions.",
+          "bestFor": "Teams standardizing agent-assisted code review.",
+          "action": "Extract the review flow and validate it in one repository first.",
+          "primaryCaution": "Review bundled scripts and permissions before installation.",
+          "problem": "Reduces skipped tests and security checks during agent reviews.",
+          "usability": "Instructions are directly readable; scripts need project adaptation.",
+          "adaptation": "Map tool names to Codex capabilities and retain acceptance gates.",
+          "trust": "Pin a commit, audit scripts individually, and minimize permissions."
+        }
+      },
+      "quality": {
+        "dimensions": {
+          "relevance": 5,
+          "reusability": 5,
+          "maintenanceEvidence": 4,
+          "novelty": 4,
+          "adaptationFeasibility": 5,
+          "trustSafety": 4
+        },
+        "baseScore": 92,
+        "preferenceAdjustment": 0,
+        "finalRankScore": 92,
+        "skillLike": true,
+        "officialSourceVerified": true,
+        "sourceCheckedAt": "2026-07-06T00:00:00.000Z",
+        "license": "MIT",
+        "history": {
+          "seenWithin30Days": false,
+          "previousDates": [],
+          "materialChange": false,
+          "changeEvidence": null
+        }
+      }
+    }
+  ],
+  "socialDecisions": []
+}

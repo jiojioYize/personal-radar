@@ -9,7 +9,8 @@ param(
   [string]$Category = "skill-radar",
   [ValidateSet("public", "private")]
   [string]$Visibility = "public",
-  [int]$LookbackHours = 36
+  [int]$LookbackHours = 36,
+  [switch]$ValidateOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -72,14 +73,13 @@ function Select-ReportMarkdown {
 
   $report = $Text.Substring($start).Trim()
   $report = [regex]::Replace($report, "(?m)^::inbox-item\{.*\}\s*$", "").Trim()
-  if ($report.Length -lt 300) { return $null }
+  if ($report.Length -lt 100) { return $null }
   if ($report -notmatch "(?s)<!--\s*zh\s*-->.*<!--\s*/zh\s*-->") { return $null }
   if ($report -notmatch "(?s)<!--\s*en\s*-->.*<!--\s*/en\s*-->") { return $null }
   if ($report -notmatch "(?m)^#\s+Skill Radar Deep Dive\s+-\s+\d{4}-\d{2}-\d{2}\s*$") { return $null }
   $zh = Get-MarkedSection -Text $report -Name "zh"
   $en = Get-MarkedSection -Text $report -Name "en"
   if (-not $zh -or -not $en) { return $null }
-  if ($zh.Length -lt 1200 -or $en.Length -lt 1200) { return $null }
   return $report
 }
 
@@ -134,18 +134,87 @@ function Find-LatestOutboxReport {
     Sort-Object LastWriteTime -Descending
 
   foreach ($file in $files) {
+    $sidecarPath = $file.FullName -replace "\.md$", ".quality.json"
+    if (-not (Test-Path -LiteralPath $sidecarPath)) {
+      continue
+    }
     $content = Get-Content -Raw -Encoding UTF8 -LiteralPath $file.FullName
     $report = Select-ReportMarkdown -Text $content
     if ($report) {
       return [ordered]@{
         content = $report
         source = $file.FullName
+        sidecarSource = $sidecarPath
         generatedAt = $file.LastWriteTimeUtc.ToString("o")
       }
     }
   }
 
   return $null
+}
+
+function Read-StructuredReport {
+  param(
+    [string]$SidecarPath,
+    [string]$MarkdownPath,
+    [string]$MarkdownContent
+  )
+  if (-not (Test-Path -LiteralPath $SidecarPath)) {
+    throw "Structured report sidecar not found: $SidecarPath"
+  }
+
+  $structured = Get-Content -Raw -Encoding UTF8 -LiteralPath $SidecarPath | ConvertFrom-Json
+  if ($structured.schemaVersion -ne 1) {
+    throw "Unsupported structured report schemaVersion in $SidecarPath"
+  }
+  if ($structured.channel -ne "skill-radar") {
+    throw "Structured report channel must be skill-radar"
+  }
+  if ($structured.status -notin @("published", "no_update")) {
+    throw "Structured report status must be published or no_update"
+  }
+
+  $fileName = [System.IO.Path]::GetFileName($MarkdownPath)
+  if ($fileName -notmatch "^skill-radar-(\d{4}-\d{2}-\d{2})\.md$") {
+    throw "Markdown filename does not match the Stage 2 report convention: $fileName"
+  }
+  if ($structured.reportDate -ne $Matches[1]) {
+    throw "Sidecar reportDate does not match Markdown filename"
+  }
+
+  $items = @($structured.items)
+  if ($structured.status -eq "published" -and ($items.Count -lt 1 -or $items.Count -gt 6)) {
+    throw "Published structured reports must contain 1-6 items"
+  }
+  if ($structured.status -eq "no_update" -and $items.Count -ne 0) {
+    throw "no_update structured reports must contain zero items"
+  }
+  if ([int]$structured.stats.selectedCount -ne $items.Count) {
+    throw "Sidecar selectedCount does not match items"
+  }
+
+  $lastPosition = -1
+  foreach ($item in $items) {
+    if (-not $item.title -or -not $item.sourceUrl) {
+      throw "Every structured item needs title and sourceUrl"
+    }
+    if ($item.sourceUrl -notmatch "^https://") {
+      throw "Structured item sourceUrl must use HTTPS: $($item.sourceUrl)"
+    }
+    $position = $MarkdownContent.IndexOf([string]$item.title, [System.StringComparison]::Ordinal)
+    if ($position -lt 0) {
+      throw "Structured item title is missing from Markdown: $($item.title)"
+    }
+    if ($position -lt $lastPosition) {
+      throw "Structured item order does not match Markdown"
+    }
+    if (-not $MarkdownContent.Contains([string]$item.sourceUrl)) {
+      throw "Structured item source is missing from Markdown: $($item.sourceUrl)"
+    }
+    $lastPosition = $position
+  }
+
+  return $structured
 }
 
 function Get-ReportHash {
@@ -161,7 +230,7 @@ function Send-Report {
     [string]$Key,
     [hashtable]$Payload
   )
-  $json = $Payload | ConvertTo-Json -Depth 8
+  $json = $Payload | ConvertTo-Json -Depth 20
   $bodyBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($json)
   Invoke-RestMethod `
     -Uri $Endpoint `
@@ -171,7 +240,6 @@ function Send-Report {
     -Body $bodyBytes
 }
 
-$ingestKey = Read-DotEnvValue -Path $SecretsPath -Name "DEEP_REPORT_INGEST_KEY"
 $state = Read-State -Path $StatePath
 Write-Log "Forwarder started. AutomationId=$AutomationId Category=$Category Visibility=$Visibility LookbackHours=$LookbackHours OutboxDir=$OutboxDir"
 
@@ -182,6 +250,7 @@ if ($ReportPath) {
   $report = [ordered]@{
     content = Get-Content -Raw -Encoding UTF8 -LiteralPath $ReportPath
     source = (Resolve-Path -LiteralPath $ReportPath).Path
+    sidecarSource = ((Resolve-Path -LiteralPath $ReportPath).Path -replace "\.md$", ".quality.json")
     generatedAt = (Get-Item -LiteralPath $ReportPath).LastWriteTimeUtc.ToString("o")
   }
 } else {
@@ -196,9 +265,20 @@ if ($ReportPath) {
 
 $localized = Split-ReportLanguages -Content $report.content
 Assert-ReadableReport -Content ($localized.contentZh + "`n" + $localized.contentEn)
+$structuredReport = Read-StructuredReport `
+  -SidecarPath $report.sidecarSource `
+  -MarkdownPath $report.source `
+  -MarkdownContent $report.content
+if ($ValidateOnly) {
+  Write-Log "Validated Stage 2 report pair. Markdown=$($report.source) Sidecar=$($report.sidecarSource) Status=$($structuredReport.status) Items=$(@($structuredReport.items).Count)"
+  return
+}
+
+$ingestKey = Read-DotEnvValue -Path $SecretsPath -Name "DEEP_REPORT_INGEST_KEY"
 $hashSourceZh = if ($localized.contentZh) { $localized.contentZh } else { "" }
 $hashSourceEn = if ($localized.contentEn) { $localized.contentEn } else { "" }
-$hash = Get-ReportHash -Content ($hashSourceZh + "`n---EN---`n" + $hashSourceEn)
+$structuredHashSource = $structuredReport | ConvertTo-Json -Depth 20 -Compress
+$hash = Get-ReportHash -Content ($hashSourceZh + "`n---EN---`n" + $hashSourceEn + "`n---STRUCTURED---`n" + $structuredHashSource)
 $sourceRunId = "$AutomationId-$hash"
 if ($state.sent.ContainsKey($sourceRunId)) {
   Write-Log "Already forwarded $sourceRunId"
@@ -216,6 +296,7 @@ $payload = @{
   visibility = $Visibility
   generatedAt = $report.generatedAt
   sourceRunId = $sourceRunId
+  structuredReport = $structuredReport
 }
 $endpoint = "$($WorkerUrl.TrimEnd('/'))/ingest-report"
 

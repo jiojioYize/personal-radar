@@ -1,0 +1,116 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+test("quality CLI finalizes a draft into a validated Sidecar and Markdown pair", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "personal-radar-quality-"));
+  await fs.mkdir(path.join(root, "schemas"), { recursive: true });
+  await fs.mkdir(path.join(root, "reports", "state"), { recursive: true });
+  await fs.copyFile(
+    path.join(projectRoot, "schemas", "skill-radar-report.schema.json"),
+    path.join(root, "schemas", "skill-radar-report.schema.json"),
+  );
+
+  const example = JSON.parse(await fs.readFile(
+    path.join(projectRoot, "schemas", "examples", "skill-radar-report.example.json"),
+    "utf8",
+  ));
+  example.reportDate = "2099-01-02";
+  example.items[0].sourceUrl = "https://github.com/example/stage-two-test";
+  example.items[0].canonicalUrl = example.items[0].sourceUrl;
+  const draftPath = path.join(root, "reports", "state", "skill-radar-draft.json");
+  await fs.writeFile(draftPath, `${JSON.stringify(example, null, 2)}\n`, "utf8");
+
+  const result = await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "finalize",
+      "--input",
+      "reports/state/skill-radar-draft.json",
+    ],
+    {
+      cwd: projectRoot,
+      env: { ...process.env, PERSONAL_RADAR_ROOT: root },
+    },
+  );
+
+  assert.match(result.stdout, /Finalized structured report/);
+
+  const retry = await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "finalize",
+      "--input",
+      "reports/state/skill-radar-draft.json",
+    ],
+    {
+      cwd: projectRoot,
+      env: { ...process.env, PERSONAL_RADAR_ROOT: root },
+    },
+  );
+  assert.match(retry.stdout, /Finalized structured report/);
+
+  const sidecarPath = path.join(root, "reports", "outbox", "skill-radar-2099-01-02.quality.json");
+  const markdownPath = path.join(root, "reports", "outbox", "skill-radar-2099-01-02.md");
+  const sidecar = JSON.parse(await fs.readFile(sidecarPath, "utf8"));
+  const markdown = await fs.readFile(markdownPath, "utf8");
+  assert.equal(sidecar.items[0].canonicalUrl, "https://github.com/example/stage-two-test");
+  assert.match(markdown, /<!-- zh -->/);
+  assert.match(markdown, /<!-- en -->/);
+  assert.match(markdown, /https:\/\/github.com\/example\/stage-two-test/);
+
+  const summary = await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "summary",
+      "--date",
+      "2099-01-02",
+    ],
+    {
+      cwd: projectRoot,
+      env: { ...process.env, PERSONAL_RADAR_ROOT: root },
+    },
+  );
+  assert.match(summary.stdout, /Wrote quality summary/);
+  const summaryText = await fs.readFile(
+    path.join(root, "reports", "quality", "skill-radar-summary.md"),
+    "utf8",
+  );
+  assert.match(summaryText, /Candidate source mix:/);
+  assert.match(summaryText, /X discovery:/);
+
+  if (process.platform === "win32") {
+    const forwarder = await execFileAsync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        path.join(projectRoot, "tools", "codex-forwarder", "forward-codex-report.ps1"),
+        "-ReportPath",
+        markdownPath,
+        "-LogPath",
+        path.join(root, "forwarder.log"),
+        "-StatePath",
+        path.join(root, "forwarder-state.json"),
+        "-ValidateOnly",
+      ],
+      { cwd: projectRoot },
+    );
+    assert.match(forwarder.stdout, /Validated Stage 2 report pair/);
+  }
+
+  await fs.rm(root, { recursive: true, force: true });
+});

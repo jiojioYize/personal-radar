@@ -13,6 +13,8 @@ The site publishes public AI-agent skill and rule radar reports. Pages default t
 ## Project Notes
 
 - [MVP Stage 1 Record](docs/mvp-stage-1.md): current production flow, completed scope, operational checklist, and next-stage candidates.
+- [Stage 2 Content Quality](docs/stage-2-content-quality.md): structured reports, quality rules, rollout status, and 14/30-day acceptance.
+- [Product Strategy](docs/product-strategy.md): long-term product positioning, user model, hosted and self-hosted paths, website evolution, and storage roadmap.
 - [Encoding Playbook](docs/encoding-playbook.md): UTF-8 and PowerShell lessons from the report delivery chain.
 
 ## 中文指南
@@ -46,11 +48,14 @@ Local Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-re
 请读取并执行仓库中的 prompts/skill-radar-local.md。
 ```
 
-这个 prompt 会把正式报告写到：
+这个 prompt 会先生成并校验结构化报告，再输出正式文件：
 
 ```text
+reports/outbox/skill-radar-YYYY-MM-DD.quality.json
 reports/outbox/skill-radar-YYYY-MM-DD.md
 ```
+
+Sidecar 是正式数据源，Markdown 由本地质量工具确定性生成。运行前会读取近 30 天历史、个人反馈和 X 候选收件箱。
 
 ### 本地密钥
 
@@ -102,6 +107,8 @@ npm run deploy
 
 Cloudflare Cron 默认关闭。推荐让 Codex Automation 负责智能搜索和写报告，让 Worker 负责接收、存储、展示和推送。
 
+Stage 2 默认继续使用 `PUSHPLUS_TEMPLATE=markdown`。完成一次真实微信 HTML 对照测试后，可改为 `html`。
+
 ### 手动发布一篇报告
 
 Worker 接收双语 Markdown。中文默认用于 PushPlus，网页可在中文和英文之间切换。
@@ -134,7 +141,7 @@ Invoke-RestMethod `
 
 ### Codex forwarder
 
-`tools/codex-forwarder/` 是当前生产桥接方案。它会读取 `reports/outbox/` 中最新的完整报告并 POST 到 Worker。
+`tools/codex-forwarder/` 是当前生产桥接方案。它会读取 `reports/outbox/` 中同日期的 Markdown 与 `.quality.json`，验证内容一致后再 POST 到 Worker。
 
 本地 Codex Automation 负责执行 `prompts/skill-radar-local.md` 并输出完整报告。forwarder 负责在稍后读取报告并推送。
 
@@ -155,6 +162,11 @@ Invoke-RestMethod `
 - `.codex-forwarder-state.json`
 - `.codex-forwarder-pending.json`
 - `reports/outbox/*.md`
+- `reports/outbox/*.quality.json`
+- `reports/state/`
+- `reports/feedback/`
+- `reports/inbox/`
+- `reports/quality/`
 - 生成的私人报告
 - PushPlus、Worker、Codex 或其他 token
 
@@ -191,9 +203,11 @@ For the formal daily automation, use:
 Please read and execute prompts/skill-radar-local.md.
 ```
 
-That prompt writes the final report to:
+That prompt prepares local history and feedback, validates a structured report,
+and writes:
 
 ```text
+reports/outbox/skill-radar-YYYY-MM-DD.quality.json
 reports/outbox/skill-radar-YYYY-MM-DD.md
 ```
 
@@ -247,6 +261,9 @@ npm run deploy
 
 Cloudflare Cron is disabled by default. Codex Automation handles intelligent search and report writing; the Worker handles ingest, storage, rendering, and push delivery.
 
+Stage 2 keeps `PUSHPLUS_TEMPLATE=markdown` until a real-device HTML comparison
+is accepted. Set it to `html` afterward to enable concise HTML cards.
+
 ### Publish a Report Manually
 
 The Worker accepts bilingual Markdown. Chinese content is used for PushPlus by default, and the website can switch between Chinese and English.
@@ -279,7 +296,9 @@ Useful fields:
 
 ### Codex Forwarder
 
-`tools/codex-forwarder/` is the production local bridge. It reads the latest complete report from `reports/outbox/` and POSTs it to the Worker.
+`tools/codex-forwarder/` is the production local bridge. It requires a matching
+Markdown and `.quality.json` pair, validates their date, item order, and
+sources, and POSTs both to the Worker.
 
 Run it after the Codex Automation schedule. The local state file prevents duplicate forwarding.
 
@@ -298,6 +317,11 @@ Do not commit:
 - `.codex-forwarder-state.json`
 - `.codex-forwarder-pending.json`
 - `reports/outbox/*.md`
+- `reports/outbox/*.quality.json`
+- `reports/state/`
+- `reports/feedback/`
+- `reports/inbox/`
+- `reports/quality/`
 - generated private reports
 - PushPlus, Worker, Codex, or other tokens
 

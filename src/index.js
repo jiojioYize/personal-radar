@@ -1,3 +1,8 @@
+import {
+  enrichStructuredReport,
+  validateStructuredSemantics,
+} from "./report-structure.js";
+
 const DEFAULT_CATEGORY = "skill-radar";
 const DEFAULT_TIME_ZONE = "Asia/Shanghai";
 const DEFAULT_LANGUAGE = "zh";
@@ -47,8 +52,8 @@ export default {
         return Response.json({ ok: true, stored: false, pushed: false, duplicate: true, reason: stored.reason, report: stored.report });
       }
 
-      await pushReport(env, getPushContent(report));
-      return Response.json({ ok: true, stored: true, pushed: true, report: stored.report });
+      const pushed = await pushReport(env, report, url.origin);
+      return Response.json({ ok: true, stored: true, pushed, report: stored.report });
     }
 
     if (url.pathname === "/admin/prune-reports") {
@@ -108,6 +113,9 @@ async function readIngestedReport(request) {
       throw new Error("Empty report content");
     }
     const generatedAt = payload.generatedAt || payload.generated_at || new Date().toISOString();
+    const structured = payload.structuredReport
+      ? normalizeIngestedStructuredReport(payload.structuredReport)
+      : null;
     return {
       title,
       content: normalizeReportContent(title, contentZh || contentEn),
@@ -118,6 +126,7 @@ async function readIngestedReport(request) {
       visibility: payload.visibility === "public" ? "public" : "private",
       generatedAt: normalizeIsoDate(generatedAt),
       sourceRunId: payload.sourceRunId || payload.source_run_id || null,
+      structured,
     };
   }
 
@@ -138,25 +147,157 @@ async function readIngestedReport(request) {
   };
 }
 
-async function pushReport(env, report) {
+function normalizeIngestedStructuredReport(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("structuredReport must be an object");
+  }
+  if (Number(input.schemaVersion) !== 1) {
+    throw new Error("Unsupported structuredReport schemaVersion");
+  }
+  if (input.channel !== DEFAULT_CATEGORY) {
+    throw new Error("structuredReport channel must be skill-radar");
+  }
+
+  const report = enrichStructuredReport(input, { preservePreference: true });
+  const errors = validateStructuredSemantics(report);
+  const requiredLocalized = [report.summary, report.conclusion];
+  if (requiredLocalized.some((value) => !value?.zh?.trim() || !value?.en?.trim())) {
+    errors.push("structuredReport requires bilingual summary and conclusion");
+  }
+
+  for (const [index, item] of report.items.entries()) {
+    for (const language of ["zh", "en"]) {
+      const display = item.display?.[language];
+      for (const field of ["oneLiner", "whyNow", "bestFor", "action", "primaryCaution", "problem", "usability", "adaptation", "trust"]) {
+        if (!String(display?.[field] || "").trim()) {
+          errors.push(`items[${index}].display.${language}.${field} is required`);
+        }
+      }
+    }
+    if (!isHttpsUrl(item.discovery?.url)) {
+      errors.push(`items[${index}].discovery.url must use HTTPS`);
+    }
+    if (containsRawHtml(item)) {
+      errors.push(`items[${index}] contains raw HTML`);
+    }
+  }
+
+  if (containsRawHtml(report.summary) || containsRawHtml(report.conclusion)) {
+    errors.push("structuredReport summary and conclusion must not contain raw HTML");
+  }
+  if (errors.length) {
+    throw new Error(`Invalid structuredReport: ${errors.join("; ")}`);
+  }
+  return report;
+}
+
+async function pushReport(env, report, origin) {
   if (env.PUSHPLUS_TOKEN) {
-    await sendPushPlus(env, report);
-    return;
+    await sendPushPlus(env, report, origin);
+    return true;
   }
 
   // No push adapter configured. The report remains available in KV and on the public site.
+  return false;
 }
 
-async function sendPushPlus(env, report) {
-  const content = report.length > 18000 ? `${report.slice(0, 17600)}\n\n...truncated` : report;
+function buildPushMessage(report, origin, template) {
+  const structured = report.structured;
+  if (!structured) {
+    const markdown = getPushContent(report);
+    return {
+      title: "Personal Radar",
+      content: markdown.length > 18000 ? `${markdown.slice(0, 17600)}\n\n...truncated` : markdown,
+    };
+  }
+
+  const reportUrl = `${origin}/reports/${encodeURIComponent(report.category)}/${encodeURIComponent(structured.reportDate)}?lang=zh`;
+  const count = structured.items.length;
+  const title = structured.status === "no_update"
+    ? "Skill Radar 今日无重要更新"
+    : `Skill Radar 今日精选（${count}项）`;
+
+  return {
+    title,
+    content: template === "html"
+      ? renderPushHtml(structured, reportUrl)
+      : renderPushMarkdown(structured, reportUrl),
+  };
+}
+
+function renderPushHtml(report, reportUrl) {
+  const summary = escapeHtml(truncateText(report.summary.zh, 160));
+  const stats = `检查 ${report.stats.reviewedCount} 项 · 精选 ${report.items.length} 项 · 排除重复 ${report.stats.duplicateCount} 项`;
+  if (report.status === "no_update") {
+    return [
+      '<div style="font-family:Arial,sans-serif;color:#172018;line-height:1.65">',
+      '<h2 style="margin:0 0 12px">今日无重要更新</h2>',
+      `<p style="color:#667064">${escapeHtml(stats)}</p>`,
+      `<p>${summary}</p>`,
+      `<p>${escapeHtml(truncateText(report.conclusion.zh, 220))}</p>`,
+      `<p><a href="${escapeHtml(reportUrl)}">查看网站归档</a></p>`,
+      "</div>",
+    ].join("");
+  }
+
+  const cards = report.items.map((item, index) => {
+    const display = item.display.zh;
+    const border = index === 0 ? "#0b6b59" : "#d9ded7";
+    return [
+      `<section style="border-left:4px solid ${border};padding:10px 12px;margin:12px 0;background:#f7f8f4">`,
+      `<div style="font-size:12px;font-weight:700;color:#994d1f;text-transform:uppercase">${escapeHtml(item.recommendation)}</div>`,
+      `<h3 style="margin:2px 0 6px;font-size:17px">${escapeHtml(item.title)}</h3>`,
+      `<p style="margin:4px 0">${escapeHtml(truncateText(display.oneLiner, 72))}</p>`,
+      `<p style="margin:4px 0;color:#667064"><strong>适合：</strong>${escapeHtml(truncateText(display.bestFor, 50))}</p>`,
+      `<p style="margin:4px 0;color:#667064"><strong>注意：</strong>${escapeHtml(truncateText(display.primaryCaution, 72))}</p>`,
+      "</section>",
+    ].join("");
+  }).join("");
+
+  return [
+    '<div style="font-family:Arial,sans-serif;color:#172018;line-height:1.65">',
+    `<p style="color:#667064">${escapeHtml(stats)}</p>`,
+    `<p>${summary}</p>`,
+    cards,
+    `<p style="margin-top:16px"><a href="${escapeHtml(reportUrl)}">查看完整分析与来源</a></p>`,
+    "</div>",
+  ].join("");
+}
+
+function renderPushMarkdown(report, reportUrl) {
+  const lines = [
+    report.status === "no_update" ? "## 今日无重要更新" : `## 今日精选 ${report.items.length} 项`,
+    "",
+    `检查 ${report.stats.reviewedCount} 项 · 排除重复 ${report.stats.duplicateCount} 项`,
+    "",
+    truncateText(report.summary.zh, 160),
+  ];
+
+  for (const item of report.items) {
+    const display = item.display.zh;
+    lines.push(
+      "",
+      `### ${item.title} · ${item.recommendation}`,
+      truncateText(display.oneLiner, 72),
+      `- 适合：${truncateText(display.bestFor, 50)}`,
+      `- 注意：${truncateText(display.primaryCaution, 72)}`,
+    );
+  }
+  lines.push("", `[查看完整分析与来源](${reportUrl})`);
+  return lines.join("\n");
+}
+
+async function sendPushPlus(env, report, origin) {
+  const template = env.PUSHPLUS_TEMPLATE === "html" ? "html" : "markdown";
+  const push = buildPushMessage(report, origin, template);
   const response = await fetch("https://www.pushplus.plus/send", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       token: env.PUSHPLUS_TOKEN,
-      title: "Personal Radar",
-      content,
-      template: "markdown",
+      title: push.title,
+      content: push.content,
+      template,
       channel: env.PUSHPLUS_CHANNEL || "wechat",
     }),
   });
@@ -189,9 +330,10 @@ async function storeReport(env, report) {
   }
 
   const stored = {
-    version: 1,
+    version: report.structured ? 2 : 1,
     meta,
     content: normalizeStoredContent(report),
+    ...(report.structured ? { structured: report.structured } : {}),
   };
   await env.RADAR_STATE.put(reportKey, JSON.stringify(stored));
   await updateReportIndex(env, meta);
@@ -216,6 +358,9 @@ function reportMeta(report, env = {}) {
     timeZone,
     sourceRunId: report.sourceRunId || null,
     languages: availableLanguages(report),
+    status: report.structured?.status || "published",
+    selectedCount: report.structured?.items?.length ?? null,
+    schemaVersion: report.structured?.schemaVersion || null,
   };
 }
 
@@ -282,7 +427,8 @@ async function renderReportsIndex(env, request) {
   const publicReports = reports.filter((report) => report.visibility === "public");
   const items = publicReports.map((report) => {
     const href = `/reports/${encodeURIComponent(report.category)}/${encodeURIComponent(report.date)}?lang=${language}`;
-    return `<li><a href="${href}">${escapeHtml(report.title)}</a><span>${escapeHtml(formatMetaDate(report))}</span></li>`;
+    const status = report.status === "no_update" ? '<small class="status-label">No update</small>' : "";
+    return `<li><div><a href="${href}">${escapeHtml(report.title)}</a>${status}</div><span>${escapeHtml(formatMetaDate(report))}</span></li>`;
   }).join("");
   const body = [
     `<section class="page-head"><p>Archive</p><h1>Personal Radar Reports</h1><div class="nav-row"><a href="/?lang=${language}">Latest</a>${renderLanguageSwitch(language, "/reports")}</div></section>`,
@@ -305,9 +451,125 @@ async function renderStoredReport(env, category, date, request) {
   const switchPath = `/reports/${encodeURIComponent(stored.meta.category)}/${encodeURIComponent(stored.meta.date)}`;
   const body = [
     `<section class="page-head"><p>${escapeHtml(stored.meta.category)} · ${escapeHtml(formatMetaDate(stored.meta))}</p><h1>${escapeHtml(stored.meta.title)}</h1><div class="nav-row"><a href="/reports?lang=${language}">Archive</a>${renderLanguageSwitch(language, switchPath)}</div></section>`,
-    `<article class="markdown">${renderMarkdown(content)}</article>`,
+    stored.version >= 2 && stored.structured
+      ? renderStructuredReport(stored.structured, language)
+      : `<article class="markdown">${renderMarkdown(content)}</article>`,
   ].join("\n");
   return htmlResponse(renderPage(stored.meta.title, body));
+}
+
+function renderStructuredReport(report, language) {
+  const labels = language === "en"
+    ? {
+        reviewed: "Reviewed",
+        selected: "Selected",
+        duplicates: "Recent duplicates",
+        bestFor: "Best for",
+        caution: "Main caution",
+        action: "Recommended action",
+        details: "Detailed analysis",
+        whyNow: "Why it matters now",
+        problem: "Problem solved",
+        usability: "Usability",
+        adaptation: "Codex adaptation",
+        trust: "Trust and security",
+        source: "Primary source",
+        sourceChecked: "Source checked",
+        noUpdate: "No important update today",
+        conclusion: "Bottom line",
+      }
+    : {
+        reviewed: "检查候选",
+        selected: "精选",
+        duplicates: "近期重复",
+        bestFor: "适合",
+        caution: "主要风险",
+        action: "建议行动",
+        details: "查看详细分析",
+        whyNow: "为什么现在值得看",
+        problem: "解决什么问题",
+        usability: "可用性",
+        adaptation: "Codex 适配",
+        trust: "信任与安全",
+        source: "官方来源",
+        sourceChecked: "来源核验",
+        noUpdate: "今日无重要更新",
+        conclusion: "今日结论",
+      };
+
+  const overview = [
+    '<section class="report-overview">',
+    `<p class="report-summary">${escapeHtml(report.summary[language])}</p>`,
+    '<dl class="report-stats">',
+    `<div><dt>${labels.reviewed}</dt><dd>${Number(report.stats.reviewedCount)}</dd></div>`,
+    `<div><dt>${labels.selected}</dt><dd>${report.items.length}</dd></div>`,
+    `<div><dt>${labels.duplicates}</dt><dd>${Number(report.stats.duplicateCount)}</dd></div>`,
+    "</dl>",
+    "</section>",
+  ].join("");
+
+  if (report.status === "no_update") {
+    return [
+      '<article class="structured-report">',
+      overview,
+      `<section class="no-update"><p class="eyebrow">${escapeHtml(labels.noUpdate)}</p><p>${escapeHtml(report.conclusion[language])}</p></section>`,
+      "</article>",
+    ].join("\n");
+  }
+
+  const recommendations = report.items.map((item, index) => {
+    const display = item.display[language];
+    return [
+      `<section class="recommendation${index === 0 ? " featured" : ""}">`,
+      '<div class="recommendation-head">',
+      `<div><span class="recommendation-index">${item.rank}</span><span class="action-tag action-${escapeHtml(item.recommendation)}">${escapeHtml(item.recommendation)}</span></div>`,
+      `<span class="category-label">${escapeHtml(item.category)}</span>`,
+      "</div>",
+      `<h2>${escapeHtml(item.title)}</h2>`,
+      `<p class="one-liner">${escapeHtml(display.oneLiner)}</p>`,
+      '<dl class="quick-facts">',
+      `<div><dt>${labels.bestFor}</dt><dd>${escapeHtml(display.bestFor)}</dd></div>`,
+      `<div><dt>${labels.caution}</dt><dd>${escapeHtml(display.primaryCaution)}</dd></div>`,
+      `<div><dt>${labels.action}</dt><dd>${escapeHtml(display.action)}</dd></div>`,
+      "</dl>",
+      `<p class="source-link"><a href="${escapeHtml(item.sourceUrl)}" rel="noopener noreferrer">${escapeHtml(labels.source)}: ${escapeHtml(item.title)}</a></p>`,
+      "<details>",
+      `<summary>${escapeHtml(labels.details)}</summary>`,
+      '<div class="detail-grid">',
+      detailBlock(labels.whyNow, display.whyNow),
+      detailBlock(labels.problem, display.problem),
+      detailBlock(labels.usability, display.usability),
+      detailBlock(labels.adaptation, display.adaptation),
+      detailBlock(labels.trust, display.trust),
+      detailBlock(labels.sourceChecked, formatSourceChecked(item.quality?.sourceCheckedAt, language)),
+      "</div>",
+      "</details>",
+      "</section>",
+    ].join("");
+  }).join("");
+
+  return [
+    '<article class="structured-report">',
+    overview,
+    `<div class="recommendations">${recommendations}</div>`,
+    `<section class="report-conclusion"><p class="eyebrow">${escapeHtml(labels.conclusion)}</p><p>${escapeHtml(report.conclusion[language])}</p></section>`,
+    "</article>",
+  ].join("\n");
+}
+
+function detailBlock(title, value) {
+  return `<section><h3>${escapeHtml(title)}</h3><p>${escapeHtml(value)}</p></section>`;
+}
+
+function formatSourceChecked(value, language) {
+  const date = new Date(value || Date.now());
+  if (Number.isNaN(date.getTime())) return String(value || "");
+  return new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-CA", {
+    timeZone: DEFAULT_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 function renderPage(title, body) {
@@ -341,11 +603,58 @@ function renderPage(title, body) {
     .markdown code { background: #edf1eb; border-radius: 5px; padding: 1px 5px; }
     .report-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
     .report-list li { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
+    .report-list li > div { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .status-label { border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; font-weight: 750; padding: 2px 7px; text-transform: uppercase; }
     .report-list span, .empty p { color: var(--muted); }
     .empty { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 24px; }
     .empty h2 { margin: 0 0 8px; }
     .empty p { margin: 0; }
-    @media (max-width: 640px) { main { width: min(100% - 24px, 920px); padding-top: 24px; } .report-list li { display: grid; } }
+    .structured-report { display: grid; gap: 28px; }
+    .report-overview { border-bottom: 1px solid var(--line); padding-bottom: 24px; }
+    .report-summary { font-size: 18px; margin: 0 0 18px; max-width: 72ch; }
+    .report-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+    .report-stats div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+    .report-stats dt { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .report-stats dd { font-size: 22px; font-weight: 760; margin: 2px 0 0; }
+    .recommendations { border-top: 1px solid var(--line); }
+    .recommendation { border-bottom: 1px solid var(--line); padding: 26px 0; }
+    .recommendation.featured { border-top: 3px solid var(--accent); padding-top: 22px; }
+    .recommendation-head { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
+    .recommendation-head > div { align-items: center; display: flex; gap: 9px; }
+    .recommendation-index { align-items: center; background: var(--ink); border-radius: 50%; color: white; display: inline-flex; font-size: 12px; font-weight: 800; height: 26px; justify-content: center; width: 26px; }
+    .action-tag, .category-label { border-radius: 999px; display: inline-block; font-size: 11px; font-weight: 800; padding: 3px 8px; }
+    .action-tag { background: #e6efe9; color: #075947; text-transform: uppercase; }
+    .action-watch { background: #f3eadf; color: #7c3d17; }
+    .action-skip { background: #f2e4e3; color: #812f2b; }
+    .category-label { background: #eef0f3; color: #4f5864; }
+    .recommendation h2 { font-size: 26px; line-height: 1.2; margin: 12px 0 8px; overflow-wrap: anywhere; }
+    .one-liner { font-size: 17px; margin: 0 0 18px; max-width: 72ch; }
+    .quick-facts { display: grid; gap: 10px; margin: 0; }
+    .quick-facts div { display: grid; gap: 3px; grid-template-columns: 110px minmax(0, 1fr); }
+    .quick-facts dt { color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; }
+    .quick-facts dd { margin: 0; }
+    .source-link { margin: 16px 0 0; overflow-wrap: anywhere; }
+    details { border-top: 1px dashed var(--line); margin-top: 18px; padding-top: 12px; }
+    summary { color: var(--accent); cursor: pointer; font-weight: 750; width: fit-content; }
+    summary:focus-visible, a:focus-visible { outline: 3px solid #f0b36b; outline-offset: 3px; }
+    .detail-grid { display: grid; gap: 16px 22px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: 18px; }
+    .detail-grid h3 { font-size: 13px; margin: 0 0 4px; }
+    .detail-grid p { margin: 0; }
+    .report-conclusion, .no-update { background: var(--surface); border-left: 4px solid var(--accent-2); padding: 18px 20px; }
+    .report-conclusion p:last-child, .no-update p:last-child { margin-bottom: 0; }
+    .eyebrow { color: var(--accent-2); font-size: 12px; font-weight: 800; margin: 0 0 6px; text-transform: uppercase; }
+    @media (max-width: 640px) {
+      main { width: min(100% - 24px, 920px); padding-top: 24px; }
+      .page-head h1 { font-size: 30px; }
+      .report-list li { display: grid; }
+      .report-summary { font-size: 16px; }
+      .report-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .report-stats div { padding: 10px; }
+      .report-stats dd { font-size: 18px; }
+      .recommendation h2 { font-size: 22px; }
+      .quick-facts div { grid-template-columns: 1fr; }
+      .detail-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -560,6 +869,27 @@ function formatTimeZoneLabel(timeZone) {
 function extractMarkdownTitle(markdown) {
   const match = markdown.match(/^#\s+(.+)$/m);
   return match ? match[1].trim() : null;
+}
+
+function isHttpsUrl(value) {
+  try {
+    return new URL(String(value || "")).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function containsRawHtml(value) {
+  if (typeof value === "string") return /<\/?[a-z][^>]*>/i.test(value);
+  if (Array.isArray(value)) return value.some(containsRawHtml);
+  if (value && typeof value === "object") return Object.values(value).some(containsRawHtml);
+  return false;
+}
+
+function truncateText(value, maxLength) {
+  const text = String(value || "").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 }
 
 function escapeHtml(value) {

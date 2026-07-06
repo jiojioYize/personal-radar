@@ -1,0 +1,585 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import Ajv2020 from "ajv/dist/2020.js";
+import addFormats from "ajv-formats";
+import {
+  canonicalizeUrl,
+  enrichStructuredReport,
+  stableSourceId,
+  validateStructuredSemantics,
+} from "../../src/report-structure.js";
+
+const ROOT = process.env.PERSONAL_RADAR_ROOT
+  ? path.resolve(process.env.PERSONAL_RADAR_ROOT)
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const OUTBOX_DIR = path.join(ROOT, "reports", "outbox");
+const STATE_DIR = path.join(ROOT, "reports", "state");
+const FEEDBACK_DIR = path.join(ROOT, "reports", "feedback");
+const INBOX_DIR = path.join(ROOT, "reports", "inbox");
+const QUALITY_DIR = path.join(ROOT, "reports", "quality");
+const HISTORY_PATH = path.join(STATE_DIR, "skill-radar-history.json");
+const CONTEXT_PATH = path.join(STATE_DIR, "skill-radar-context.json");
+const FEEDBACK_PATH = path.join(FEEDBACK_DIR, "skill-radar.json");
+const SOCIAL_PATH = path.join(INBOX_DIR, "social-candidates.json");
+const SUMMARY_PATH = path.join(QUALITY_DIR, "skill-radar-summary.md");
+const SCHEMA_PATH = path.join(ROOT, "schemas", "skill-radar-report.schema.json");
+
+const args = parseArgs(process.argv.slice(2));
+const command = args._[0] || "help";
+
+try {
+  if (command === "prepare") await prepareContext(args);
+  else if (command === "finalize") await finalizeReport(args);
+  else if (command === "feedback") await recordFeedback(args);
+  else if (command === "social-add") await addSocialCandidate(args);
+  else if (command === "summary") await writeQualitySummary(args);
+  else printHelp();
+} catch (error) {
+  console.error(`quality tool failed: ${error.message}`);
+  process.exitCode = 1;
+}
+
+async function prepareContext(options) {
+  await ensureLocalFiles();
+  const asOf = normalizeDate(options.date || beijingDate());
+  const history = await buildHistory(asOf);
+  const feedback = await readJson(FEEDBACK_PATH, { version: 1, entries: [] });
+  const inbox = await expireDeferredCandidates(await readJson(SOCIAL_PATH, emptyInbox()), asOf);
+  await writeJson(SOCIAL_PATH, inbox);
+
+  const context = {
+    version: 1,
+    channel: "skill-radar",
+    asOf,
+    historyWindowDays: 30,
+    recentSources: history.sources,
+    preferenceSummary: summarizePreferences(feedback.entries),
+    pendingSocialCandidates: inbox.candidates.filter((candidate) =>
+      ["pending", "verified", "deferred"].includes(candidate.status),
+    ),
+  };
+
+  await writeJson(HISTORY_PATH, history);
+  await writeJson(CONTEXT_PATH, context);
+  console.log(`Prepared quality context: ${relative(CONTEXT_PATH)}`);
+  console.log(`Recent sources: ${history.sources.length}; pending social candidates: ${context.pendingSocialCandidates.length}`);
+}
+
+async function finalizeReport(options) {
+  const inputPath = resolveInput(options.input);
+
+  await ensureLocalFiles();
+  const raw = await readJsonRequired(inputPath);
+  const feedback = await readJson(FEEDBACK_PATH, { version: 1, entries: [] });
+  const reportDate = normalizeDate(raw.reportDate || beijingDate());
+  const sidecarPath = path.join(OUTBOX_DIR, `skill-radar-${reportDate}.quality.json`);
+  const history = await buildHistory(reportDate, sidecarPath);
+  const enriched = enrichStructuredReport(raw, { feedbackEntries: feedback.entries });
+
+  applyHistory(enriched, history.sources);
+  const schema = await readJsonRequired(SCHEMA_PATH);
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  addFormats(ajv);
+  const validate = ajv.compile(schema);
+
+  if (!validate(enriched)) {
+    const details = validate.errors.map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ");
+    throw new Error(`schema validation failed: ${details}`);
+  }
+
+  const semanticErrors = validateStructuredSemantics(enriched, { recentSources: history.sources });
+  if (semanticErrors.length) {
+    throw new Error(`semantic validation failed: ${semanticErrors.join("; ")}`);
+  }
+
+  const markdownPath = path.join(OUTBOX_DIR, `skill-radar-${enriched.reportDate}.md`);
+  await writeJson(sidecarPath, enriched);
+  await fs.writeFile(markdownPath, renderMarkdown(enriched), "utf8");
+  await applySocialDecisions(enriched);
+  await writeJson(HISTORY_PATH, await buildHistory(enriched.reportDate));
+  console.log(`Finalized structured report: ${relative(sidecarPath)}`);
+  console.log(`Rendered bilingual Markdown: ${relative(markdownPath)}`);
+}
+
+async function recordFeedback(options) {
+  if (!options.url || !options.rating) {
+    throw new Error("feedback requires --url and --rating");
+  }
+  if (!["useful", "not_useful"].includes(options.rating)) {
+    throw new Error("rating must be useful or not_useful");
+  }
+  if (options.outcome && !["opened", "installed", "adapted"].includes(options.outcome)) {
+    throw new Error("outcome must be opened, installed, or adapted");
+  }
+
+  await ensureLocalFiles();
+  const feedback = await readJson(FEEDBACK_PATH, { version: 1, entries: [] });
+  const canonicalUrl = canonicalizeUrl(options.url);
+  const entry = {
+    id: `${normalizeDate(options.date || beijingDate())}:${stableSourceId(canonicalUrl)}`,
+    reportDate: normalizeDate(options.date || beijingDate()),
+    canonicalUrl,
+    category: String(options.category || "uncategorized"),
+    rating: options.rating,
+    outcome: options.outcome || null,
+    note: options.note || null,
+    recordedAt: new Date().toISOString(),
+  };
+
+  feedback.entries = [
+    entry,
+    ...feedback.entries.filter((existing) => existing.id !== entry.id),
+  ];
+  await writeJson(FEEDBACK_PATH, feedback);
+  console.log(`Recorded feedback for ${canonicalUrl}`);
+}
+
+async function addSocialCandidate(options) {
+  if (!options.url) throw new Error("social-add requires --url");
+  const postUrl = canonicalizeUrl(options.url);
+  const host = new URL(postUrl).hostname;
+  if (host !== "x.com" && host !== "www.x.com") {
+    throw new Error("Stage 2 social candidates must use an x.com URL");
+  }
+
+  await ensureLocalFiles();
+  const inbox = await readJson(SOCIAL_PATH, emptyInbox());
+  const id = stableSourceId(postUrl);
+  if (inbox.candidates.some((candidate) => candidate.id === id)) {
+    console.log(`Social candidate already exists: ${postUrl}`);
+    return;
+  }
+
+  inbox.candidates.push({
+    id,
+    platform: "x",
+    postUrl,
+    note: options.note || null,
+    addedAt: new Date().toISOString(),
+    status: "pending",
+    officialUrl: null,
+    reason: null,
+    lastReviewedAt: null,
+    expiresAt: null,
+  });
+  await writeJson(SOCIAL_PATH, inbox);
+  console.log(`Added social candidate: ${postUrl}`);
+}
+
+async function writeQualitySummary(options) {
+  await ensureLocalFiles();
+  const days = Math.max(1, Number(options.days || 30));
+  const asOf = normalizeDate(options.date || beijingDate());
+  const reports = await loadSidecars();
+  const cutoff = addDays(asOf, -(days - 1));
+  const selected = reports.filter((report) => report.reportDate >= cutoff && report.reportDate <= asOf);
+  const feedback = await readJson(FEEDBACK_PATH, { version: 1, entries: [] });
+  const windowFeedback = feedback.entries.filter((entry) =>
+    entry.reportDate >= cutoff && entry.reportDate <= asOf,
+  );
+  const items = selected.flatMap((report) => report.items || []);
+  const useful = windowFeedback.filter((entry) => entry.rating === "useful").length;
+  const notUseful = windowFeedback.filter((entry) => entry.rating === "not_useful").length;
+  const selectedSourceCounts = countBy(items, (item) => item.discovery?.type || "unknown");
+  const candidateSourceCounts = {};
+  for (const report of selected) {
+    for (const [source, count] of Object.entries(report.stats?.sourceCounts || {})) {
+      candidateSourceCounts[source] = (candidateSourceCounts[source] || 0) + Number(count || 0);
+    }
+  }
+  const xCandidates = Number(candidateSourceCounts.x || 0) + Number(candidateSourceCounts.inbox || 0);
+  const xItems = items.filter((item) => ["x", "inbox"].includes(item.discovery?.type));
+  const xFeedbackUrls = new Set(xItems.map((item) => item.canonicalUrl));
+  const xFeedback = windowFeedback.filter((entry) => xFeedbackUrls.has(entry.canonicalUrl));
+  const xUseful = xFeedback.filter((entry) => entry.rating === "useful").length;
+  const xSelectionRate = xCandidates ? `${Math.round((xItems.length / xCandidates) * 100)}%` : "n/a";
+  const xUsefulRate = xFeedback.length ? `${Math.round((xUseful / xFeedback.length) * 100)}%` : "n/a";
+  const averageScore = items.length
+    ? Math.round(items.reduce((sum, item) => sum + Number(item.quality?.baseScore || 0), 0) / items.length)
+    : 0;
+
+  const lines = [
+    "# Skill Radar Quality Summary",
+    "",
+    `- Window: ${cutoff} to ${asOf}`,
+    `- Valid outcomes: ${selected.length}`,
+    `- Published reports: ${selected.filter((report) => report.status === "published").length}`,
+    `- No-update outcomes: ${selected.filter((report) => report.status === "no_update").length}`,
+    `- Selected items: ${items.length}`,
+    `- Average base score: ${averageScore}`,
+    `- Feedback: ${useful} useful, ${notUseful} not useful`,
+    `- Candidate source mix: ${formatCounts(candidateSourceCounts)}`,
+    `- Selected source mix: ${formatCounts(selectedSourceCounts)}`,
+    `- X discovery: ${xCandidates} candidates, ${xItems.length} selected, ${xSelectionRate} selection rate`,
+    `- X usefulness: ${xUseful}/${xFeedback.length} rated items useful (${xUsefulRate})`,
+    "",
+  ];
+
+  await fs.mkdir(QUALITY_DIR, { recursive: true });
+  await fs.writeFile(SUMMARY_PATH, lines.join("\n"), "utf8");
+  console.log(`Wrote quality summary: ${relative(SUMMARY_PATH)}`);
+}
+
+async function buildHistory(asOf, excludedPath = null) {
+  const cutoff = addDays(asOf, -29);
+  const sourceMap = new Map();
+  const reports = await loadSidecars(excludedPath);
+
+  for (const report of reports) {
+    if (report.reportDate < cutoff || report.reportDate > asOf) continue;
+    for (const item of report.items || []) {
+      addHistorySource(sourceMap, {
+        canonicalUrl: item.canonicalUrl || item.sourceUrl,
+        title: item.title,
+        category: item.category,
+        reportDate: report.reportDate,
+      });
+    }
+  }
+
+  const markdownFiles = await listFiles(OUTBOX_DIR, /^skill-radar-(\d{4}-\d{2}-\d{2})\.md$/);
+  for (const file of markdownFiles) {
+    const match = path.basename(file).match(/^skill-radar-(\d{4}-\d{2}-\d{2})\.md$/);
+    const reportDate = match?.[1];
+    if (!reportDate || reportDate < cutoff || reportDate > asOf) continue;
+    const sidecarPath = file.replace(/\.md$/, ".quality.json");
+    if (await exists(sidecarPath)) continue;
+    const markdown = await fs.readFile(file, "utf8");
+    const urls = markdown.match(/https:\/\/github\.com\/[^\s)>]+/g) || [];
+    for (const url of urls) {
+      try {
+        addHistorySource(sourceMap, {
+          canonicalUrl: canonicalizeUrl(url.replace(/[.,;]+$/, "")),
+          title: null,
+          category: null,
+          reportDate,
+        });
+      } catch {
+        // Legacy reports may contain malformed prose-adjacent URLs.
+      }
+    }
+  }
+
+  return {
+    version: 1,
+    channel: "skill-radar",
+    asOf,
+    windowDays: 30,
+    sources: [...sourceMap.values()]
+      .map((entry) => ({
+        ...entry,
+        dates: [...new Set(entry.dates)].sort(),
+        lastSeenAt: [...new Set(entry.dates)].sort().at(-1),
+      }))
+      .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt)),
+  };
+}
+
+function applyHistory(report, recentSources) {
+  const recent = new Map(recentSources.map((entry) => [entry.canonicalUrl, entry]));
+  for (const item of report.items) {
+    const prior = recent.get(item.canonicalUrl);
+    item.quality.history = {
+      seenWithin30Days: Boolean(prior),
+      previousDates: prior?.dates || [],
+      materialChange: item.quality?.history?.materialChange === true,
+      changeEvidence: item.quality?.history?.changeEvidence || null,
+    };
+  }
+}
+
+async function applySocialDecisions(report) {
+  const inbox = await readJson(SOCIAL_PATH, emptyInbox());
+  const decisions = new Map(report.socialDecisions.map((decision) => [canonicalizeUrl(decision.postUrl), decision]));
+  const selectedPosts = new Map(
+    report.items
+      .filter((item) => item.discovery?.type === "inbox" || item.discovery?.type === "x")
+      .map((item) => [canonicalizeUrl(item.discovery.url), item]),
+  );
+
+  inbox.candidates = inbox.candidates.map((candidate) => {
+    const postUrl = canonicalizeUrl(candidate.postUrl);
+    const selected = selectedPosts.get(postUrl);
+    const decision = decisions.get(postUrl);
+    if (selected) {
+      return {
+        ...candidate,
+        status: "selected",
+        officialUrl: selected.canonicalUrl,
+        reason: "Selected for the daily report",
+        lastReviewedAt: new Date().toISOString(),
+        expiresAt: null,
+      };
+    }
+    if (!decision) return candidate;
+    return {
+      ...candidate,
+      status: decision.status,
+      officialUrl: decision.officialUrl ? canonicalizeUrl(decision.officialUrl) : null,
+      reason: decision.reason,
+      lastReviewedAt: new Date().toISOString(),
+      expiresAt: decision.status === "deferred" ? `${addDays(report.reportDate, 14)}T00:00:00.000Z` : null,
+    };
+  });
+
+  await writeJson(SOCIAL_PATH, inbox);
+}
+
+async function expireDeferredCandidates(inbox, asOf) {
+  return {
+    ...inbox,
+    candidates: inbox.candidates.map((candidate) => {
+      if (candidate.status !== "deferred" || !candidate.expiresAt) return candidate;
+      if (candidate.expiresAt.slice(0, 10) > asOf) return candidate;
+      return {
+        ...candidate,
+        status: "rejected",
+        reason: candidate.reason || "Deferred candidate expired after 14 days",
+        lastReviewedAt: new Date().toISOString(),
+      };
+    }),
+  };
+}
+
+function renderMarkdown(report) {
+  return [
+    renderLanguage(report, "zh"),
+    "",
+    renderLanguage(report, "en"),
+    "",
+  ].join("\n");
+}
+
+function renderLanguage(report, language) {
+  const marker = language === "zh" ? "zh" : "en";
+  const heading = `# Skill Radar Deep Dive - ${report.reportDate}`;
+  const labels = language === "zh"
+    ? {
+        category: "类别",
+        source: "来源",
+        why: "为什么现在值得看",
+        problem: "解决问题",
+        bestFor: "适合",
+        usability: "可用性",
+        adaptation: "Codex 适配",
+        trust: "信任/安全",
+        recommendation: "建议",
+        conclusion: "今日结论",
+      }
+    : {
+        category: "Category",
+        source: "Source",
+        why: "Why now",
+        problem: "Problem solved",
+        bestFor: "Best for",
+        usability: "Usability",
+        adaptation: "Codex adaptation",
+        trust: "Trust/security",
+        recommendation: "Recommendation",
+        conclusion: "Bottom line",
+      };
+  const lines = [`<!-- ${marker} -->`, heading, "", report.summary[language]];
+
+  if (report.status === "no_update") {
+    lines.push("", `## ${labels.conclusion}`, "", report.conclusion[language], `<!-- /${marker} -->`);
+    return lines.join("\n");
+  }
+
+  for (const item of report.items) {
+    const display = item.display[language];
+    lines.push(
+      "",
+      `## ${item.rank}. ${item.title}`,
+      "",
+      `- **${labels.category}:** ${item.category}`,
+      `- **${labels.source}:** [${item.title}](${item.sourceUrl})`,
+      `- **${labels.why}:** ${display.whyNow}`,
+      `- **${labels.problem}:** ${display.problem}`,
+      `- **${labels.bestFor}:** ${display.bestFor}`,
+      `- **${labels.usability}:** ${display.usability}`,
+      `- **${labels.adaptation}:** ${display.adaptation}`,
+      `- **${labels.trust}:** ${display.trust}`,
+      `- **${labels.recommendation}:** **${item.recommendation}** - ${display.action}`,
+    );
+  }
+
+  lines.push("", `## ${labels.conclusion}`, "", report.conclusion[language], `<!-- /${marker} -->`);
+  return lines.join("\n");
+}
+
+function summarizePreferences(entries) {
+  const categories = {};
+  for (const entry of entries) {
+    const category = entry.category || "uncategorized";
+    categories[category] ||= { useful: 0, notUseful: 0, outcomes: 0 };
+    if (entry.rating === "useful") categories[category].useful += 1;
+    if (entry.rating === "not_useful") categories[category].notUseful += 1;
+    if (entry.outcome === "installed" || entry.outcome === "adapted") categories[category].outcomes += 1;
+  }
+  return { totalFeedback: entries.length, categories };
+}
+
+function addHistorySource(sourceMap, entry) {
+  let canonicalUrl;
+  try {
+    canonicalUrl = canonicalizeUrl(entry.canonicalUrl);
+  } catch {
+    return;
+  }
+  const existing = sourceMap.get(canonicalUrl) || {
+    id: stableSourceId(canonicalUrl),
+    canonicalUrl,
+    title: entry.title || null,
+    category: entry.category || null,
+    dates: [],
+  };
+  existing.title ||= entry.title || null;
+  existing.category ||= entry.category || null;
+  existing.dates.push(entry.reportDate);
+  sourceMap.set(canonicalUrl, existing);
+}
+
+async function loadSidecars(excludedPath = null) {
+  const files = await listFiles(OUTBOX_DIR, /\.quality\.json$/);
+  const excluded = excludedPath ? path.resolve(excludedPath) : null;
+  const reports = [];
+  for (const file of files) {
+    if (excluded && path.resolve(file) === excluded) continue;
+    try {
+      reports.push(await readJsonRequired(file));
+    } catch {
+      // Incomplete drafts are ignored until finalize succeeds.
+    }
+  }
+  return reports;
+}
+
+async function ensureLocalFiles() {
+  await Promise.all([
+    fs.mkdir(OUTBOX_DIR, { recursive: true }),
+    fs.mkdir(STATE_DIR, { recursive: true }),
+    fs.mkdir(FEEDBACK_DIR, { recursive: true }),
+    fs.mkdir(INBOX_DIR, { recursive: true }),
+  ]);
+  if (!(await exists(FEEDBACK_PATH))) await writeJson(FEEDBACK_PATH, { version: 1, entries: [] });
+  if (!(await exists(SOCIAL_PATH))) await writeJson(SOCIAL_PATH, emptyInbox());
+}
+
+function emptyInbox() {
+  return { version: 1, candidates: [] };
+}
+
+async function listFiles(directory, pattern) {
+  if (!(await exists(directory))) return [];
+  const entries = await fs.readdir(directory, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && pattern.test(entry.name))
+    .map((entry) => path.join(directory, entry.name))
+    .sort();
+}
+
+async function readJsonRequired(filePath) {
+  const content = await fs.readFile(filePath, "utf8");
+  try {
+    return JSON.parse(content);
+  } catch (error) {
+    throw new Error(`invalid JSON in ${relative(filePath)}: ${error.message}`);
+  }
+}
+
+async function readJson(filePath, fallback) {
+  if (!(await exists(filePath))) return structuredClone(fallback);
+  return readJsonRequired(filePath);
+}
+
+async function writeJson(filePath, value) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+async function exists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveInput(value) {
+  if (!value) throw new Error("finalize requires --input");
+  return path.isAbsolute(value) ? value : path.resolve(ROOT, value);
+}
+
+function normalizeDate(value) {
+  const text = String(value || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) throw new Error(`Invalid date: ${value}`);
+  return text;
+}
+
+function addDays(dateText, amount) {
+  const date = new Date(`${normalizeDate(dateText)}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+function beijingDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function countBy(values, selector) {
+  return values.reduce((counts, value) => {
+    const key = selector(value);
+    counts[key] = (counts[key] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function formatCounts(counts) {
+  return Object.entries(counts)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${value}`)
+    .join(", ") || "none";
+}
+
+function relative(filePath) {
+  return path.relative(ROOT, filePath).replaceAll("\\", "/");
+}
+
+function parseArgs(values) {
+  const result = { _: [] };
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (!value.startsWith("--")) {
+      result._.push(value);
+      continue;
+    }
+    const key = value.slice(2);
+    const next = values[index + 1];
+    if (!next || next.startsWith("--")) result[key] = true;
+    else {
+      result[key] = next;
+      index += 1;
+    }
+  }
+  return result;
+}
+
+function printHelp() {
+  console.log(`Personal Radar quality tool
+
+Commands:
+  prepare [--date YYYY-MM-DD]
+  finalize --input reports/state/skill-radar-draft.json
+  feedback --url URL --rating useful|not_useful [--date YYYY-MM-DD] [--category NAME] [--outcome opened|installed|adapted] [--note TEXT]
+  social-add --url https://x.com/... [--note TEXT]
+  summary [--days 30] [--date YYYY-MM-DD]`);
+}

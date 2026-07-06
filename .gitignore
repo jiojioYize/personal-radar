@@ -6,6 +6,11 @@
 .codex-forwarder-pending.json
 .codex-forwarder.log
 reports/outbox/*.md
+reports/outbox/*.quality.json
+reports/state/
+reports/feedback/
+reports/inbox/
+reports/quality/
 docs/portfolio-personal-radar.*
 docs/assets/portfolio-*.png
 .DS_Store

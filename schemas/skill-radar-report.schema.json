@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar.dailyingest.cn/schemas/skill-radar-report-v1.json",
+  "title": "Personal Radar structured skill report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "channel",
+    "reportDate",
+    "summary",
+    "conclusion",
+    "stats",
+    "items",
+    "socialDecisions"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["published", "no_update"] },
+    "channel": { "const": "skill-radar" },
+    "reportDate": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "summary": { "$ref": "#/$defs/localizedText" },
+    "conclusion": { "$ref": "#/$defs/localizedText" },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewedCount",
+        "selectedCount",
+        "duplicateCount",
+        "rejectedCount",
+        "sourceCounts"
+      ],
+      "properties": {
+        "reviewedCount": { "type": "integer", "minimum": 8 },
+        "selectedCount": { "type": "integer", "minimum": 0, "maximum": 6 },
+        "duplicateCount": { "type": "integer", "minimum": 0 },
+        "rejectedCount": { "type": "integer", "minimum": 0 },
+        "sourceCounts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 6,
+      "items": { "$ref": "#/$defs/item" }
+    },
+    "socialDecisions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/socialDecision" }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "httpsUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "localizedText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zh", "en"],
+      "properties": {
+        "zh": { "$ref": "#/$defs/nonEmptyString" },
+        "en": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "oneLiner",
+        "whyNow",
+        "bestFor",
+        "action",
+        "primaryCaution",
+        "problem",
+        "usability",
+        "adaptation",
+        "trust"
+      ],
+      "properties": {
+        "oneLiner": { "$ref": "#/$defs/nonEmptyString" },
+        "whyNow": { "$ref": "#/$defs/nonEmptyString" },
+        "bestFor": { "$ref": "#/$defs/nonEmptyString" },
+        "action": { "$ref": "#/$defs/nonEmptyString" },
+        "primaryCaution": { "$ref": "#/$defs/nonEmptyString" },
+        "problem": { "$ref": "#/$defs/nonEmptyString" },
+        "usability": { "$ref": "#/$defs/nonEmptyString" },
+        "adaptation": { "$ref": "#/$defs/nonEmptyString" },
+        "trust": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relevance",
+        "reusability",
+        "maintenanceEvidence",
+        "novelty",
+        "adaptationFeasibility",
+        "trustSafety"
+      ],
+      "properties": {
+        "relevance": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "reusability": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "maintenanceEvidence": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "novelty": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "adaptationFeasibility": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "trustSafety": { "type": "integer", "minimum": 0, "maximum": 5 }
+      }
+    },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seenWithin30Days",
+        "previousDates",
+        "materialChange",
+        "changeEvidence"
+      ],
+      "properties": {
+        "seenWithin30Days": { "type": "boolean" },
+        "previousDates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          }
+        },
+        "materialChange": { "type": "boolean" },
+        "changeEvidence": { "type": ["string", "null"] }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dimensions",
+        "baseScore",
+        "preferenceAdjustment",
+        "finalRankScore",
+        "skillLike",
+        "officialSourceVerified",
+        "sourceCheckedAt",
+        "license",
+        "history"
+      ],
+      "properties": {
+        "dimensions": { "$ref": "#/$defs/dimensions" },
+        "baseScore": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "preferenceAdjustment": { "type": "integer", "minimum": -5, "maximum": 5 },
+        "finalRankScore": { "type": "integer", "minimum": 0, "maximum": 105 },
+        "skillLike": { "const": true },
+        "officialSourceVerified": { "const": true },
+        "sourceCheckedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "license": { "type": ["string", "null"] },
+        "history": { "$ref": "#/$defs/history" }
+      }
+    },
+    "discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "url", "author", "publishedAt"],
+      "properties": {
+        "type": { "enum": ["github", "web", "x", "inbox"] },
+        "url": { "$ref": "#/$defs/httpsUrl" },
+        "author": { "type": ["string", "null"] },
+        "publishedAt": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "rank",
+        "title",
+        "category",
+        "sourceUrl",
+        "canonicalUrl",
+        "recommendation",
+        "discovery",
+        "display",
+        "quality"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^src_[a-f0-9]{8}$"
+        },
+        "rank": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "category": { "$ref": "#/$defs/nonEmptyString" },
+        "sourceUrl": { "$ref": "#/$defs/httpsUrl" },
+        "canonicalUrl": { "$ref": "#/$defs/httpsUrl" },
+        "recommendation": { "enum": ["install", "adapt", "watch", "skip"] },
+        "discovery": { "$ref": "#/$defs/discovery" },
+        "display": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["zh", "en"],
+          "properties": {
+            "zh": { "$ref": "#/$defs/display" },
+            "en": { "$ref": "#/$defs/display" }
+          }
+        },
+        "quality": { "$ref": "#/$defs/quality" }
+      }
+    },
+    "socialDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["postUrl", "status", "officialUrl", "reason"],
+      "properties": {
+        "postUrl": { "$ref": "#/$defs/httpsUrl" },
+        "status": { "enum": ["verified", "selected", "rejected", "deferred"] },
+        "officialUrl": {
+          "anyOf": [
+            { "$ref": "#/$defs/httpsUrl" },
+            { "type": "null" }
+          ]
+        },
+        "reason": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    }
+  }
+}

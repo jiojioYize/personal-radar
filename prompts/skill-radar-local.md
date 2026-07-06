@@ -1,106 +1,183 @@
-# Personal Radar Local Prompt: Skill Radar
+# Personal Radar Local Prompt: Skill Radar Stage 2
 
 Run a deep-dive radar for true AI-agent skills and rules only.
 
-This prompt is the recommended production path for local Codex Automation.
+This task performs research and writes local report artifacts. Do not POST to
+the Worker. The Windows forwarder handles delivery after the report has passed
+local validation.
 
-The automation shell may not have outbound network access. Do not POST to the Worker from this task. Write the completed report to the outbox file path below; the local forwarder will read that file and send it to the Worker.
+## 1. Prepare Local Context
 
-Before writing the report, determine the current Beijing date and time in Beijing time (`Asia/Shanghai`).
+Determine the current Beijing date in `Asia/Shanghai`, then run:
 
-Use the date in:
+```text
+node tools/quality/report-quality.mjs prepare --date YYYY-MM-DD
+```
 
-- the report title
-- the outbox file name
+Read:
 
-Do not write a generated-time line inside the report body. The Worker website already displays the report timestamp above the title.
+```text
+reports/state/skill-radar-context.json
+schemas/skill-radar-report.schema.json
+```
 
-Do not write machine metadata such as `generatedAt`, `sourceRunId`, `Asia/Shanghai`, `Generated:`, `生成时间：`, JSON fields, or raw key/value status lines inside the report body.
+The context contains:
 
-Do not modify repository files except for writing the report file under `reports/outbox/`.
-Do not read, print, or reveal any ingest key.
-Do not attempt to call `/ingest-report`.
+- sources recommended in the last 30 days;
+- preference feedback;
+- pending or deferred X candidates.
 
-## Scope
+Do not recommend a recent source again unless an important release, structural
+change, or security change is verified from a primary source. A material change
+must include evidence.
+
+## 2. Research Scope
 
 Focus on:
 
-- Codex-native skills and plugins with reusable `SKILL.md` workflows.
-- Claude or Claude Code skills and reusable `CLAUDE.md`-style instructions.
-- Cursor rules, `.cursorrules`, and Cursor agent workflow rules.
-- Cline, Roo, and Roo Code rules or portable rule packs.
-- Reusable coding-agent rule packs that can be adapted into Codex skills.
+- Codex-native skills and plugins with reusable `SKILL.md` workflows;
+- Claude or Claude Code skills and reusable `CLAUDE.md` instructions;
+- Cursor rules and `.cursorrules`;
+- Cline, Roo, and Roo Code rules;
+- portable coding-agent rule packs.
 
 Do not recommend:
 
-- generic MCP servers unless they include concrete skill/rule packages.
-- broad agent frameworks with no portable skill-like instructions.
-- ordinary automation tools with no reusable agent rules.
+- generic MCP servers without concrete skill or rule packages;
+- broad agent frameworks without portable instructions;
+- ordinary automation tools without reusable agent rules;
+- sources that require unverifiable claims or unsafe installation steps.
 
-Prefer practical, reusable, recently active or clearly maintained items relevant to:
+Prioritize document processing, coding workflows, browser automation, data
+analysis, design, GitHub, PDF/Word handling, productivity, and context
+management.
 
-- document processing
-- coding workflows
-- browser automation
-- data analysis
-- design
-- GitHub
-- PDF/Word handling
-- personal productivity
-- agent context management
+Review at least 8 candidates. Use GitHub repositories and official project
+documentation as primary evidence.
 
-Find 5-8 high-signal items. Deduplicate obvious repeats and favor quality over popularity.
-
-## Required Fields Per Item
-
-For each item, include:
-
-- title/name
-- category
-- source link
-- why it is worth attention
-- what problem it solves
-- whether it is directly usable or needs adaptation
-- suggested Codex-skill adaptation approach
-- trust/security caveats
-- one short recommendation: install, adapt, watch, or skip
-
-## Output Format
-
-Write a concise bilingual Markdown report using this exact structure.
-
-```markdown
-<!-- zh -->
-# Skill Radar Deep Dive - YYYY-MM-DD
-
-Chinese report body here. Write natural, concise Chinese. Keep product names, repository names, skill names, file names, commands, URLs, and technical identifiers in English. Translate explanations, caveats, recommendations, and summaries into Chinese.
-<!-- /zh -->
-
-<!-- en -->
-# Skill Radar Deep Dive - YYYY-MM-DD
-
-English report body here.
-<!-- /en -->
-```
-
-## Required File Output
-
-Create or overwrite this UTF-8 Markdown file:
+As an auxiliary discovery lane, search public, search-engine-indexed X results
+that contain GitHub or official links. Useful query patterns include:
 
 ```text
+site:x.com ("agent skills" OR "Claude Code skills" OR "Codex skills") (github.com OR "open source")
+site:x.com ("SKILL.md" OR "Cursor rules" OR "Roo rules") github.com
+```
+
+Do not scrape X, use an X API, depend on logged-in Chrome, or search
+Xiaohongshu. Social popularity is not quality evidence.
+
+For pending social candidates, either:
+
+- select the verified official project;
+- reject it with a reason;
+- defer it for later review;
+- mark it verified when the official source is valid but it is not yet ranked.
+
+## 3. Quality Rules
+
+Select zero to six items.
+
+Every selected item must:
+
+- be a real reusable skill, rule, or instruction pack;
+- have a reachable HTTPS primary source;
+- explain the problem, usability, Codex adaptation, and security boundary;
+- have a calculated base score of at least 70;
+- not be an unjustified 30-day repeat.
+
+Score every selected item from 0 to 5 on:
+
+- `relevance`
+- `reusability`
+- `maintenanceEvidence`
+- `novelty`
+- `adaptationFeasibility`
+- `trustSafety`
+
+The local quality tool calculates the weighted score and preference adjustment.
+Do not invent or optimize the final numeric score.
+
+Use:
+
+- `published` when one to six items qualify;
+- `no_update` when zero items qualify after reviewing at least eight candidates.
+
+A research, network, or tooling failure is not `no_update`. If the task cannot
+complete valid research, do not finalize a report.
+
+## 4. Write The Structured Draft
+
+Write UTF-8 JSON to:
+
+```text
+reports/state/skill-radar-draft.json
+```
+
+Use `schemaVersion: 1`, `channel: "skill-radar"`, and the Beijing date.
+
+For every selected item provide:
+
+- `title`, `category`, `sourceUrl`, and `recommendation`;
+- `discovery` with `type`, `url`, optional author, and optional publish time;
+- bilingual `display.zh` and `display.en`;
+- all display fields required by the JSON Schema;
+- all six quality dimensions;
+- `skillLike: true`;
+- `officialSourceVerified: true`;
+- `sourceCheckedAt` as an ISO timestamp;
+- license when known;
+- material-change status and evidence when applicable.
+
+Computed fields such as `id`, `rank`, `canonicalUrl`, `baseScore`,
+`preferenceAdjustment`, and `finalRankScore` may be omitted from the draft. The
+quality tool adds them deterministically.
+
+Keep product names, repository names, commands, URLs, and identifiers in
+English. Write concise natural Chinese and equivalent English explanations.
+Do not include raw HTML.
+
+For every social inbox candidate reviewed, add a `socialDecisions` entry with:
+
+- `postUrl`;
+- `status`: `verified`, `selected`, `rejected`, or `deferred`;
+- verified `officialUrl`, or `null`;
+- a short reason.
+
+## 5. Validate And Render
+
+Run:
+
+```text
+node tools/quality/report-quality.mjs finalize --input reports/state/skill-radar-draft.json
+```
+
+If validation fails, read the error, correct the draft, and run finalize again.
+Do not hand-write the final Markdown.
+
+Successful finalize creates:
+
+```text
+reports/outbox/skill-radar-YYYY-MM-DD.quality.json
 reports/outbox/skill-radar-YYYY-MM-DD.md
 ```
 
-Replace `YYYY-MM-DD` with the current Beijing date.
+The forwarder will only send a matching validated pair.
 
-The file must contain only the complete bilingual report, starting with `<!-- zh -->` and ending with `<!-- /en -->`. Do not include status notes, code fences, logs, or any wrapper text inside the file.
+## 6. Boundaries
 
-The report file is ignored by Git and will be consumed by the local forwarder.
+- Do not read, print, or reveal ingest keys.
+- Do not call `/ingest-report`.
+- Do not change application code, public documentation, or Git-tracked files.
+- Only write local runtime files under `reports/outbox`, `reports/state`,
+  `reports/feedback`, `reports/inbox`, or `reports/quality`.
+- Do not add generated reports, feedback, history, or candidates to Git.
 
-After the report, add a short status note:
+After successful finalize, report:
 
-- report generated: yes
-- report file path
-- date used
-- whether repository files changed
-- forwarding: handled by local forwarder, not this automation
+- report generated: yes;
+- status: `published` or `no_update`;
+- selected item count;
+- Sidecar and Markdown paths;
+- date used;
+- repository files changed: no;
+- forwarding: handled by the local forwarder.
