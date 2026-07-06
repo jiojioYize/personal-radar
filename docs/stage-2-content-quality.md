@@ -225,6 +225,18 @@ Validate a report pair without sending:
   -ValidateOnly
 ```
 
+Run an isolated shadow generation:
+
+```powershell
+node tools/quality/report-quality.mjs prepare --date YYYY-MM-DD --shadow
+node tools/quality/report-quality.mjs finalize --shadow `
+  --input reports/shadow/state/skill-radar-draft.json
+```
+
+Shadow artifacts stay under `reports/shadow/`. The production forwarder does
+not scan this directory, so a manual shadow run cannot replace or delay a
+scheduled report.
+
 Generate the local quality summary:
 
 ```powershell
@@ -243,7 +255,7 @@ npm run quality:summary
 | HTML and concise Markdown PushPlus renderers | Implemented locally |
 | Automated tests and Worker bundle dry run | Passed |
 | Desktop and 390px visual verification | Pending local preview access |
-| Three successful shadow reports | Not started |
+| Three successful shadow reports | 1 of 3 passed |
 | Worker production deployment | Not started |
 | Real-device HTML comparison | Not started |
 | 14-day observation | Not started |
@@ -251,6 +263,16 @@ npm run quality:summary
 
 The observation clock starts on the day after the structured website and the
 accepted PushPlus format are enabled in production.
+
+## Shadow Run Log
+
+| Date | Result | Items | Validation | Production impact | Notes |
+| --- | --- | ---: | --- | --- | --- |
+| 2026-07-06 | `published` | 6 | Schema, semantic, and forwarder pair validation passed | None | Found and fixed a forwarder false positive when a summary mentioned a later item title before its heading |
+
+Shadow runs use `prompts/skill-radar-shadow.md` and write only to
+`reports/shadow/`. Three successful runs are required before Worker v2
+deployment.
 
 ## 14-Day Checkpoint
 

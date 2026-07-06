@@ -201,10 +201,15 @@ function Read-StructuredReport {
     if ($item.sourceUrl -notmatch "^https://") {
       throw "Structured item sourceUrl must use HTTPS: $($item.sourceUrl)"
     }
-    $position = $MarkdownContent.IndexOf([string]$item.title, [System.StringComparison]::Ordinal)
-    if ($position -lt 0) {
+    $escapedTitle = [regex]::Escape([string]$item.title)
+    $headingMatch = [regex]::Match(
+      $MarkdownContent,
+      "(?m)^##\s+\d+\.\s+$escapedTitle\s*$"
+    )
+    if (-not $headingMatch.Success) {
       throw "Structured item title is missing from Markdown: $($item.title)"
     }
+    $position = $headingMatch.Index
     if ($position -lt $lastPosition) {
       throw "Structured item order does not match Markdown"
     }

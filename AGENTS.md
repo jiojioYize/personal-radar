@@ -48,6 +48,14 @@ Formal daily automation should read and execute:
 prompts/skill-radar-local.md
 ```
 
+Manual Stage 2 shadow runs should read and execute:
+
+```text
+prompts/skill-radar-shadow.md
+```
+
+Shadow runs write only to `reports/shadow/` and must never invoke the forwarder.
+
 That prompt should write:
 
 ```text

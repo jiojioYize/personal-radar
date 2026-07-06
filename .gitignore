@@ -11,6 +11,7 @@ reports/state/
 reports/feedback/
 reports/inbox/
 reports/quality/
+reports/shadow/
 docs/portfolio-personal-radar.*
 docs/assets/portfolio-*.png
 .DS_Store

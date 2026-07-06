@@ -26,6 +26,14 @@ test("quality CLI finalizes a draft into a validated Sidecar and Markdown pair",
   example.reportDate = "2099-01-02";
   example.items[0].sourceUrl = "https://github.com/example/stage-two-test";
   example.items[0].canonicalUrl = example.items[0].sourceUrl;
+  example.items[0].title = "Stage Two First";
+  const secondItem = structuredClone(example.items[0]);
+  secondItem.title = "Stage Two Second";
+  secondItem.sourceUrl = "https://github.com/example/stage-two-second";
+  secondItem.canonicalUrl = secondItem.sourceUrl;
+  example.items.push(secondItem);
+  example.summary.zh = "摘要先提到 Stage Two Second，再介绍 Stage Two First。";
+  example.summary.en = "The summary mentions Stage Two Second before Stage Two First.";
   const draftPath = path.join(root, "reports", "state", "skill-radar-draft.json");
   await fs.writeFile(draftPath, `${JSON.stringify(example, null, 2)}\n`, "utf8");
 
@@ -89,6 +97,57 @@ test("quality CLI finalizes a draft into a validated Sidecar and Markdown pair",
   );
   assert.match(summaryText, /Candidate source mix:/);
   assert.match(summaryText, /X discovery:/);
+
+  example.reportDate = "2099-01-03";
+  example.items[0].sourceUrl = "https://github.com/example/stage-two-shadow";
+  example.items[0].canonicalUrl = example.items[0].sourceUrl;
+  example.items[1].sourceUrl = "https://github.com/example/stage-two-shadow-second";
+  example.items[1].canonicalUrl = example.items[1].sourceUrl;
+  const shadowDraftPath = path.join(root, "reports", "shadow", "state", "skill-radar-draft.json");
+  await fs.mkdir(path.dirname(shadowDraftPath), { recursive: true });
+  await fs.writeFile(shadowDraftPath, `${JSON.stringify(example, null, 2)}\n`, "utf8");
+
+  const shadowPrepare = await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "prepare",
+      "--date",
+      "2099-01-03",
+      "--shadow",
+    ],
+    {
+      cwd: projectRoot,
+      env: { ...process.env, PERSONAL_RADAR_ROOT: root },
+    },
+  );
+  assert.match(shadowPrepare.stdout, /Prepared shadow quality context/);
+
+  const shadowFinalize = await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "finalize",
+      "--shadow",
+      "--input",
+      "reports/shadow/state/skill-radar-draft.json",
+    ],
+    {
+      cwd: projectRoot,
+      env: { ...process.env, PERSONAL_RADAR_ROOT: root },
+    },
+  );
+  assert.match(shadowFinalize.stdout, /Finalized shadow structured report/);
+  await fs.access(path.join(
+    root,
+    "reports",
+    "shadow",
+    "outbox",
+    "skill-radar-2099-01-03.quality.json",
+  ));
+  await assert.rejects(
+    fs.access(path.join(root, "reports", "outbox", "skill-radar-2099-01-03.md")),
+  );
 
   if (process.platform === "win32") {
     const forwarder = await execFileAsync(

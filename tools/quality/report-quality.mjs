@@ -18,6 +18,9 @@ const STATE_DIR = path.join(ROOT, "reports", "state");
 const FEEDBACK_DIR = path.join(ROOT, "reports", "feedback");
 const INBOX_DIR = path.join(ROOT, "reports", "inbox");
 const QUALITY_DIR = path.join(ROOT, "reports", "quality");
+const SHADOW_DIR = path.join(ROOT, "reports", "shadow");
+const SHADOW_OUTBOX_DIR = path.join(SHADOW_DIR, "outbox");
+const SHADOW_STATE_DIR = path.join(SHADOW_DIR, "state");
 const HISTORY_PATH = path.join(STATE_DIR, "skill-radar-history.json");
 const CONTEXT_PATH = path.join(STATE_DIR, "skill-radar-context.json");
 const FEEDBACK_PATH = path.join(FEEDBACK_DIR, "skill-radar.json");
@@ -41,12 +44,13 @@ try {
 }
 
 async function prepareContext(options) {
-  await ensureLocalFiles();
+  const paths = runtimePaths(options);
+  await ensureLocalFiles(paths);
   const asOf = normalizeDate(options.date || beijingDate());
-  const history = await buildHistory(asOf);
+  const history = await buildHistory(asOf, null, { includeShadow: paths.shadow });
   const feedback = await readJson(FEEDBACK_PATH, { version: 1, entries: [] });
   const inbox = await expireDeferredCandidates(await readJson(SOCIAL_PATH, emptyInbox()), asOf);
-  await writeJson(SOCIAL_PATH, inbox);
+  if (!paths.shadow) await writeJson(SOCIAL_PATH, inbox);
 
   const context = {
     version: 1,
@@ -60,21 +64,22 @@ async function prepareContext(options) {
     ),
   };
 
-  await writeJson(HISTORY_PATH, history);
-  await writeJson(CONTEXT_PATH, context);
-  console.log(`Prepared quality context: ${relative(CONTEXT_PATH)}`);
+  await writeJson(paths.historyPath, history);
+  await writeJson(paths.contextPath, context);
+  console.log(`Prepared${paths.shadow ? " shadow" : ""} quality context: ${relative(paths.contextPath)}`);
   console.log(`Recent sources: ${history.sources.length}; pending social candidates: ${context.pendingSocialCandidates.length}`);
 }
 
 async function finalizeReport(options) {
+  const paths = runtimePaths(options);
   const inputPath = resolveInput(options.input);
 
-  await ensureLocalFiles();
+  await ensureLocalFiles(paths);
   const raw = await readJsonRequired(inputPath);
   const feedback = await readJson(FEEDBACK_PATH, { version: 1, entries: [] });
   const reportDate = normalizeDate(raw.reportDate || beijingDate());
-  const sidecarPath = path.join(OUTBOX_DIR, `skill-radar-${reportDate}.quality.json`);
-  const history = await buildHistory(reportDate, sidecarPath);
+  const sidecarPath = path.join(paths.outboxDir, `skill-radar-${reportDate}.quality.json`);
+  const history = await buildHistory(reportDate, sidecarPath, { includeShadow: paths.shadow });
   const enriched = enrichStructuredReport(raw, { feedbackEntries: feedback.entries });
 
   applyHistory(enriched, history.sources);
@@ -93,12 +98,15 @@ async function finalizeReport(options) {
     throw new Error(`semantic validation failed: ${semanticErrors.join("; ")}`);
   }
 
-  const markdownPath = path.join(OUTBOX_DIR, `skill-radar-${enriched.reportDate}.md`);
+  const markdownPath = path.join(paths.outboxDir, `skill-radar-${enriched.reportDate}.md`);
   await writeJson(sidecarPath, enriched);
   await fs.writeFile(markdownPath, renderMarkdown(enriched), "utf8");
-  await applySocialDecisions(enriched);
-  await writeJson(HISTORY_PATH, await buildHistory(enriched.reportDate));
-  console.log(`Finalized structured report: ${relative(sidecarPath)}`);
+  if (!paths.shadow) await applySocialDecisions(enriched);
+  await writeJson(
+    paths.historyPath,
+    await buildHistory(enriched.reportDate, null, { includeShadow: paths.shadow }),
+  );
+  console.log(`Finalized${paths.shadow ? " shadow" : ""} structured report: ${relative(sidecarPath)}`);
   console.log(`Rendered bilingual Markdown: ${relative(markdownPath)}`);
 }
 
@@ -221,10 +229,10 @@ async function writeQualitySummary(options) {
   console.log(`Wrote quality summary: ${relative(SUMMARY_PATH)}`);
 }
 
-async function buildHistory(asOf, excludedPath = null) {
+async function buildHistory(asOf, excludedPath = null, { includeShadow = false } = {}) {
   const cutoff = addDays(asOf, -29);
   const sourceMap = new Map();
-  const reports = await loadSidecars(excludedPath);
+  const reports = await loadSidecars(excludedPath, { includeShadow });
 
   for (const report of reports) {
     if (report.reportDate < cutoff || report.reportDate > asOf) continue;
@@ -440,8 +448,11 @@ function addHistorySource(sourceMap, entry) {
   sourceMap.set(canonicalUrl, existing);
 }
 
-async function loadSidecars(excludedPath = null) {
-  const files = await listFiles(OUTBOX_DIR, /\.quality\.json$/);
+async function loadSidecars(excludedPath = null, { includeShadow = false } = {}) {
+  const files = [
+    ...await listFiles(OUTBOX_DIR, /\.quality\.json$/),
+    ...(includeShadow ? await listFiles(SHADOW_OUTBOX_DIR, /\.quality\.json$/) : []),
+  ];
   const excluded = excludedPath ? path.resolve(excludedPath) : null;
   const reports = [];
   for (const file of files) {
@@ -455,12 +466,14 @@ async function loadSidecars(excludedPath = null) {
   return reports;
 }
 
-async function ensureLocalFiles() {
+async function ensureLocalFiles(paths = runtimePaths({})) {
   await Promise.all([
     fs.mkdir(OUTBOX_DIR, { recursive: true }),
     fs.mkdir(STATE_DIR, { recursive: true }),
     fs.mkdir(FEEDBACK_DIR, { recursive: true }),
     fs.mkdir(INBOX_DIR, { recursive: true }),
+    fs.mkdir(paths.outboxDir, { recursive: true }),
+    fs.mkdir(paths.stateDir, { recursive: true }),
   ]);
   if (!(await exists(FEEDBACK_PATH))) await writeJson(FEEDBACK_PATH, { version: 1, entries: [] });
   if (!(await exists(SOCIAL_PATH))) await writeJson(SOCIAL_PATH, emptyInbox());
@@ -468,6 +481,18 @@ async function ensureLocalFiles() {
 
 function emptyInbox() {
   return { version: 1, candidates: [] };
+}
+
+function runtimePaths(options) {
+  const shadow = options.shadow === true || options.shadow === "true";
+  const stateDir = shadow ? SHADOW_STATE_DIR : STATE_DIR;
+  return {
+    shadow,
+    outboxDir: shadow ? SHADOW_OUTBOX_DIR : OUTBOX_DIR,
+    stateDir,
+    historyPath: path.join(stateDir, "skill-radar-history.json"),
+    contextPath: path.join(stateDir, "skill-radar-context.json"),
+  };
 }
 
 async function listFiles(directory, pattern) {
@@ -577,8 +602,8 @@ function printHelp() {
   console.log(`Personal Radar quality tool
 
 Commands:
-  prepare [--date YYYY-MM-DD]
-  finalize --input reports/state/skill-radar-draft.json
+  prepare [--date YYYY-MM-DD] [--shadow]
+  finalize --input reports/state/skill-radar-draft.json [--shadow]
   feedback --url URL --rating useful|not_useful [--date YYYY-MM-DD] [--category NAME] [--outcome opened|installed|adapted] [--note TEXT]
   social-add --url https://x.com/... [--note TEXT]
   summary [--days 30] [--date YYYY-MM-DD]`);
