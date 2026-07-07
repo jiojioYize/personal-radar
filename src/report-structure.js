@@ -116,9 +116,21 @@ export function enrichStructuredReport(input, { feedbackEntries = [], preservePr
     duplicateCount: Number(report.stats?.duplicateCount || 0),
     rejectedCount: Number(report.stats?.rejectedCount || 0),
     sourceCounts: report.stats?.sourceCounts || {},
+    xDiscovery: normalizeXDiscovery(report.stats?.xDiscovery),
   };
 
   return report;
+}
+
+export function normalizeXDiscovery(value = {}) {
+  return {
+    searched: Boolean(value.searched),
+    candidateCount: Number(value.candidateCount || 0),
+    verifiedCount: Number(value.verifiedCount || 0),
+    selectedCount: Number(value.selectedCount || 0),
+    rejectedCount: Number(value.rejectedCount || 0),
+    deferredCount: Number(value.deferredCount || 0),
+  };
 }
 
 export function validateStructuredSemantics(report, { recentSources = [] } = {}) {
@@ -149,6 +161,16 @@ export function validateStructuredSemantics(report, { recentSources = [] } = {})
   }
   if (Number(report.stats?.reviewedCount) < 8) {
     errors.push("stats.reviewedCount must be at least 8");
+  }
+  if (report.stats?.xDiscovery?.searched !== true) {
+    errors.push("stats.xDiscovery.searched must be true for Stage 2 reports");
+  }
+  const xSelectedItems = items.filter((item) => ["x", "inbox"].includes(item.discovery?.type)).length;
+  if (Number(report.stats?.xDiscovery?.selectedCount || 0) !== xSelectedItems) {
+    errors.push("stats.xDiscovery.selectedCount must match x/inbox selected items");
+  }
+  if (Number(report.stats?.xDiscovery?.candidateCount || 0) < Number(report.stats?.xDiscovery?.selectedCount || 0)) {
+    errors.push("stats.xDiscovery.candidateCount must be at least selectedCount");
   }
 
   for (const [index, item] of items.entries()) {

@@ -19,6 +19,14 @@
     "sourceCounts": {
       "github": 7,
       "x": 1
+    },
+    "xDiscovery": {
+      "searched": true,
+      "candidateCount": 1,
+      "verifiedCount": 1,
+      "selectedCount": 0,
+      "rejectedCount": 0,
+      "deferredCount": 1
     }
   },
   "items": [

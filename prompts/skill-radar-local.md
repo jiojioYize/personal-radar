@@ -55,16 +55,28 @@ management.
 Review at least 8 candidates. Use GitHub repositories and official project
 documentation as primary evidence.
 
-As an auxiliary discovery lane, search public, search-engine-indexed X results
-that contain GitHub or official links. Useful query patterns include:
+Run two discovery lanes:
+
+1. GitHub and official documentation search as the primary verification lane.
+2. A bounded X auxiliary search as a discovery lane.
+
+When network access allows research, perform at least one public,
+search-engine-indexed X search that targets posts containing GitHub or official
+links. Useful query patterns include:
 
 ```text
 site:x.com ("agent skills" OR "Claude Code skills" OR "Codex skills") (github.com OR "open source")
 site:x.com ("SKILL.md" OR "Cursor rules" OR "Roo rules") github.com
 ```
 
+Merge GitHub/official candidates and X-discovered candidates into one candidate
+pool. Rank them with the same hard gates, scoring rubric, 30-day history, and
+feedback adjustment. Do not force X-discovered items into the final report when
+GitHub or official search provides stronger candidates.
+
 Do not scrape X, use an X API, depend on logged-in Chrome, or search
-Xiaohongshu. Social popularity is not quality evidence.
+Xiaohongshu. Social popularity is not quality evidence and does not add ranking
+weight.
 
 For pending social candidates, either:
 
@@ -142,6 +154,20 @@ For every social inbox candidate reviewed, add a `socialDecisions` entry with:
 - `status`: `verified`, `selected`, `rejected`, or `deferred`;
 - verified `officialUrl`, or `null`;
 - a short reason.
+
+Always include `stats.xDiscovery`:
+
+- `searched`: `true` when the bounded X auxiliary search was attempted;
+- `candidateCount`: X-discovered posts or inbox entries with GitHub or official
+  links;
+- `verifiedCount`: candidates whose official source was reachable and relevant;
+- `selectedCount`: selected items whose `discovery.type` is `x` or `inbox`;
+- `rejectedCount`: X or inbox candidates rejected today;
+- `deferredCount`: X or inbox candidates kept for later review.
+
+If the X search returns no useful public results, set `searched: true` and all
+counts to zero. If research cannot be performed reliably, do not finalize a
+report.
 
 ## 5. Validate And Render
 

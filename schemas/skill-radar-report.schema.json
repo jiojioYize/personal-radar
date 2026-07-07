@@ -33,7 +33,8 @@
         "selectedCount",
         "duplicateCount",
         "rejectedCount",
-        "sourceCounts"
+        "sourceCounts",
+        "xDiscovery"
       ],
       "properties": {
         "reviewedCount": { "type": "integer", "minimum": 8 },
@@ -45,6 +46,26 @@
           "additionalProperties": {
             "type": "integer",
             "minimum": 0
+          }
+        },
+        "xDiscovery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "searched",
+            "candidateCount",
+            "verifiedCount",
+            "selectedCount",
+            "rejectedCount",
+            "deferredCount"
+          ],
+          "properties": {
+            "searched": { "type": "boolean" },
+            "candidateCount": { "type": "integer", "minimum": 0 },
+            "verifiedCount": { "type": "integer", "minimum": 0 },
+            "selectedCount": { "type": "integer", "minimum": 0 },
+            "rejectedCount": { "type": "integer", "minimum": 0 },
+            "deferredCount": { "type": "integer", "minimum": 0 }
           }
         }
       }

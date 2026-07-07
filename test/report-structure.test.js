@@ -55,6 +55,7 @@ test("enriches computed fields deterministically", () => {
   assert.equal(item.canonicalUrl, "https://github.com/openai/skills");
   assert.equal(item.rank, 1);
   assert.equal(report.stats.selectedCount, 1);
+  assert.equal(report.stats.xDiscovery.searched, true);
   assert.equal(item.quality.finalRankScore, item.quality.baseScore);
 });
 
@@ -147,6 +148,14 @@ function reportFixture() {
       duplicateCount: 1,
       rejectedCount: 6,
       sourceCounts: { github: 8 },
+      xDiscovery: {
+        searched: true,
+        candidateCount: 0,
+        verifiedCount: 0,
+        selectedCount: 0,
+        rejectedCount: 0,
+        deferredCount: 0,
+      },
     },
     items: [{
       id: "placeholder",

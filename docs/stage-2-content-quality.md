@@ -1,6 +1,6 @@
 # Personal Radar Stage 2: Content Quality And Reading Experience
 
-Last updated: 2026-07-06
+Last updated: 2026-07-07
 
 ## Status
 
@@ -134,13 +134,32 @@ reports/quality/skill-radar-summary.md
 Feedback supports `useful`, `not_useful`, `opened`, `installed`, and `adapted`.
 The user can ask Codex to record feedback without editing JSON.
 
-X is an auxiliary discovery source:
+X is an auxiliary discovery source. The product rule is: dual-lane discovery,
+single quality ranking. GitHub and official documentation remain the primary
+verification lane. X only helps discover candidates that might otherwise be
+missed; it never serves as quality proof.
 
-- daily Automation may use search-engine-indexed public X results;
+- daily Automation should run at least one bounded X auxiliary search when
+  network access allows it;
+- public X results only enter the candidate pool when they link to a GitHub
+  repository or official HTTPS source;
+- GitHub/official candidates and X-discovered candidates are merged into one
+  pool and ranked by the same hard gates, scoring rubric, 30-day history, and
+  feedback adjustment;
+- X engagement is not quality evidence and does not add ranking weight;
+- X items are not forced into the final report when GitHub/official search
+  already provides stronger candidates;
 - user-submitted or Chrome-assisted posts enter the social inbox;
 - only projects with a verifiable official source can be selected;
-- X engagement is not quality evidence;
 - no page scraper, logged-in Automation dependency, or X API is included.
+
+The Sidecar or local quality summary should record lightweight source-yield
+metrics for the X lane, even when no X-discovered item is selected:
+
+- whether X was searched;
+- number of X-discovered candidates with official links;
+- number verified, selected, rejected, or deferred;
+- later usefulness of selected X-discovered items when feedback exists.
 
 Xiaohongshu is outside the Stage 2 automated source set.
 
@@ -255,7 +274,7 @@ npm run quality:summary
 | HTML and concise Markdown PushPlus renderers | Implemented locally |
 | Automated tests and Worker bundle dry run | Passed |
 | Desktop and 390px visual verification | Pending local preview access |
-| Three successful shadow reports | 1 of 3 passed |
+| Three successful shadow reports | 2 of 3 passed |
 | Worker production deployment | Not started |
 | Real-device HTML comparison | Not started |
 | 14-day observation | Not started |
@@ -268,6 +287,7 @@ accepted PushPlus format are enabled in production.
 
 | Date | Result | Items | Validation | Production impact | Notes |
 | --- | --- | ---: | --- | --- | --- |
+| 2026-07-07 | `published` | 5 | Schema, semantic, and forwarder pair validation passed | None | Reviewed 10 candidates, selected 5 non-recent sources, and confirmed production outbox files were not overwritten |
 | 2026-07-06 | `published` | 6 | Schema, semantic, and forwarder pair validation passed | None | Found and fixed a forwarder false positive when a summary mentioned a later item title before its heading |
 
 Shadow runs use `prompts/skill-radar-shadow.md` and write only to

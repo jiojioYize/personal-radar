@@ -191,12 +191,28 @@ async function writeQualitySummary(options) {
   const notUseful = windowFeedback.filter((entry) => entry.rating === "not_useful").length;
   const selectedSourceCounts = countBy(items, (item) => item.discovery?.type || "unknown");
   const candidateSourceCounts = {};
+  const xDiscoveryTotals = {
+    searchedDays: 0,
+    candidateCount: 0,
+    verifiedCount: 0,
+    selectedCount: 0,
+    rejectedCount: 0,
+    deferredCount: 0,
+  };
   for (const report of selected) {
     for (const [source, count] of Object.entries(report.stats?.sourceCounts || {})) {
       candidateSourceCounts[source] = (candidateSourceCounts[source] || 0) + Number(count || 0);
     }
+    const xDiscovery = report.stats?.xDiscovery;
+    if (xDiscovery?.searched === true) xDiscoveryTotals.searchedDays += 1;
+    xDiscoveryTotals.candidateCount += Number(xDiscovery?.candidateCount || 0);
+    xDiscoveryTotals.verifiedCount += Number(xDiscovery?.verifiedCount || 0);
+    xDiscoveryTotals.selectedCount += Number(xDiscovery?.selectedCount || 0);
+    xDiscoveryTotals.rejectedCount += Number(xDiscovery?.rejectedCount || 0);
+    xDiscoveryTotals.deferredCount += Number(xDiscovery?.deferredCount || 0);
   }
-  const xCandidates = Number(candidateSourceCounts.x || 0) + Number(candidateSourceCounts.inbox || 0);
+  const fallbackXCandidates = Number(candidateSourceCounts.x || 0) + Number(candidateSourceCounts.inbox || 0);
+  const xCandidates = xDiscoveryTotals.candidateCount || fallbackXCandidates;
   const xItems = items.filter((item) => ["x", "inbox"].includes(item.discovery?.type));
   const xFeedbackUrls = new Set(xItems.map((item) => item.canonicalUrl));
   const xFeedback = windowFeedback.filter((entry) => xFeedbackUrls.has(entry.canonicalUrl));
@@ -219,7 +235,8 @@ async function writeQualitySummary(options) {
     `- Feedback: ${useful} useful, ${notUseful} not useful`,
     `- Candidate source mix: ${formatCounts(candidateSourceCounts)}`,
     `- Selected source mix: ${formatCounts(selectedSourceCounts)}`,
-    `- X discovery: ${xCandidates} candidates, ${xItems.length} selected, ${xSelectionRate} selection rate`,
+    `- X discovery: ${xDiscoveryTotals.searchedDays}/${selected.length} days searched, ${xCandidates} candidates, ${xItems.length} selected, ${xSelectionRate} selection rate`,
+    `- X decisions: ${xDiscoveryTotals.verifiedCount} verified, ${xDiscoveryTotals.rejectedCount} rejected, ${xDiscoveryTotals.deferredCount} deferred`,
     `- X usefulness: ${xUseful}/${xFeedback.length} rated items useful (${xUsefulRate})`,
     "",
   ];
