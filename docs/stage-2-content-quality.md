@@ -275,13 +275,19 @@ npm run quality:summary
 | Automated tests and Worker bundle dry run | Passed |
 | Desktop and 390px visual verification | Pending local preview access |
 | Three successful shadow reports | 3 of 3 passed |
-| Worker production deployment | Not started |
+| Worker production deployment | Deployed 2026-07-08; PushPlus remains `markdown` |
 | Real-device HTML comparison | Not started |
 | 14-day observation | Not started |
 | 30-day acceptance | Not started |
 
 The observation clock starts on the day after the structured website and the
 accepted PushPlus format are enabled in production.
+
+Worker v2 deployment on 2026-07-08 upgraded ingest, KV compatibility, and
+structured website rendering while keeping PushPlus on the conservative
+Markdown template. Reports already stored before the deployment remain version 1
+Markdown pages; the first naturally ingested structured report after deployment
+is expected to show the new website format.
 
 ## Shadow Run Log
 
