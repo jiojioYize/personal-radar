@@ -274,7 +274,7 @@ npm run quality:summary
 | HTML and concise Markdown PushPlus renderers | Implemented locally |
 | Automated tests and Worker bundle dry run | Passed |
 | Desktop and 390px visual verification | Pending local preview access |
-| Three successful shadow reports | 2 of 3 passed |
+| Three successful shadow reports | 3 of 3 passed |
 | Worker production deployment | Not started |
 | Real-device HTML comparison | Not started |
 | 14-day observation | Not started |
@@ -287,6 +287,7 @@ accepted PushPlus format are enabled in production.
 
 | Date | Result | Items | Validation | Production impact | Notes |
 | --- | --- | ---: | --- | --- | --- |
+| 2026-07-08 | `published` | 5 | Schema, semantic, and forwarder pair validation passed | None | Verified the new `xDiscovery` requirement: X auxiliary search attempted, 0 verifiable X candidates found, and production outbox files were not overwritten |
 | 2026-07-07 | `published` | 5 | Schema, semantic, and forwarder pair validation passed | None | Reviewed 10 candidates, selected 5 non-recent sources, and confirmed production outbox files were not overwritten |
 | 2026-07-06 | `published` | 6 | Schema, semantic, and forwarder pair validation passed | None | Found and fixed a forwarder false positive when a summary mentioned a later item title before its heading |
 
