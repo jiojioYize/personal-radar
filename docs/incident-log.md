@@ -22,15 +22,16 @@ automatically classified as product defects.
   08:07:34 Beijing time.
 - Windows Task Scheduler started the forwarder at 08:15:03 and selected the
   correct outbox report.
-- Worker returned HTTP `400`, so the report was not stored, the public site was
-  not updated, and PushPlus was not sent.
+- Worker returned HTTP `400` during the scheduled run, so the report was not
+  stored, the public site was not updated, and PushPlus was not sent at the
+  intended 08:15 delivery window.
 - Diagnosis: Worker v2 raw-HTML protection treated the normal placeholder path
   ``skills/<name>/SKILL.md`` as an HTML tag. Local forwarder pair validation
   passed, but Worker ingest rejected `items[2] contains raw HTML`.
-- Resolution: do not backfill or manually push the missed 2026-07-09 report.
-  Clear the local pending entry and deploy a Worker validation fix that still
-  rejects real HTML such as `<script>` while allowing angle-bracket placeholders
-  in code-like text.
+- Resolution: deploy a Worker validation fix that still rejects real HTML such
+  as `<script>` while allowing angle-bracket placeholders in code-like text.
+  After the fix, the user manually ran the Windows scheduled task and confirmed
+  the report was pushed successfully and the website page looked correct.
 - Classification: Stage 2 Worker validation regression introduced during the
   structured ingest rollout.
 
