@@ -149,6 +149,8 @@ test("builds a concise HTML PushPlus message", async () => {
     assert.equal(result.pushed, true);
     assert.equal(pushPayload.template, "html");
     assert.match(pushPayload.title, /今日精选/);
+    assert.match(pushPayload.content, /background:#f1f3ee/);
+    assert.match(pushPayload.content, /Skill Radar 今日精选/);
     assert.match(pushPayload.content, /查看完整分析与来源/);
     assert.match(pushPayload.content, /example\/agent-skill/);
     assert.ok(pushPayload.content.length < 6000);

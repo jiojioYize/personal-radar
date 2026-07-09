@@ -230,12 +230,14 @@ function renderPushHtml(report, reportUrl) {
   const stats = `检查 ${report.stats.reviewedCount} 项 · 精选 ${report.items.length} 项 · 排除重复 ${report.stats.duplicateCount} 项`;
   if (report.status === "no_update") {
     return [
-      '<div style="font-family:Arial,sans-serif;color:#172018;line-height:1.65">',
-      '<h2 style="margin:0 0 12px">今日无重要更新</h2>',
-      `<p style="color:#667064">${escapeHtml(stats)}</p>`,
-      `<p>${summary}</p>`,
-      `<p>${escapeHtml(truncateText(report.conclusion.zh, 220))}</p>`,
-      `<p><a href="${escapeHtml(reportUrl)}">查看网站归档</a></p>`,
+      '<div style="font-family:Arial,sans-serif;background:#f1f3ee;color:#172018;line-height:1.65;padding:12px">',
+      '<section style="background:#ffffff;padding:12px;margin:0 0 12px;border-left:4px solid #0b6b59">',
+      '<h2 style="margin:0 0 12px;color:#172018">今日无重要更新</h2>',
+      `<p style="color:#667064;margin:4px 0">${escapeHtml(stats)}</p>`,
+      `<p style="margin:8px 0;color:#172018">${summary}</p>`,
+      `<p style="margin:8px 0;color:#172018">${escapeHtml(truncateText(report.conclusion.zh, 220))}</p>`,
+      "</section>",
+      `<p style="margin:12px 0 0"><a href="${escapeHtml(reportUrl)}">查看网站归档</a></p>`,
       "</div>",
     ].join("");
   }
@@ -255,9 +257,12 @@ function renderPushHtml(report, reportUrl) {
   }).join("");
 
   return [
-    '<div style="font-family:Arial,sans-serif;color:#172018;line-height:1.65">',
-    `<p style="color:#667064">${escapeHtml(stats)}</p>`,
-    `<p>${summary}</p>`,
+    '<div style="font-family:Arial,sans-serif;background:#f1f3ee;color:#172018;line-height:1.65;padding:12px">',
+    '<section style="background:#ffffff;padding:12px;margin:0 0 12px;border-left:4px solid #0b6b59">',
+    '<h2 style="margin:0 0 8px;color:#172018">Skill Radar 今日精选</h2>',
+    `<p style="color:#667064;margin:4px 0">${escapeHtml(stats)}</p>`,
+    `<p style="margin:8px 0;color:#172018">${summary}</p>`,
+    "</section>",
     cards,
     `<p style="margin-top:16px"><a href="${escapeHtml(reportUrl)}">查看完整分析与来源</a></p>`,
     "</div>",
