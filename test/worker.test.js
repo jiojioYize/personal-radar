@@ -157,6 +157,39 @@ test("builds a concise HTML PushPlus message", async () => {
   }
 });
 
+test("keeps HTML card fields untruncated", async () => {
+  const kv = new MemoryKv();
+  const structured = await exampleReport();
+  structured.items[0].display.zh.oneLiner = "这是用于确认 HTML 卡片完整显示的长价值说明，末尾包含唯一标记 VALUE_TAIL。";
+  structured.items[0].display.zh.bestFor = "适合需要在微信里直接看完整判断依据的人，末尾包含唯一标记 BEST_FOR_TAIL。";
+  structured.items[0].display.zh.primaryCaution = "注意事项也必须完整显示，否则用户无法判断风险边界，末尾包含唯一标记 CAUTION_TAIL。";
+  const originalFetch = globalThis.fetch;
+  let pushPayload;
+  globalThis.fetch = async (_url, options) => {
+    pushPayload = JSON.parse(options.body);
+    return new Response('{"code":200}', { status: 200 });
+  };
+
+  try {
+    const response = await ingest(kv, structured, {
+      generatedAt: "2026-07-11T00:00:00.000Z",
+      sourceRunId: "html-untruncated-card-fields",
+      envOverrides: {
+        PUSHPLUS_TOKEN: "test-token",
+        PUSHPLUS_TEMPLATE: "html",
+      },
+    });
+    assert.equal(response.status, 200);
+    assert.match(pushPayload.content, /VALUE_TAIL/);
+    assert.match(pushPayload.content, /BEST_FOR_TAIL/);
+    assert.match(pushPayload.content, /CAUTION_TAIL/);
+    assert.doesNotMatch(pushPayload.content, /VALUE_TAIL。…|BEST_FOR_TAIL。…|CAUTION_TAIL。…/);
+    assert.ok(pushPayload.content.length < 7000);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 async function ingest(kv, structuredReport, options) {
   const payload = {
     title: `Skill Radar Deep Dive - ${structuredReport.reportDate}`,

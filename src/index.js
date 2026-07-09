@@ -247,9 +247,9 @@ function renderPushHtml(report, reportUrl) {
       `<section style="border-left:4px solid ${border};padding:10px 12px;margin:12px 0;background:#f7f8f4">`,
       `<div style="font-size:12px;font-weight:700;color:#994d1f;text-transform:uppercase">${escapeHtml(item.recommendation)}</div>`,
       `<h3 style="margin:2px 0 6px;font-size:17px">${escapeHtml(item.title)}</h3>`,
-      `<p style="margin:4px 0">${escapeHtml(truncateText(display.oneLiner, 72))}</p>`,
-      `<p style="margin:4px 0;color:#667064"><strong>适合：</strong>${escapeHtml(truncateText(display.bestFor, 50))}</p>`,
-      `<p style="margin:4px 0;color:#667064"><strong>注意：</strong>${escapeHtml(truncateText(display.primaryCaution, 72))}</p>`,
+      `<p style="margin:4px 0">${escapeHtml(display.oneLiner)}</p>`,
+      `<p style="margin:4px 0;color:#667064"><strong>适合：</strong>${escapeHtml(display.bestFor)}</p>`,
+      `<p style="margin:4px 0;color:#667064"><strong>注意：</strong>${escapeHtml(display.primaryCaution)}</p>`,
       "</section>",
     ].join("");
   }).join("");
