@@ -73,9 +73,8 @@ export function calculatePreferenceAdjustment(item, feedbackEntries = []) {
 
   for (const entry of feedbackEntries) {
     if (String(entry.category || "").toLowerCase() !== category) continue;
-    if (entry.rating === "useful") adjustment += 1;
-    if (entry.rating === "not_useful") adjustment -= 1;
-    if (entry.outcome === "installed" || entry.outcome === "adapted") adjustment += 1;
+    if (entry.rating === "interested") adjustment += 1;
+    if (entry.rating === "not_interested") adjustment -= 1;
   }
 
   return Math.max(-5, Math.min(5, adjustment));

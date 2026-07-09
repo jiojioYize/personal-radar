@@ -1,6 +1,6 @@
 # Personal Radar Stage 2: Content Quality And Reading Experience
 
-Last updated: 2026-07-07
+Last updated: 2026-07-09
 
 ## Status
 
@@ -106,7 +106,7 @@ Weights:
 | Adaptation feasibility | 15 |
 | Trust and safety | 10 |
 
-Preference feedback changes ordering by at most five points. It cannot promote a
+Interest feedback changes ordering by at most five points. It cannot promote a
 candidate that fails the base quality threshold or a hard safety gate.
 
 ## Daily Outcome Rules
@@ -119,7 +119,7 @@ candidate that fails the base quality threshold or a hard safety gate.
   must not be represented as `no_update`.
 - Late or missed reports follow the existing no-backfill incident policy.
 
-## History, Feedback, And Social Inbox
+## History, Interest Feedback, And Social Inbox
 
 Local-only state:
 
@@ -131,8 +131,22 @@ reports/inbox/social-candidates.json
 reports/quality/skill-radar-summary.md
 ```
 
-Feedback supports `useful`, `not_useful`, `opened`, `installed`, and `adapted`.
-The user can ask Codex to record feedback without editing JSON.
+Stage 2 feedback is intentionally coarse. It supports only two explicit
+interest signals:
+
+- `interested`: this item is worth remembering or seeing more of.
+- `not_interested`: this item is not a good fit and similar items should be
+  ranked lower.
+
+The user can give feedback in natural language, such as "I am interested in
+skill-sniffer" or "SkillForge is not interesting to me." Codex can translate
+that into the local feedback file without requiring manual JSON edits.
+
+Heavier outcomes such as opened, installed, adapted, or proven useful are not
+daily Stage 2 feedback fields. Opening details and source links should become
+automatic website events in a later product stage. Installation, adaptation,
+and long-term usefulness are optional later evidence, not a daily validation
+burden.
 
 X is an auxiliary discovery source. The product rule is: dual-lane discovery,
 single quality ranking. GitHub and official documentation remain the primary
@@ -159,7 +173,7 @@ metrics for the X lane, even when no X-discovered item is selected:
 - whether X was searched;
 - number of X-discovered candidates with official links;
 - number verified, selected, rejected, or deferred;
-- later usefulness of selected X-discovered items when feedback exists.
+- later interest in selected X-discovered items when feedback exists.
 
 Xiaohongshu is outside the Stage 2 automated source set.
 
@@ -225,9 +239,9 @@ Record feedback:
 ```powershell
 node tools/quality/report-quality.mjs feedback `
   --url "https://github.com/example/project" `
-  --rating useful `
+  --rating interested `
   --category "browser automation" `
-  --outcome adapted
+  --note "I want to track more security-scanning skill packs."
 ```
 
 Add an X candidate:
@@ -308,7 +322,8 @@ deployment.
 - Every outcome has a schema-valid Sidecar.
 - No unexplained repository-level repeat.
 - Every selected item has a base score of at least 70.
-- At least eight reports with recommendations receive two feedback entries.
+- At least eight reports with recommendations receive two lightweight interest
+  feedback entries, recorded as `interested` or `not_interested`.
 - Mobile push is scannable and website details remain complete.
 - No mojibake, structure mismatch, low-quality padding, or content injection.
 
@@ -317,9 +332,9 @@ deployment.
 - At least 26 valid daily outcomes.
 - Zero unexplained 30-day repository repeats.
 - All selected sources were reachable and verified at generation time.
-- At least 60% of rated items are marked `useful`.
+- At least 60% of rated items are marked `interested`.
 - History or feedback demonstrably changes later filtering or ranking.
-- X candidate volume, selection rate, and usefulness are measured.
+- X candidate volume, selection rate, and interest rate are measured.
 - `published`, `no_update`, and production incidents remain correctly
   distinguished.
 - Push supports discovery and judgment; the website supports evidence,

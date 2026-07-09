@@ -41,8 +41,7 @@ test("calculates the weighted base score", () => {
 test("preference adjustment is category-based and clamped", () => {
   const feedback = Array.from({ length: 10 }, (_, index) => ({
     category: "browser",
-    rating: index < 8 ? "useful" : "not_useful",
-    outcome: index < 3 ? "adapted" : null,
+    rating: index < 8 ? "interested" : "not_interested",
   }));
   assert.equal(calculatePreferenceAdjustment({ category: "browser" }, feedback), 5);
   assert.equal(calculatePreferenceAdjustment({ category: "documents" }, feedback), 0);

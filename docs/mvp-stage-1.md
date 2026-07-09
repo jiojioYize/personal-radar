@@ -174,7 +174,7 @@ Recommended next work:
 
 1. Add 30-day cross-run deduplication for recommended links.
 2. Add protected history endpoints so Codex can avoid recently recommended items.
-3. Add preference memory for useful/not useful feedback.
+3. Add preference memory for interested/not-interested feedback.
 4. Improve public archive browsing and category presentation.
 5. Add a small operational status page for last ingest, last push, and last report date.
 6. Add a shared channel registry and channel-specific outbox directories before expanding beyond `skill-radar`.

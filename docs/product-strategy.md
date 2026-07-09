@@ -1,6 +1,6 @@
 # Personal Radar Product Strategy
 
-Last updated: 2026-07-06
+Last updated: 2026-07-09
 
 ## Purpose
 
@@ -103,11 +103,50 @@ Personalization develops through two paths:
 
 - **Explicit preferences:** topics, language, frequency, delivery channel,
   technical focus, and risk tolerance.
-- **Behavioral feedback:** useful, not useful, opened, installed, adapted, and
-  optional reasons.
+- **Behavioral feedback:** low-friction interest actions such as saving,
+  dismissing, expanding details, and opening source links.
 
 Explicit preferences set the initial direction. Feedback continuously corrects
 the ranking.
+
+User-facing feedback should stay lightweight from the start. Stage 2 local
+validation now uses the same coarse mental model as the future product:
+interested or not interested. The product should not ask users to decide
+whether a skill is already "useful", "installed", or "adapted" at first glance.
+Those outcomes are better treated as optional later-stage evidence, not the
+main feedback loop.
+
+The practical hosted feedback model is:
+
+| Signal | Product treatment | Recommendation meaning |
+| --- | --- | --- |
+| Save | Primary explicit positive signal; add to a saved-skills area | Strong interest, worth remembering |
+| Not interested | Primary explicit negative signal; do not need a separate user-facing list | Reduce similar future recommendations |
+| Expand details | Weak interest signal, deduplicated per user and skill | User wanted more context |
+| Open source link | Weak interest signal, same weight as expand details | User wanted external verification |
+| Page dwell time | Product analytics only in early versions | Too noisy without skill-level focus |
+| Report page revisit | Product analytics only in early versions | Not specific enough to infer skill preference |
+
+Save and not-interested are the first personalization signals to build because
+they are explicit, easy to explain, and useful to the user immediately. Saved
+skills should become a personal collection that users can revisit.
+
+In the current single-user Stage 2 implementation, the equivalent local signals
+are recorded as `interested` and `not_interested`. They are gathered through
+plain-language Codex feedback rather than website buttons because the public
+site has no identity layer yet, and feedback written to Worker KV would not
+automatically reach the local recommendation pipeline.
+
+Expand-details and open-source-link events are useful but should remain weak
+signals. They should not be ranked as stronger or weaker than each other because
+their order is ambiguous: a user may expand then click, click then return, or
+click out of curiosity. Repeated clicks on the same item should be capped or
+deduplicated by user, skill, and time window.
+
+Page-level dwell time and page revisit counts should not affect recommendation
+ranking until the product has skill-level detail pages or reliable skill-level
+focus tracking. Otherwise the system risks learning from idle tabs, background
+windows, or generic report browsing rather than actual item interest.
 
 The early hosted product should not run a complete AI research task separately
 for every user. It should:

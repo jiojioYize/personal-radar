@@ -98,6 +98,52 @@ test("quality CLI finalizes a draft into a validated Sidecar and Markdown pair",
   assert.match(summaryText, /Candidate source mix:/);
   assert.match(summaryText, /X discovery:/);
 
+  const feedbackResult = await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "feedback",
+      "--url",
+      "https://github.com/example/stage-two-test",
+      "--rating",
+      "interested",
+      "--category",
+      "browser automation",
+      "--note",
+      "Track more items like this.",
+    ],
+    {
+      cwd: projectRoot,
+      env: { ...process.env, PERSONAL_RADAR_ROOT: root },
+    },
+  );
+  assert.match(feedbackResult.stdout, /Recorded feedback/);
+  const feedback = JSON.parse(await fs.readFile(
+    path.join(root, "reports", "feedback", "skill-radar.json"),
+    "utf8",
+  ));
+  assert.equal(feedback.entries[0].rating, "interested");
+  assert.equal("outcome" in feedback.entries[0], false);
+
+  await assert.rejects(
+    execFileAsync(
+      process.execPath,
+      [
+        path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+        "feedback",
+        "--url",
+        "https://github.com/example/stage-two-test",
+        "--rating",
+        "useful",
+      ],
+      {
+        cwd: projectRoot,
+        env: { ...process.env, PERSONAL_RADAR_ROOT: root },
+      },
+    ),
+    /rating must be interested or not_interested/,
+  );
+
   example.reportDate = "2099-01-03";
   example.items[0].sourceUrl = "https://github.com/example/stage-two-shadow";
   example.items[0].canonicalUrl = example.items[0].sourceUrl;

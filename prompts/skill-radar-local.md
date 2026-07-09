@@ -24,7 +24,7 @@ schemas/skill-radar-report.schema.json
 The context contains:
 
 - sources recommended in the last 30 days;
-- preference feedback;
+- coarse interest feedback (`interested` and `not_interested`);
 - pending or deferred X candidates.
 
 Do not recommend a recent source again unless an important release, structural

@@ -114,11 +114,8 @@ async function recordFeedback(options) {
   if (!options.url || !options.rating) {
     throw new Error("feedback requires --url and --rating");
   }
-  if (!["useful", "not_useful"].includes(options.rating)) {
-    throw new Error("rating must be useful or not_useful");
-  }
-  if (options.outcome && !["opened", "installed", "adapted"].includes(options.outcome)) {
-    throw new Error("outcome must be opened, installed, or adapted");
+  if (!["interested", "not_interested"].includes(options.rating)) {
+    throw new Error("rating must be interested or not_interested");
   }
 
   await ensureLocalFiles();
@@ -130,7 +127,6 @@ async function recordFeedback(options) {
     canonicalUrl,
     category: String(options.category || "uncategorized"),
     rating: options.rating,
-    outcome: options.outcome || null,
     note: options.note || null,
     recordedAt: new Date().toISOString(),
   };
@@ -187,8 +183,8 @@ async function writeQualitySummary(options) {
     entry.reportDate >= cutoff && entry.reportDate <= asOf,
   );
   const items = selected.flatMap((report) => report.items || []);
-  const useful = windowFeedback.filter((entry) => entry.rating === "useful").length;
-  const notUseful = windowFeedback.filter((entry) => entry.rating === "not_useful").length;
+  const interested = windowFeedback.filter((entry) => entry.rating === "interested").length;
+  const notInterested = windowFeedback.filter((entry) => entry.rating === "not_interested").length;
   const selectedSourceCounts = countBy(items, (item) => item.discovery?.type || "unknown");
   const candidateSourceCounts = {};
   const xDiscoveryTotals = {
@@ -216,9 +212,9 @@ async function writeQualitySummary(options) {
   const xItems = items.filter((item) => ["x", "inbox"].includes(item.discovery?.type));
   const xFeedbackUrls = new Set(xItems.map((item) => item.canonicalUrl));
   const xFeedback = windowFeedback.filter((entry) => xFeedbackUrls.has(entry.canonicalUrl));
-  const xUseful = xFeedback.filter((entry) => entry.rating === "useful").length;
+  const xInterested = xFeedback.filter((entry) => entry.rating === "interested").length;
   const xSelectionRate = xCandidates ? `${Math.round((xItems.length / xCandidates) * 100)}%` : "n/a";
-  const xUsefulRate = xFeedback.length ? `${Math.round((xUseful / xFeedback.length) * 100)}%` : "n/a";
+  const xInterestRate = xFeedback.length ? `${Math.round((xInterested / xFeedback.length) * 100)}%` : "n/a";
   const averageScore = items.length
     ? Math.round(items.reduce((sum, item) => sum + Number(item.quality?.baseScore || 0), 0) / items.length)
     : 0;
@@ -232,12 +228,12 @@ async function writeQualitySummary(options) {
     `- No-update outcomes: ${selected.filter((report) => report.status === "no_update").length}`,
     `- Selected items: ${items.length}`,
     `- Average base score: ${averageScore}`,
-    `- Feedback: ${useful} useful, ${notUseful} not useful`,
+    `- Interest feedback: ${interested} interested, ${notInterested} not interested`,
     `- Candidate source mix: ${formatCounts(candidateSourceCounts)}`,
     `- Selected source mix: ${formatCounts(selectedSourceCounts)}`,
     `- X discovery: ${xDiscoveryTotals.searchedDays}/${selected.length} days searched, ${xCandidates} candidates, ${xItems.length} selected, ${xSelectionRate} selection rate`,
     `- X decisions: ${xDiscoveryTotals.verifiedCount} verified, ${xDiscoveryTotals.rejectedCount} rejected, ${xDiscoveryTotals.deferredCount} deferred`,
-    `- X usefulness: ${xUseful}/${xFeedback.length} rated items useful (${xUsefulRate})`,
+    `- X interest: ${xInterested}/${xFeedback.length} rated items interested (${xInterestRate})`,
     "",
   ];
 
@@ -437,10 +433,9 @@ function summarizePreferences(entries) {
   const categories = {};
   for (const entry of entries) {
     const category = entry.category || "uncategorized";
-    categories[category] ||= { useful: 0, notUseful: 0, outcomes: 0 };
-    if (entry.rating === "useful") categories[category].useful += 1;
-    if (entry.rating === "not_useful") categories[category].notUseful += 1;
-    if (entry.outcome === "installed" || entry.outcome === "adapted") categories[category].outcomes += 1;
+    categories[category] ||= { interested: 0, notInterested: 0 };
+    if (entry.rating === "interested") categories[category].interested += 1;
+    if (entry.rating === "not_interested") categories[category].notInterested += 1;
   }
   return { totalFeedback: entries.length, categories };
 }
@@ -621,7 +616,7 @@ function printHelp() {
 Commands:
   prepare [--date YYYY-MM-DD] [--shadow]
   finalize --input reports/state/skill-radar-draft.json [--shadow]
-  feedback --url URL --rating useful|not_useful [--date YYYY-MM-DD] [--category NAME] [--outcome opened|installed|adapted] [--note TEXT]
+  feedback --url URL --rating interested|not_interested [--date YYYY-MM-DD] [--category NAME] [--note TEXT]
   social-add --url https://x.com/... [--note TEXT]
   summary [--days 30] [--date YYYY-MM-DD]`);
 }
