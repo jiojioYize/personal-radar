@@ -8,9 +8,9 @@ Stage 2 implementation is in progress.
 
 The local quality layer, structured report contract, forwarder validation, KV
 v2 compatibility, structured website rendering, and HTML PushPlus renderer are
-implemented locally. Production deployment, three-run shadow validation, the
-real-device PushPlus comparison, and the 14/30-day observation windows have not
-started.
+implemented. Worker v2 is deployed, three shadow runs passed, and the
+real-device HTML PushPlus comparison was accepted on 2026-07-09. The 14-day
+observation window starts on 2026-07-10.
 
 This document is the single living record for the Stage 2 plan, rollout,
 checkpoints, and final acceptance.
@@ -190,8 +190,9 @@ does not create D1 or R2 resources.
 - All selected items appear in concise form.
 - Each card shows the action, core value, best-fit audience, and main caution.
 - The full report link points to the dated public website page.
-- `PUSHPLUS_TEMPLATE=markdown` remains the production default until the
-  real-device HTML comparison is accepted.
+- `PUSHPLUS_TEMPLATE=html` is the production default as of 2026-07-09.
+- HTML messages use a fixed light reading shell and summary card so mobile dark
+  backgrounds do not hide the introductory text.
 
 ### Website
 
@@ -275,19 +276,19 @@ npm run quality:summary
 | Automated tests and Worker bundle dry run | Passed |
 | Desktop and 390px visual verification | Pending local preview access |
 | Three successful shadow reports | 3 of 3 passed |
-| Worker production deployment | Deployed 2026-07-08; PushPlus remains `markdown` |
-| Real-device HTML comparison | Not started |
-| 14-day observation | Not started |
+| Worker production deployment | Deployed 2026-07-08; PushPlus switched to `html` on 2026-07-09 |
+| Real-device HTML comparison | Accepted 2026-07-09 |
+| 14-day observation | Starts 2026-07-10 |
 | 30-day acceptance | Not started |
 
 The observation clock starts on the day after the structured website and the
 accepted PushPlus format are enabled in production.
 
 Worker v2 deployment on 2026-07-08 upgraded ingest, KV compatibility, and
-structured website rendering while keeping PushPlus on the conservative
-Markdown template. Reports already stored before the deployment remain version 1
-Markdown pages; the first naturally ingested structured report after deployment
-is expected to show the new website format.
+structured website rendering while initially keeping PushPlus on the
+conservative Markdown template. Reports already stored before the deployment
+remain version 1 Markdown pages. After real-device HTML testing on 2026-07-09,
+PushPlus was switched to the HTML card format.
 
 ## Shadow Run Log
 

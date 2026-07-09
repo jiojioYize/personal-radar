@@ -6,7 +6,7 @@ preview_urls = false
 
 [vars]
 RADAR_TIME_ZONE = "Asia/Shanghai"
-PUSHPLUS_TEMPLATE = "markdown"
+PUSHPLUS_TEMPLATE = "html"
 
 [[kv_namespaces]]
 binding = "RADAR_STATE"
