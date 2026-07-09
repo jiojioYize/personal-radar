@@ -880,11 +880,13 @@ function isHttpsUrl(value) {
 }
 
 function containsRawHtml(value) {
-  if (typeof value === "string") return /<\/?[a-z][^>]*>/i.test(value);
+  if (typeof value === "string") return HTML_TAG_PATTERN.test(value);
   if (Array.isArray(value)) return value.some(containsRawHtml);
   if (value && typeof value === "object") return Object.values(value).some(containsRawHtml);
   return false;
 }
+
+const HTML_TAG_PATTERN = /<\/?(?:a|abbr|address|article|aside|audio|b|blockquote|body|br|button|canvas|caption|code|col|colgroup|dd|details|dialog|div|dl|dt|em|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|i|iframe|img|input|label|legend|li|link|main|meta|nav|ol|option|p|pre|script|section|select|small|source|span|strong|style|summary|svg|table|tbody|td|textarea|tfoot|th|thead|title|tr|u|ul|video)(?:\s|>|\/)/i;
 
 function truncateText(value, maxLength) {
   const text = String(value || "").trim();

@@ -95,6 +95,19 @@ test("rejects raw HTML in structured content", async () => {
   assert.match((await response.json()).error, /raw HTML/);
 });
 
+test("allows angle-bracket placeholders in structured text", async () => {
+  const kv = new MemoryKv();
+  const structured = await exampleReport();
+  structured.items[0].display.zh.usability = "路径遵循 `skills/<name>/SKILL.md` 约定。";
+  structured.items[0].display.en.usability = "The layout follows `skills/<name>/SKILL.md` conventions.";
+
+  const response = await ingest(kv, structured, {
+    generatedAt: "2026-07-08T00:00:00.000Z",
+    sourceRunId: "placeholder-angle-brackets",
+  });
+  assert.equal(response.status, 200);
+});
+
 test("returns duplicate for the same category and date", async () => {
   const kv = new MemoryKv();
   const structured = await exampleReport();

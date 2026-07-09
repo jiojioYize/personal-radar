@@ -15,6 +15,25 @@ automatically classified as product defects.
 
 ## Incidents
 
+### 2026-07-09: Worker v2 Rejected Structured Report
+
+- Codex Automation successfully generated
+  `reports/outbox/skill-radar-2026-07-09.md` and its `.quality.json` Sidecar at
+  08:07:34 Beijing time.
+- Windows Task Scheduler started the forwarder at 08:15:03 and selected the
+  correct outbox report.
+- Worker returned HTTP `400`, so the report was not stored, the public site was
+  not updated, and PushPlus was not sent.
+- Diagnosis: Worker v2 raw-HTML protection treated the normal placeholder path
+  ``skills/<name>/SKILL.md`` as an HTML tag. Local forwarder pair validation
+  passed, but Worker ingest rejected `items[2] contains raw HTML`.
+- Resolution: do not backfill or manually push the missed 2026-07-09 report.
+  Clear the local pending entry and deploy a Worker validation fix that still
+  rejects real HTML such as `<script>` while allowing angle-bracket placeholders
+  in code-like text.
+- Classification: Stage 2 Worker validation regression introduced during the
+  structured ingest rollout.
+
 ### 2026-06-30: Report Generated After the Forwarder Window
 
 - Codex Automation started on schedule but could not complete its internet
@@ -52,4 +71,3 @@ automatically classified as product defects.
 - Resolution: no retry or backfill.
 - Classification: external runtime/network incident, not a report parsing or
   delivery regression.
-
