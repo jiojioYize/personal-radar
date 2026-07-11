@@ -15,7 +15,7 @@ test("ingests and renders a structured v2 report", async () => {
   assert.equal(response.status, 200);
   assert.equal(result.stored, true);
   assert.equal(result.pushed, false);
-  assert.equal(result.report.schemaVersion, 1);
+  assert.equal(result.report.schemaVersion, 2);
   assert.equal(result.report.selectedCount, 1);
 
   const page = await worker.fetch(

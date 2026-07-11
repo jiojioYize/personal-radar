@@ -93,21 +93,31 @@ Every selected item must:
 
 - be a real reusable skill, rule, or instruction pack;
 - have a reachable HTTPS primary source;
-- explain the problem, usability, Codex adaptation, and security boundary;
+- explain the problem, native-platform usability, cross-platform portability,
+  current-user adaptation, and security boundary;
 - have a calculated base score of at least 70;
 - not be an unjustified 30-day repeat.
 
-Score every selected item from 0 to 5 on:
+Do not assign quality scores. Collect the structured evidence required by the
+JSON Schema and let the local quality tool calculate all seven dimensions.
 
-- `relevance`
-- `reusability`
-- `maintenanceEvidence`
-- `novelty`
-- `adaptationFeasibility`
-- `trustSafety`
+Objective quality is platform-neutral. Judge whether a skill works in its
+declared target products, such as Codex, Claude Code, Cursor, Cline, Roo Code,
+Hermes, GitHub Copilot, or Gemini CLI. Codex compatibility belongs in the
+current-user adaptation explanation; lack of Codex support must not reduce the
+objective quality score.
 
-The local quality tool calculates the weighted score and preference adjustment.
-Do not invent or optimize the final numeric score.
+For GitHub repositories, collect current stars, contributors, repository age,
+recent maintenance, releases, and independent participation when directly
+verifiable. Use OSS Insight for historical trends and OpenSSF or deps.dev for
+applicable security evidence when available. RadarAI, X, and curated lists are
+discovery sources, not direct quality proof. Do not estimate unavailable
+numeric metrics: use `null`. Use only `met`, `not_met`, `unknown`, or
+`not_applicable` for evidence-state fields.
+
+Classify `artifactScope` accurately. Stars from curated lists never transfer to
+listed projects. Stars from broad collections or mixed toolkits do not fully
+validate an individual sub-skill without item-level evidence.
 
 Use:
 
@@ -125,7 +135,9 @@ Write UTF-8 JSON to:
 reports/state/skill-radar-draft.json
 ```
 
-Use `schemaVersion: 1`, `channel: "skill-radar"`, and the Beijing date.
+Use `schemaVersion: 2`, `channel: "skill-radar"`, and the Beijing date. Read
+`schemas/skill-radar-report.schema.json` and
+`schemas/examples/skill-radar-report.example.json` before writing the draft.
 
 For every selected item provide:
 
@@ -133,16 +145,17 @@ For every selected item provide:
 - `discovery` with `type`, `url`, optional author, and optional publish time;
 - bilingual `display.zh` and `display.en`;
 - all display fields required by the JSON Schema;
-- all six quality dimensions;
+- `quality.evidence` with artifact scope, declared platforms, all required
+  evidence groups, raw community and maintenance metrics, and evidence refs;
 - `skillLike: true`;
 - `officialSourceVerified: true`;
 - `sourceCheckedAt` as an ISO timestamp;
 - license when known;
 - material-change status and evidence when applicable.
 
-Computed fields such as `id`, `rank`, `canonicalUrl`, `baseScore`,
-`preferenceAdjustment`, and `finalRankScore` may be omitted from the draft. The
-quality tool adds them deterministically.
+Computed fields such as `id`, `rank`, `canonicalUrl`, `quality.dimensions`,
+`baseScore`, `preferenceAdjustment`, and `finalRankScore` may use placeholders
+in the draft. The quality tool overwrites them deterministically.
 
 Keep product names, repository names, commands, URLs, and identifiers in
 English. Write concise natural Chinese and equivalent English explanations.

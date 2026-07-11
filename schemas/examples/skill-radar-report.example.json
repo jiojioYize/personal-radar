@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "status": "published",
   "channel": "skill-radar",
   "reportDate": "2026-07-06",
@@ -70,16 +70,102 @@
       },
       "quality": {
         "dimensions": {
-          "relevance": 5,
-          "reusability": 5,
-          "maintenanceEvidence": 4,
-          "novelty": 4,
-          "adaptationFeasibility": 5,
-          "trustSafety": 4
+          "valueClarity": 16,
+          "nativeUsabilityPortability": 20,
+          "implementationQuality": 15,
+          "maintenanceHealth": 10,
+          "communityValidation": 11,
+          "trustSafetyLicense": 10,
+          "differentiation": 8
         },
-        "baseScore": 92,
+        "evidence": {
+          "artifactScope": "individual_skill",
+          "declaredPlatforms": ["claude-code", "codex"],
+          "value": {
+            "specificTaskDefined": "met",
+            "targetUserDefined": "met",
+            "inputsOutputsDefined": "met",
+            "workflowImprovementDefined": "met",
+            "officialDemonstration": "met",
+            "independentOutcomeEvidence": "not_met"
+          },
+          "usability": {
+            "reusableContentPresent": "met",
+            "targetPlatformsDocumented": "met",
+            "nativeInstallInstructions": "met",
+            "nativeUsageExample": "met",
+            "dependenciesAndPermissionsDocumented": "met",
+            "validationMethodAvailable": "met",
+            "coreInstructionsPortable": "met",
+            "multiPlatformSupport": "met",
+            "adaptationGuideAvailable": "not_applicable"
+          },
+          "implementation": {
+            "documentedStructureMatches": "met",
+            "coreFilesSubstantive": "met",
+            "triggerOrScopeDefined": "met",
+            "executableStepsDefined": "met",
+            "constraintsAndFailureModesDefined": "met",
+            "testsOrReviewableExamples": "met"
+          },
+          "maintenance": {
+            "repositoryAgeDays": 365,
+            "commitCount90d": 12,
+            "activeMonths12m": 8,
+            "releaseCount12m": 2,
+            "contributorCount12m": 4,
+            "independentIssueOrPrParticipants90d": 5,
+            "hasUnresolvedBlockingIssues": false,
+            "archived": false,
+            "maintenanceEnded": false
+          },
+          "community": {
+            "stars": 1200,
+            "contributors": 6,
+            "independentParticipants90d": 5,
+            "independentAdoptions": 1,
+            "starsGrowth30d": 80,
+            "starsGrowth90d": 240,
+            "credibleOrganizationBacking": "met",
+            "verifiableUsageCase": "met",
+            "itemLevelAdoptionEvidence": "met",
+            "skillSpecificAttentionEvidence": "met"
+          },
+          "security": {
+            "licensePresent": "met",
+            "permissionsDocumented": "met",
+            "externalBehaviorDocumented": "met",
+            "dangerousActionsRequireConfirmation": "met",
+            "installationAuditable": "met",
+            "securityPolicyPresent": "met",
+            "applicableOpenSsfEvidence": "not_applicable",
+            "secretExposureRequested": "not_met",
+            "destructiveByDefault": "not_met",
+            "unreviewedRemoteExecution": "not_met",
+            "unnecessaryElevatedPermissions": "not_met",
+            "safetyReviewBypass": "not_met",
+            "knownMaliciousBehavior": "not_met"
+          },
+          "differentiation": {
+            "comparisonSources": ["https://github.com/example/comparison"],
+            "newProblemCoverage": "met",
+            "newAgentFormatOrWorkflow": "met",
+            "fewerAdaptationSteps": "not_met",
+            "newValidationMechanism": "met",
+            "newSecurityOrCollaborationBoundary": "met"
+          },
+          "evidenceRefs": [
+            {
+              "field": "usability.reusableContentPresent",
+              "source": "github",
+              "location": "skills/example/SKILL.md",
+              "observedAt": "2026-07-06T00:00:00.000Z"
+            }
+          ]
+        },
+        "baseScore": 90,
         "preferenceAdjustment": 0,
-        "finalRankScore": 92,
+        "finalRankScore": 90,
         "skillLike": true,
         "officialSourceVerified": true,
         "sourceCheckedAt": "2026-07-06T00:00:00.000Z",

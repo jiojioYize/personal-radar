@@ -151,7 +151,7 @@ function normalizeIngestedStructuredReport(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("structuredReport must be an object");
   }
-  if (Number(input.schemaVersion) !== 1) {
+  if (Number(input.schemaVersion) !== 2) {
     throw new Error("Unsupported structuredReport schemaVersion");
   }
   if (input.channel !== DEFAULT_CATEGORY) {
@@ -476,7 +476,7 @@ function renderStructuredReport(report, language) {
         whyNow: "Why it matters now",
         problem: "Problem solved",
         usability: "Usability",
-        adaptation: "Codex adaptation",
+        adaptation: "Platform adaptation",
         trust: "Trust and security",
         source: "Primary source",
         sourceChecked: "Source checked",
@@ -494,7 +494,7 @@ function renderStructuredReport(report, language) {
         whyNow: "为什么现在值得看",
         problem: "解决什么问题",
         usability: "可用性",
-        adaptation: "Codex 适配",
+        adaptation: "平台适配",
         trust: "信任与安全",
         source: "官方来源",
         sourceChecked: "来源核验",

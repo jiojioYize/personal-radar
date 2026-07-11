@@ -1,6 +1,6 @@
 # Personal Radar Stage 2: Content Quality And Reading Experience
 
-Last updated: 2026-07-09
+Last updated: 2026-07-11
 
 ## Status
 
@@ -9,15 +9,18 @@ Stage 2 implementation is in progress.
 The local quality layer, structured report contract, forwarder validation, KV
 v2 compatibility, structured website rendering, and HTML PushPlus renderer are
 implemented. Worker v2 is deployed, three shadow runs passed, and the
-real-device HTML PushPlus comparison was accepted on 2026-07-09. The 14-day
-observation window starts on 2026-07-10.
+real-device HTML PushPlus comparison was accepted on 2026-07-09. Evidence-driven
+quality schema v2 was deployed on 2026-07-11; the comparable 14-day quality
+observation window starts on 2026-07-12.
 
 This document is the single living record for the Stage 2 plan, rollout,
 checkpoints, and final acceptance.
 
-Local verification completed on 2026-07-06:
+Latest local verification completed on 2026-07-11:
 
-- 18 Node tests passed, including schema and semantic validation, same-day
+- 22 Node tests passed, including evidence-driven scoring, raised star bands,
+  repository-scope caps, missing-data handling, schema and semantic validation,
+  same-day
   regeneration, `published` and `no_update`, 30-day repeat handling, v1/v2
   Worker compatibility, HTML escaping, and concise PushPlus rendering.
 - The Windows forwarder validated a generated Markdown and Sidecar pair without
@@ -91,20 +94,41 @@ Every selected item must be:
 
 - a real reusable skill, rule, or instruction pack;
 - linked to a reachable HTTPS primary source;
-- accompanied by usability, adaptation, and security analysis;
+- accompanied by native-platform usability, cross-platform portability,
+  current-user adaptation, and security analysis;
 - absent from the previous 30 days unless a material change is evidenced;
 - scored at least 70 before preference adjustment.
 
-Weights:
+The quality tool calculates an evidence-driven 100-point score. The model
+collects bounded evidence states and raw metrics; it does not assign scores.
 
-| Dimension | Weight |
+| Dimension | Maximum |
 | --- | ---: |
-| Relevance | 25 |
-| Reusability | 20 |
-| Maintenance and evidence | 15 |
-| Novelty | 15 |
-| Adaptation feasibility | 15 |
-| Trust and safety | 10 |
+| Practical value and problem clarity | 20 |
+| Native usability and cross-platform portability | 20 |
+| Implementation and content quality | 15 |
+| Maintenance health | 10 |
+| Community and external validation | 15 |
+| Trust, safety, and license | 10 |
+| Differentiation and information gain | 10 |
+
+Objective quality is platform-neutral. A project is judged first in the AI
+products it declares and supports. Codex, Claude Code, Cursor, Cline, Roo Code,
+Hermes, GitHub Copilot, Gemini CLI, generic agents, and future platforms are
+treated symmetrically. Compatibility with the current user's preferred agent
+belongs to personalization and action guidance, not the objective quality gate.
+
+Community validation uses repository shape, participation, adoption, growth,
+and raised star bands: fewer than 50, 50-199, 200-999, 1,000-4,999,
+5,000-9,999, and 10,000 or more. Curated-list stars never transfer to listed
+projects. General collections and mixed toolkits receive capped repository-star
+credit unless the recommended sub-skill has item-level adoption or attention
+evidence.
+
+GitHub and official files provide primary facts. OSS Insight may provide trend
+history; OpenSSF and deps.dev may provide applicable security evidence. RadarAI,
+X, and curated lists remain discovery sources. Missing data is recorded as
+`unknown` or `null`, never guessed and never silently treated as failure.
 
 Interest feedback changes ordering by at most five points. It cannot promote a
 candidate that fails the base quality threshold or a hard safety gate.
@@ -290,9 +314,9 @@ npm run quality:summary
 | Automated tests and Worker bundle dry run | Passed |
 | Desktop and 390px visual verification | Pending local preview access |
 | Three successful shadow reports | 3 of 3 passed |
-| Worker production deployment | Deployed 2026-07-08; PushPlus switched to `html` on 2026-07-09 |
+| Worker production deployment | Initial v2 deployed 2026-07-08; evidence-driven quality schema v2 deployed 2026-07-11; PushPlus switched to `html` on 2026-07-09 |
 | Real-device HTML comparison | Accepted 2026-07-09 |
-| 14-day observation | Starts 2026-07-10 |
+| 14-day observation | Comparable quality window starts 2026-07-12 |
 | 30-day acceptance | Not started |
 
 The observation clock starts on the day after the structured website and the

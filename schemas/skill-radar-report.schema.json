@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://radar.dailyingest.cn/schemas/skill-radar-report-v1.json",
+  "$id": "https://radar.dailyingest.cn/schemas/skill-radar-report-v2.json",
   "title": "Personal Radar structured skill report",
   "type": "object",
   "additionalProperties": false,
@@ -16,7 +16,7 @@
     "socialDecisions"
   ],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "status": { "enum": ["published", "no_update"] },
     "channel": { "const": "skill-radar" },
     "reportDate": {
@@ -129,20 +129,226 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "relevance",
-        "reusability",
-        "maintenanceEvidence",
-        "novelty",
-        "adaptationFeasibility",
-        "trustSafety"
+        "valueClarity",
+        "nativeUsabilityPortability",
+        "implementationQuality",
+        "maintenanceHealth",
+        "communityValidation",
+        "trustSafetyLicense",
+        "differentiation"
       ],
       "properties": {
-        "relevance": { "type": "integer", "minimum": 0, "maximum": 5 },
-        "reusability": { "type": "integer", "minimum": 0, "maximum": 5 },
-        "maintenanceEvidence": { "type": "integer", "minimum": 0, "maximum": 5 },
-        "novelty": { "type": "integer", "minimum": 0, "maximum": 5 },
-        "adaptationFeasibility": { "type": "integer", "minimum": 0, "maximum": 5 },
-        "trustSafety": { "type": "integer", "minimum": 0, "maximum": 5 }
+        "valueClarity": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "nativeUsabilityPortability": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "implementationQuality": { "type": "integer", "minimum": 0, "maximum": 15 },
+        "maintenanceHealth": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "communityValidation": { "type": "integer", "minimum": 0, "maximum": 15 },
+        "trustSafetyLicense": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "differentiation": { "type": "integer", "minimum": 0, "maximum": 10 }
+      }
+    },
+    "evidenceState": {
+      "enum": ["met", "not_met", "unknown", "not_applicable"]
+    },
+    "qualityEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifactScope",
+        "declaredPlatforms",
+        "value",
+        "usability",
+        "implementation",
+        "maintenance",
+        "community",
+        "security",
+        "differentiation",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "artifactScope": {
+          "enum": [
+            "individual_skill",
+            "focused_skill_pack",
+            "general_skill_collection",
+            "official_catalog",
+            "curated_list",
+            "mixed_toolkit"
+          ]
+        },
+        "declaredPlatforms": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "codex",
+              "claude-code",
+              "cursor",
+              "cline",
+              "roo-code",
+              "hermes",
+              "github-copilot",
+              "gemini-cli",
+              "generic-agent",
+              "other"
+            ]
+          }
+        },
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["specificTaskDefined", "targetUserDefined", "inputsOutputsDefined", "workflowImprovementDefined", "officialDemonstration", "independentOutcomeEvidence"],
+          "properties": {
+            "specificTaskDefined": { "$ref": "#/$defs/evidenceState" },
+            "targetUserDefined": { "$ref": "#/$defs/evidenceState" },
+            "inputsOutputsDefined": { "$ref": "#/$defs/evidenceState" },
+            "workflowImprovementDefined": { "$ref": "#/$defs/evidenceState" },
+            "officialDemonstration": { "$ref": "#/$defs/evidenceState" },
+            "independentOutcomeEvidence": { "$ref": "#/$defs/evidenceState" }
+          }
+        },
+        "usability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reusableContentPresent", "targetPlatformsDocumented", "nativeInstallInstructions", "nativeUsageExample", "dependenciesAndPermissionsDocumented", "validationMethodAvailable", "coreInstructionsPortable", "multiPlatformSupport", "adaptationGuideAvailable"],
+          "properties": {
+            "reusableContentPresent": { "$ref": "#/$defs/evidenceState" },
+            "targetPlatformsDocumented": { "$ref": "#/$defs/evidenceState" },
+            "nativeInstallInstructions": { "$ref": "#/$defs/evidenceState" },
+            "nativeUsageExample": { "$ref": "#/$defs/evidenceState" },
+            "dependenciesAndPermissionsDocumented": { "$ref": "#/$defs/evidenceState" },
+            "validationMethodAvailable": { "$ref": "#/$defs/evidenceState" },
+            "coreInstructionsPortable": { "$ref": "#/$defs/evidenceState" },
+            "multiPlatformSupport": { "$ref": "#/$defs/evidenceState" },
+            "adaptationGuideAvailable": { "$ref": "#/$defs/evidenceState" }
+          }
+        },
+        "implementation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["documentedStructureMatches", "coreFilesSubstantive", "triggerOrScopeDefined", "executableStepsDefined", "constraintsAndFailureModesDefined", "testsOrReviewableExamples"],
+          "properties": {
+            "documentedStructureMatches": { "$ref": "#/$defs/evidenceState" },
+            "coreFilesSubstantive": { "$ref": "#/$defs/evidenceState" },
+            "triggerOrScopeDefined": { "$ref": "#/$defs/evidenceState" },
+            "executableStepsDefined": { "$ref": "#/$defs/evidenceState" },
+            "constraintsAndFailureModesDefined": { "$ref": "#/$defs/evidenceState" },
+            "testsOrReviewableExamples": { "$ref": "#/$defs/evidenceState" }
+          }
+        },
+        "maintenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repositoryAgeDays",
+            "commitCount90d",
+            "activeMonths12m",
+            "releaseCount12m",
+            "contributorCount12m",
+            "independentIssueOrPrParticipants90d",
+            "hasUnresolvedBlockingIssues",
+            "archived",
+            "maintenanceEnded"
+          ],
+          "properties": {
+            "repositoryAgeDays": { "type": ["integer", "null"], "minimum": 0 },
+            "commitCount90d": { "type": ["integer", "null"], "minimum": 0 },
+            "activeMonths12m": { "type": ["integer", "null"], "minimum": 0, "maximum": 12 },
+            "releaseCount12m": { "type": ["integer", "null"], "minimum": 0 },
+            "contributorCount12m": { "type": ["integer", "null"], "minimum": 0 },
+            "independentIssueOrPrParticipants90d": { "type": ["integer", "null"], "minimum": 0 },
+            "hasUnresolvedBlockingIssues": { "type": ["boolean", "null"] },
+            "archived": { "type": ["boolean", "null"] },
+            "maintenanceEnded": { "type": ["boolean", "null"] }
+          }
+        },
+        "community": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stars",
+            "contributors",
+            "independentParticipants90d",
+            "independentAdoptions",
+            "starsGrowth30d",
+            "starsGrowth90d",
+            "credibleOrganizationBacking",
+            "verifiableUsageCase",
+            "itemLevelAdoptionEvidence",
+            "skillSpecificAttentionEvidence"
+          ],
+          "properties": {
+            "stars": { "type": ["integer", "null"], "minimum": 0 },
+            "contributors": { "type": ["integer", "null"], "minimum": 0 },
+            "independentParticipants90d": { "type": ["integer", "null"], "minimum": 0 },
+            "independentAdoptions": { "type": ["integer", "null"], "minimum": 0 },
+            "starsGrowth30d": { "type": ["integer", "null"], "minimum": 0 },
+            "starsGrowth90d": { "type": ["integer", "null"], "minimum": 0 },
+            "credibleOrganizationBacking": { "$ref": "#/$defs/evidenceState" },
+            "verifiableUsageCase": { "$ref": "#/$defs/evidenceState" },
+            "itemLevelAdoptionEvidence": { "$ref": "#/$defs/evidenceState" },
+            "skillSpecificAttentionEvidence": { "$ref": "#/$defs/evidenceState" }
+          }
+        },
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["licensePresent", "permissionsDocumented", "externalBehaviorDocumented", "dangerousActionsRequireConfirmation", "installationAuditable", "securityPolicyPresent", "applicableOpenSsfEvidence", "secretExposureRequested", "destructiveByDefault", "unreviewedRemoteExecution", "unnecessaryElevatedPermissions", "safetyReviewBypass", "knownMaliciousBehavior"],
+          "properties": {
+            "licensePresent": { "$ref": "#/$defs/evidenceState" },
+            "permissionsDocumented": { "$ref": "#/$defs/evidenceState" },
+            "externalBehaviorDocumented": { "$ref": "#/$defs/evidenceState" },
+            "dangerousActionsRequireConfirmation": { "$ref": "#/$defs/evidenceState" },
+            "installationAuditable": { "$ref": "#/$defs/evidenceState" },
+            "securityPolicyPresent": { "$ref": "#/$defs/evidenceState" },
+            "applicableOpenSsfEvidence": { "$ref": "#/$defs/evidenceState" },
+            "secretExposureRequested": { "$ref": "#/$defs/evidenceState" },
+            "destructiveByDefault": { "$ref": "#/$defs/evidenceState" },
+            "unreviewedRemoteExecution": { "$ref": "#/$defs/evidenceState" },
+            "unnecessaryElevatedPermissions": { "$ref": "#/$defs/evidenceState" },
+            "safetyReviewBypass": { "$ref": "#/$defs/evidenceState" },
+            "knownMaliciousBehavior": { "$ref": "#/$defs/evidenceState" }
+          }
+        },
+        "differentiation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "comparisonSources",
+            "newProblemCoverage",
+            "newAgentFormatOrWorkflow",
+            "fewerAdaptationSteps",
+            "newValidationMechanism",
+            "newSecurityOrCollaborationBoundary"
+          ],
+          "properties": {
+            "comparisonSources": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/httpsUrl" }
+            },
+            "newProblemCoverage": { "$ref": "#/$defs/evidenceState" },
+            "newAgentFormatOrWorkflow": { "$ref": "#/$defs/evidenceState" },
+            "fewerAdaptationSteps": { "$ref": "#/$defs/evidenceState" },
+            "newValidationMechanism": { "$ref": "#/$defs/evidenceState" },
+            "newSecurityOrCollaborationBoundary": { "$ref": "#/$defs/evidenceState" }
+          }
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "source", "location", "observedAt"],
+            "properties": {
+              "field": { "$ref": "#/$defs/nonEmptyString" },
+              "source": { "enum": ["github", "official-docs", "oss-insight", "openssf", "deps-dev", "radarai", "x", "manual-review"] },
+              "location": { "$ref": "#/$defs/nonEmptyString" },
+              "observedAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
       }
     },
     "history": {
@@ -172,6 +378,7 @@
       "additionalProperties": false,
       "required": [
         "dimensions",
+        "evidence",
         "baseScore",
         "preferenceAdjustment",
         "finalRankScore",
@@ -183,6 +390,7 @@
       ],
       "properties": {
         "dimensions": { "$ref": "#/$defs/dimensions" },
+        "evidence": { "$ref": "#/$defs/qualityEvidence" },
         "baseScore": { "type": "integer", "minimum": 0, "maximum": 100 },
         "preferenceAdjustment": { "type": "integer", "minimum": -5, "maximum": 5 },
         "finalRankScore": { "type": "integer", "minimum": 0, "maximum": 105 },

@@ -5,6 +5,8 @@ import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import {
   calculateBaseScore,
+  calculateQualityScore,
+  calculateStarPoints,
   calculatePreferenceAdjustment,
   canonicalizeUrl,
   enrichStructuredReport,
@@ -27,15 +29,47 @@ test("rejects non-HTTPS sources", () => {
   assert.throws(() => canonicalizeUrl("http://example.com/skill"), /Only HTTPS/);
 });
 
-test("calculates the weighted base score", () => {
-  assert.equal(calculateBaseScore({
-    relevance: 5,
-    reusability: 4,
-    maintenanceEvidence: 3,
-    novelty: 4,
-    adaptationFeasibility: 5,
-    trustSafety: 4,
-  }), 85);
+test("calculates the evidence-driven quality score", () => {
+  const result = calculateQualityScore(evidenceFixture());
+  assert.equal(result.baseScore, 90);
+  assert.deepEqual(result.dimensions, {
+    valueClarity: 16,
+    nativeUsabilityPortability: 20,
+    implementationQuality: 15,
+    maintenanceHealth: 10,
+    communityValidation: 11,
+    trustSafetyLicense: 10,
+    differentiation: 8,
+  });
+  assert.equal(calculateBaseScore(result.dimensions), 90);
+});
+
+test("uses raised star bands and repository-scope caps", () => {
+  assert.equal(calculateStarPoints(49), 0);
+  assert.equal(calculateStarPoints(50), 1);
+  assert.equal(calculateStarPoints(1000), 3);
+  assert.equal(calculateStarPoints(5000), 4);
+  assert.equal(calculateStarPoints(10000), 5);
+
+  const evidence = evidenceFixture();
+  evidence.artifactScope = "mixed_toolkit";
+  evidence.community.stars = 100000;
+  evidence.community.skillSpecificAttentionEvidence = "not_met";
+  const individual = evidenceFixture();
+  individual.community.stars = 100000;
+  assert.equal(calculateQualityScore(individual).dimensions.communityValidation, 13);
+  assert.equal(calculateQualityScore(evidence).dimensions.communityValidation, 11);
+});
+
+test("treats unavailable numeric evidence as unknown rather than zero", () => {
+  const evidence = evidenceFixture();
+  evidence.maintenance.repositoryAgeDays = null;
+  evidence.community.stars = null;
+  evidence.community.starsGrowth30d = null;
+  evidence.community.starsGrowth90d = null;
+  const result = calculateQualityScore(evidence);
+  assert.equal(result.dimensions.maintenanceHealth, 10);
+  assert.equal(result.dimensions.communityValidation, 7);
 });
 
 test("preference adjustment is category-based and clamped", () => {
@@ -105,14 +139,19 @@ test("allows a repeated source with material-change evidence", () => {
 
 test("rejects reports below the quality threshold", () => {
   const fixture = reportFixture();
-  fixture.items[0].quality.dimensions = {
-    relevance: 2,
-    reusability: 2,
-    maintenanceEvidence: 2,
-    novelty: 2,
-    adaptationFeasibility: 2,
-    trustSafety: 2,
-  };
+  const evidence = fixture.items[0].quality.evidence;
+  for (const group of [evidence.value, evidence.usability, evidence.implementation, evidence.security]) {
+    for (const field of Object.keys(group)) group[field] = "not_met";
+  }
+  for (const field of Object.keys(evidence.differentiation)) {
+    if (field !== "comparisonSources") evidence.differentiation[field] = "not_met";
+  }
+  evidence.community.stars = 0;
+  evidence.community.contributors = 0;
+  evidence.community.independentParticipants90d = 0;
+  evidence.community.independentAdoptions = 0;
+  evidence.community.starsGrowth30d = 0;
+  evidence.community.starsGrowth90d = 0;
   const report = enrichStructuredReport(fixture);
   assert.match(validateStructuredSemantics(report).join("\n"), /base score is below 70/);
 });
@@ -129,7 +168,7 @@ test("tracked example satisfies the JSON Schema and semantic rules", async () =>
 
 function reportFixture() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "published",
     channel: "skill-radar",
     reportDate: "2026-07-06",
@@ -175,14 +214,8 @@ function reportFixture() {
         en: displayFixture("English"),
       },
       quality: {
-        dimensions: {
-          relevance: 5,
-          reusability: 5,
-          maintenanceEvidence: 4,
-          novelty: 4,
-          adaptationFeasibility: 5,
-          trustSafety: 4,
-        },
+        dimensions: {},
+        evidence: evidenceFixture(),
         baseScore: 0,
         preferenceAdjustment: 0,
         finalRankScore: 0,
@@ -199,6 +232,92 @@ function reportFixture() {
       },
     }],
     socialDecisions: [],
+  };
+}
+
+function evidenceFixture() {
+  return {
+    artifactScope: "individual_skill",
+    declaredPlatforms: ["claude-code", "codex"],
+    value: {
+      specificTaskDefined: "met",
+      targetUserDefined: "met",
+      inputsOutputsDefined: "met",
+      workflowImprovementDefined: "met",
+      officialDemonstration: "met",
+      independentOutcomeEvidence: "not_met",
+    },
+    usability: {
+      reusableContentPresent: "met",
+      targetPlatformsDocumented: "met",
+      nativeInstallInstructions: "met",
+      nativeUsageExample: "met",
+      dependenciesAndPermissionsDocumented: "met",
+      validationMethodAvailable: "met",
+      coreInstructionsPortable: "met",
+      multiPlatformSupport: "met",
+      adaptationGuideAvailable: "not_applicable",
+    },
+    implementation: {
+      documentedStructureMatches: "met",
+      coreFilesSubstantive: "met",
+      triggerOrScopeDefined: "met",
+      executableStepsDefined: "met",
+      constraintsAndFailureModesDefined: "met",
+      testsOrReviewableExamples: "met",
+    },
+    maintenance: {
+      repositoryAgeDays: 365,
+      commitCount90d: 12,
+      activeMonths12m: 8,
+      releaseCount12m: 2,
+      contributorCount12m: 4,
+      independentIssueOrPrParticipants90d: 5,
+      hasUnresolvedBlockingIssues: false,
+      archived: false,
+      maintenanceEnded: false,
+    },
+    community: {
+      stars: 1200,
+      contributors: 6,
+      independentParticipants90d: 5,
+      independentAdoptions: 1,
+      starsGrowth30d: 80,
+      starsGrowth90d: 240,
+      credibleOrganizationBacking: "met",
+      verifiableUsageCase: "met",
+      itemLevelAdoptionEvidence: "met",
+      skillSpecificAttentionEvidence: "met",
+    },
+    security: {
+      licensePresent: "met",
+      permissionsDocumented: "met",
+      externalBehaviorDocumented: "met",
+      dangerousActionsRequireConfirmation: "met",
+      installationAuditable: "met",
+      securityPolicyPresent: "met",
+      applicableOpenSsfEvidence: "not_applicable",
+      secretExposureRequested: "not_met",
+      destructiveByDefault: "not_met",
+      unreviewedRemoteExecution: "not_met",
+      unnecessaryElevatedPermissions: "not_met",
+      safetyReviewBypass: "not_met",
+      knownMaliciousBehavior: "not_met",
+    },
+    differentiation: {
+      comparisonSources: ["https://github.com/example/comparison"],
+      newProblemCoverage: "met",
+      newAgentFormatOrWorkflow: "met",
+      fewerAdaptationSteps: "not_met",
+      newValidationMechanism: "met",
+      newSecurityOrCollaborationBoundary: "met",
+    },
+    evidenceRefs: [{
+      field: "usability.reusableContentPresent",
+      source: "github",
+      location: "skills/example/SKILL.md",
+      observedAt: "2026-07-06T00:00:00.000Z",
+    }],
   };
 }
 

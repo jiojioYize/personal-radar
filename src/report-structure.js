@@ -1,27 +1,171 @@
-export const STRUCTURED_REPORT_SCHEMA_VERSION = 1;
+export const STRUCTURED_REPORT_SCHEMA_VERSION = 2;
 export const MAX_REPORT_ITEMS = 6;
 export const MIN_BASE_SCORE = 70;
 
-export const SCORE_WEIGHTS = Object.freeze({
-  relevance: 25,
-  reusability: 20,
-  maintenanceEvidence: 15,
-  novelty: 15,
-  adaptationFeasibility: 15,
-  trustSafety: 10,
+export const SCORE_MAXIMUMS = Object.freeze({
+  valueClarity: 20,
+  nativeUsabilityPortability: 20,
+  implementationQuality: 15,
+  maintenanceHealth: 10,
+  communityValidation: 15,
+  trustSafetyLicense: 10,
+  differentiation: 10,
 });
+
+export const ARTIFACT_SCOPES = new Set([
+  "individual_skill",
+  "focused_skill_pack",
+  "general_skill_collection",
+  "official_catalog",
+  "curated_list",
+  "mixed_toolkit",
+]);
+
+export const SUPPORTED_PLATFORMS = new Set([
+  "codex",
+  "claude-code",
+  "cursor",
+  "cline",
+  "roo-code",
+  "hermes",
+  "github-copilot",
+  "gemini-cli",
+  "generic-agent",
+  "other",
+]);
 
 export const REPORT_STATUSES = new Set(["published", "no_update"]);
 export const RECOMMENDATIONS = new Set(["install", "adapt", "watch", "skip"]);
 export const DISCOVERY_TYPES = new Set(["github", "web", "x", "inbox"]);
 
-export function calculateBaseScore(dimensions = {}) {
-  const total = Object.entries(SCORE_WEIGHTS).reduce((sum, [name, weight]) => {
-    const value = Number(dimensions[name]);
-    if (!Number.isFinite(value)) return sum;
-    return sum + (Math.max(0, Math.min(5, value)) / 5) * weight;
+export function calculateQualityScore(evidence = {}) {
+  const valueClarity = sumChecks(evidence.value, {
+    specificTaskDefined: 4,
+    targetUserDefined: 2,
+    inputsOutputsDefined: 3,
+    workflowImprovementDefined: 3,
+    officialDemonstration: 4,
+    independentOutcomeEvidence: 4,
+  });
+
+  const usability = evidence.usability || {};
+  const nativeUsabilityPortability = sumChecks(usability, {
+    reusableContentPresent: 4,
+    targetPlatformsDocumented: 2,
+    nativeInstallInstructions: 3,
+    nativeUsageExample: 3,
+    dependenciesAndPermissionsDocumented: 2,
+    validationMethodAvailable: 2,
+    coreInstructionsPortable: 2,
+  }) + (isMet(usability.multiPlatformSupport) || isMet(usability.adaptationGuideAvailable) ? 2 : 0);
+
+  const implementationQuality = sumChecks(evidence.implementation, {
+    documentedStructureMatches: 3,
+    coreFilesSubstantive: 3,
+    triggerOrScopeDefined: 2,
+    executableStepsDefined: 2,
+    constraintsAndFailureModesDefined: 2,
+    testsOrReviewableExamples: 3,
+  });
+
+  const maintenance = evidence.maintenance || {};
+  let maintenanceHealth = 0;
+  if (numberAtLeast(maintenance.commitCount90d, 1)) maintenanceHealth += 2;
+  if (numberAtLeast(maintenance.activeMonths12m, 3)) maintenanceHealth += 1;
+  if (numberAtLeast(maintenance.activeMonths12m, 6)) maintenanceHealth += 1;
+  if (numberAtLeast(maintenance.releaseCount12m, 1)) maintenanceHealth += 1;
+  if (numberAtLeast(maintenance.contributorCount12m, 2)) maintenanceHealth += 1;
+  if (numberAtLeast(maintenance.independentIssueOrPrParticipants90d, 1)) maintenanceHealth += 1;
+  if (maintenance.hasUnresolvedBlockingIssues === false) maintenanceHealth += 1;
+  if (maintenance.archived === false && maintenance.maintenanceEnded === false) maintenanceHealth += 2;
+  if (maintenance.archived === true) maintenanceHealth = Math.min(maintenanceHealth, 3);
+  if (numberBelow(maintenance.repositoryAgeDays, 90)) maintenanceHealth = Math.min(maintenanceHealth, 8);
+
+  const community = evidence.community || {};
+  let starPoints = calculateStarPoints(community.stars);
+  if (evidence.artifactScope === "general_skill_collection" && !isMet(community.itemLevelAdoptionEvidence)) {
+    starPoints = Math.min(starPoints, 4);
+  }
+  if (evidence.artifactScope === "mixed_toolkit" && !isMet(community.skillSpecificAttentionEvidence)) {
+    starPoints = Math.min(starPoints, 3);
+  }
+  if (evidence.artifactScope === "curated_list") starPoints = 0;
+
+  let participationPoints = 0;
+  if (numberAtLeast(community.contributors, 2)) participationPoints += 1;
+  if (numberAtLeast(community.contributors, 5)) participationPoints += 1;
+  if (numberAtLeast(community.independentParticipants90d, 3)) participationPoints += 1;
+
+  let adoptionPoints = 0;
+  if (numberAtLeast(community.independentAdoptions, 1)) adoptionPoints += 2;
+  if (numberAtLeast(community.independentAdoptions, 2)) adoptionPoints += 1;
+  if (isMet(community.credibleOrganizationBacking)) adoptionPoints += 1;
+  if (isMet(community.verifiableUsageCase)) adoptionPoints += 1;
+
+  let growthPoints = 0;
+  const stars = numeric(community.stars);
+  const growth30d = numeric(community.starsGrowth30d);
+  if (stars !== null && growth30d !== null && growth30d >= 10 && growth30d >= stars * 0.1) growthPoints += 1;
+  if (numberAtLeast(community.starsGrowth90d, 1) && numberAtLeast(community.independentParticipants90d, 1)) growthPoints += 1;
+  const communityValidation = Math.min(15, starPoints + participationPoints + adoptionPoints + growthPoints);
+
+  const security = evidence.security || {};
+  let trustSafetyLicense = sumChecks(security, {
+    licensePresent: 2,
+    permissionsDocumented: 2,
+    externalBehaviorDocumented: 1,
+    dangerousActionsRequireConfirmation: 2,
+    installationAuditable: 2,
+  });
+  if (isMet(security.securityPolicyPresent) || isMet(security.applicableOpenSsfEvidence)) trustSafetyLicense += 1;
+  if (!isMet(security.licensePresent)) trustSafetyLicense = Math.min(trustSafetyLicense, 6);
+  if (security.permissionsDocumented === "unknown" || security.externalBehaviorDocumented === "unknown") {
+    trustSafetyLicense = Math.min(trustSafetyLicense, 5);
+  }
+
+  const differentiation = sumChecks(evidence.differentiation, {
+    newProblemCoverage: 2,
+    newAgentFormatOrWorkflow: 2,
+    fewerAdaptationSteps: 2,
+    newValidationMechanism: 2,
+    newSecurityOrCollaborationBoundary: 2,
+  });
+  const boundedDifferentiation = Array.isArray(evidence.differentiation?.comparisonSources)
+    && evidence.differentiation.comparisonSources.length
+    ? differentiation
+    : Math.min(differentiation, 2);
+
+  const dimensions = {
+    valueClarity,
+    nativeUsabilityPortability,
+    implementationQuality,
+    maintenanceHealth,
+    communityValidation,
+    trustSafetyLicense,
+    differentiation: boundedDifferentiation,
+  };
+  return {
+    dimensions,
+    baseScore: Object.values(dimensions).reduce((sum, value) => sum + value, 0),
+  };
+}
+
+export function calculateBaseScore(value = {}) {
+  if (value?.evidence) return calculateQualityScore(value.evidence).baseScore;
+  return Object.entries(SCORE_MAXIMUMS).reduce((sum, [name, maximum]) => {
+    const score = Number(value[name]);
+    return sum + (Number.isFinite(score) ? Math.max(0, Math.min(maximum, score)) : 0);
   }, 0);
-  return Math.round(total);
+}
+
+export function calculateStarPoints(value) {
+  const stars = numeric(value);
+  if (stars === null || stars < 50) return 0;
+  if (stars < 200) return 1;
+  if (stars < 1000) return 2;
+  if (stars < 5000) return 3;
+  if (stars < 10000) return 4;
+  return 5;
 }
 
 export function canonicalizeUrl(value) {
@@ -90,7 +234,8 @@ export function enrichStructuredReport(input, { feedbackEntries = [], preservePr
 
   report.items = report.items.map((item, index) => {
     const canonicalUrl = canonicalizeUrl(item.sourceUrl || item.canonicalUrl);
-    const baseScore = calculateBaseScore(item.quality?.dimensions);
+    const score = calculateQualityScore(item.quality?.evidence);
+    const baseScore = score.baseScore;
     const preferenceAdjustment = preservePreference
       ? Math.max(-5, Math.min(5, Number(item.quality?.preferenceAdjustment || 0)))
       : calculatePreferenceAdjustment(item, feedbackEntries);
@@ -102,6 +247,7 @@ export function enrichStructuredReport(input, { feedbackEntries = [], preservePr
       canonicalUrl,
       quality: {
         ...item.quality,
+        dimensions: score.dimensions,
         baseScore,
         preferenceAdjustment,
         finalRankScore: baseScore + preferenceAdjustment,
@@ -208,6 +354,7 @@ export function validateStructuredSemantics(report, { recentSources = [] } = {})
     if (item.quality?.officialSourceVerified !== true) {
       errors.push(`${label}: officialSourceVerified must be true`);
     }
+    validateQualityEvidence(item, label, errors);
     if (!String(item.display?.zh?.primaryCaution || "").trim() || !String(item.display?.en?.primaryCaution || "").trim()) {
       errors.push(`${label}: bilingual primary caution is required`);
     }
@@ -222,6 +369,72 @@ export function validateStructuredSemantics(report, { recentSources = [] } = {})
   }
 
   return errors;
+}
+
+function validateQualityEvidence(item, label, errors) {
+  const quality = item.quality || {};
+  const evidence = quality.evidence || {};
+  const dimensions = quality.dimensions || {};
+  if (!ARTIFACT_SCOPES.has(evidence.artifactScope)) errors.push(`${label}: unsupported artifactScope`);
+  if (!Array.isArray(evidence.declaredPlatforms) || evidence.declaredPlatforms.length === 0) {
+    errors.push(`${label}: at least one declared platform is required`);
+  } else if (evidence.declaredPlatforms.some((platform) => !SUPPORTED_PLATFORMS.has(platform))) {
+    errors.push(`${label}: unsupported declared platform`);
+  }
+  if (!isMet(evidence.value?.specificTaskDefined)) errors.push(`${label}: specific task evidence is required`);
+  if (!isMet(evidence.usability?.reusableContentPresent)) errors.push(`${label}: reusable content evidence is required`);
+  if (!isMet(evidence.implementation?.coreFilesSubstantive)) errors.push(`${label}: substantive core files are required`);
+  if (hasSecurityBlocker(evidence.security)) errors.push(`${label}: unacceptable security behavior detected`);
+  if (Number(dimensions.valueClarity) < 10) errors.push(`${label}: value clarity is below 10`);
+  if (Number(dimensions.nativeUsabilityPortability) < 11) errors.push(`${label}: native usability and portability is below 11`);
+  if (Number(dimensions.implementationQuality) < 8) errors.push(`${label}: implementation quality is below 8`);
+  if (Number(dimensions.trustSafetyLicense) < 6) errors.push(`${label}: trust, safety, and license is below 6`);
+
+  const community = evidence.community || {};
+  const lowValidation = numeric(community.stars) !== null
+    && numeric(community.stars) < 50
+    && !numberAtLeast(community.independentAdoptions, 1);
+  if (item.recommendation === "install" && lowValidation) {
+    errors.push(`${label}: install requires at least 50 stars or independent adoption evidence`);
+  }
+  if (item.recommendation === "install" && !isMet(evidence.security?.licensePresent)) {
+    errors.push(`${label}: install requires a declared license`);
+  }
+}
+
+function hasSecurityBlocker(security = {}) {
+  return [
+    "secretExposureRequested",
+    "destructiveByDefault",
+    "unreviewedRemoteExecution",
+    "unnecessaryElevatedPermissions",
+    "safetyReviewBypass",
+    "knownMaliciousBehavior",
+  ].some((field) => isMet(security[field]));
+}
+
+function isMet(value) {
+  return value === "met";
+}
+
+function sumChecks(group = {}, points = {}) {
+  return Object.entries(points).reduce((sum, [field, value]) => sum + (isMet(group?.[field]) ? value : 0), 0);
+}
+
+function numeric(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const result = Number(value);
+  return Number.isFinite(result) && result >= 0 ? result : null;
+}
+
+function numberAtLeast(value, threshold) {
+  const result = numeric(value);
+  return result !== null && result >= threshold;
+}
+
+function numberBelow(value, threshold) {
+  const result = numeric(value);
+  return result !== null && result < threshold;
 }
 
 export function normalizeSegment(value) {
