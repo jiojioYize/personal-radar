@@ -5,6 +5,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import {
   canonicalizeUrl,
+  artifactKeyFor,
   enrichStructuredReport,
   stableSourceId,
   validateStructuredSemantics,
@@ -25,6 +26,7 @@ const HISTORY_PATH = path.join(STATE_DIR, "skill-radar-history.json");
 const CONTEXT_PATH = path.join(STATE_DIR, "skill-radar-context.json");
 const FEEDBACK_PATH = path.join(FEEDBACK_DIR, "skill-radar.json");
 const SOCIAL_PATH = path.join(INBOX_DIR, "social-candidates.json");
+const GITHUB_CANDIDATES_PATH = path.join(INBOX_DIR, "github-candidates.json");
 const SUMMARY_PATH = path.join(QUALITY_DIR, "skill-radar-summary.md");
 const SCHEMA_PATH = path.join(ROOT, "schemas", "skill-radar-report.schema.json");
 
@@ -50,6 +52,7 @@ async function prepareContext(options) {
   const history = await buildHistory(asOf, null, { includeShadow: paths.shadow });
   const feedback = await readJson(FEEDBACK_PATH, { version: 1, entries: [] });
   const inbox = await expireDeferredCandidates(await readJson(SOCIAL_PATH, emptyInbox()), asOf);
+  const githubDiscovery = await readJson(GITHUB_CANDIDATES_PATH, null);
   if (!paths.shadow) await writeJson(SOCIAL_PATH, inbox);
 
   const context = {
@@ -62,12 +65,25 @@ async function prepareContext(options) {
     pendingSocialCandidates: inbox.candidates.filter((candidate) =>
       ["pending", "verified", "deferred"].includes(candidate.status),
     ),
+    githubDiscovery: summarizeGithubDiscovery(githubDiscovery),
   };
 
   await writeJson(paths.historyPath, history);
   await writeJson(paths.contextPath, context);
   console.log(`Prepared${paths.shadow ? " shadow" : ""} quality context: ${relative(paths.contextPath)}`);
   console.log(`Recent sources: ${history.sources.length}; pending social candidates: ${context.pendingSocialCandidates.length}`);
+  console.log(`GitHub discovery candidates: ${context.githubDiscovery?.candidates?.length || 0}`);
+}
+
+function summarizeGithubDiscovery(discovery) {
+  if (!discovery || !Array.isArray(discovery.candidates)) return null;
+  return {
+    generatedAt: discovery.generatedAt,
+    source: discovery.source,
+    authenticated: discovery.authenticated,
+    collection: discovery.collection,
+    candidates: discovery.candidates.slice(0, 50),
+  };
 }
 
 async function finalizeReport(options) {
@@ -252,6 +268,7 @@ async function buildHistory(asOf, excludedPath = null, { includeShadow = false }
     for (const item of report.items || []) {
       addHistorySource(sourceMap, {
         canonicalUrl: item.canonicalUrl || item.sourceUrl,
+        artifactKey: item.artifactKey || artifactKeyFor(item),
         title: item.title,
         category: item.category,
         reportDate: report.reportDate,
@@ -298,9 +315,9 @@ async function buildHistory(asOf, excludedPath = null, { includeShadow = false }
 }
 
 function applyHistory(report, recentSources) {
-  const recent = new Map(recentSources.map((entry) => [entry.canonicalUrl, entry]));
+  const recent = new Map(recentSources.map((entry) => [entry.artifactKey || entry.canonicalUrl, entry]));
   for (const item of report.items) {
-    const prior = recent.get(item.canonicalUrl);
+    const prior = recent.get(item.artifactKey || item.canonicalUrl);
     item.quality.history = {
       seenWithin30Days: Boolean(prior),
       previousDates: prior?.dates || [],
@@ -447,9 +464,11 @@ function addHistorySource(sourceMap, entry) {
   } catch {
     return;
   }
-  const existing = sourceMap.get(canonicalUrl) || {
-    id: stableSourceId(canonicalUrl),
+  const artifactKey = String(entry.artifactKey || canonicalUrl);
+  const existing = sourceMap.get(artifactKey) || {
+    id: stableSourceId(artifactKey),
     canonicalUrl,
+    artifactKey,
     title: entry.title || null,
     category: entry.category || null,
     dates: [],
@@ -457,7 +476,7 @@ function addHistorySource(sourceMap, entry) {
   existing.title ||= entry.title || null;
   existing.category ||= entry.category || null;
   existing.dates.push(entry.reportDate);
-  sourceMap.set(canonicalUrl, existing);
+  sourceMap.set(artifactKey, existing);
 }
 
 async function loadSidecars(excludedPath = null, { includeShadow = false } = {}) {

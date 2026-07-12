@@ -34,7 +34,7 @@ Personal Radar 支持两条使用路径：
 当前推荐主线是本地 Codex Automation 加本地 forwarder：
 
 ```text
-Local Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
+GitHub collector -> SQLite candidate evidence -> Local Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
 ```
 
 原因是 Codex Automation 目前更适合在本地/工作树环境里创建和调度，但自动化 shell 的网络出站可能失败。让 Codex Automation 只生成报告文件，再由普通 Windows PowerShell 运行 forwarder 负责联网推送，是当前最稳的生产路径。
@@ -189,7 +189,7 @@ The current example channel is `skill-radar`, which discovers practical AI-agent
 The current recommended path uses local Codex Automation plus the local forwarder:
 
 ```text
-Local Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
+GitHub collector -> SQLite candidate evidence -> Local Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
 ```
 
 Local Codex Automation is suitable for scheduled research and report generation, but its shell network access may fail. It writes a report file under `reports/outbox/`; the forwarder runs from normal Windows PowerShell and handles network delivery to the Worker.
@@ -197,6 +197,17 @@ Local Codex Automation is suitable for scheduled research and report generation,
 ### Prompt Files
 
 - `prompts/skill-radar-local.md`: production prompt for local automation.
+
+Before Automation runs, collect deterministic GitHub candidates and repository
+metrics:
+
+```powershell
+npm run discovery:github
+```
+
+This writes local-only SQLite snapshots and
+`reports/inbox/github-candidates.json`. See
+`tools/discovery/README.md` for token and Windows scheduling guidance.
 
 For the formal daily automation, use:
 

@@ -5,6 +5,7 @@
 .codex-forwarder-state.json
 .codex-forwarder-pending.json
 .codex-forwarder.log
+.github-discovery.log
 reports/outbox/*.md
 reports/outbox/*.quality.json
 reports/state/

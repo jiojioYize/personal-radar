@@ -8,6 +8,8 @@
     "deploy": "wrangler deploy",
     "tail": "wrangler tail",
     "test": "node --test",
+    "discovery:github": "node tools/discovery/collect-github.mjs",
+    "discovery:export": "node tools/discovery/collect-github.mjs --export-only",
     "quality:prepare": "node tools/quality/report-quality.mjs prepare",
     "quality:summary": "node tools/quality/report-quality.mjs summary"
   },

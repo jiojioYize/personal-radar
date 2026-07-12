@@ -39,6 +39,7 @@ export const RECOMMENDATIONS = new Set(["install", "adapt", "watch", "skip"]);
 export const DISCOVERY_TYPES = new Set(["github", "web", "x", "inbox"]);
 
 export function calculateQualityScore(evidence = {}) {
+  evidence = evidenceBackedCopy(evidence);
   const valueClarity = sumChecks(evidence.value, {
     specificTaskDefined: 4,
     targetUserDefined: 2,
@@ -100,7 +101,7 @@ export function calculateQualityScore(evidence = {}) {
   if (numberAtLeast(community.independentAdoptions, 1)) adoptionPoints += 2;
   if (numberAtLeast(community.independentAdoptions, 2)) adoptionPoints += 1;
   if (isMet(community.credibleOrganizationBacking)) adoptionPoints += 1;
-  if (isMet(community.verifiableUsageCase)) adoptionPoints += 1;
+  if (isMet(community.externalVerifiableUsageCase)) adoptionPoints += 1;
 
   let growthPoints = 0;
   const stars = numeric(community.stars);
@@ -202,13 +203,23 @@ export function canonicalizeUrl(value) {
 }
 
 export function stableSourceId(canonicalUrl) {
-  const text = canonicalizeUrl(canonicalUrl);
+  const text = String(canonicalUrl || "");
   let hash = 0x811c9dc5;
   for (let index = 0; index < text.length; index += 1) {
     hash ^= text.charCodeAt(index);
     hash = Math.imul(hash, 0x01000193);
   }
   return `src_${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+export function artifactKeyFor(item = {}) {
+  const repositoryUrl = canonicalizeUrl(item.sourceUrl || item.canonicalUrl);
+  const scope = item.quality?.evidence?.artifactScope;
+  const path = normalizeArtifactPath(item.quality?.evidence?.artifactPath);
+  if (["focused_skill_pack", "general_skill_collection", "official_catalog", "mixed_toolkit"].includes(scope) && path) {
+    return `${repositoryUrl}#artifact=${path}`;
+  }
+  return repositoryUrl;
 }
 
 export function calculatePreferenceAdjustment(item, feedbackEntries = []) {
@@ -234,6 +245,7 @@ export function enrichStructuredReport(input, { feedbackEntries = [], preservePr
 
   report.items = report.items.map((item, index) => {
     const canonicalUrl = canonicalizeUrl(item.sourceUrl || item.canonicalUrl);
+    const artifactKey = artifactKeyFor(item);
     const score = calculateQualityScore(item.quality?.evidence);
     const baseScore = score.baseScore;
     const preferenceAdjustment = preservePreference
@@ -241,10 +253,11 @@ export function enrichStructuredReport(input, { feedbackEntries = [], preservePr
       : calculatePreferenceAdjustment(item, feedbackEntries);
     return {
       ...item,
-      id: stableSourceId(canonicalUrl),
+      id: stableSourceId(artifactKey),
       rank: index + 1,
       sourceUrl: String(item.sourceUrl || canonicalUrl),
       canonicalUrl,
+      artifactKey,
       quality: {
         ...item.quality,
         dimensions: score.dimensions,
@@ -262,9 +275,29 @@ export function enrichStructuredReport(input, { feedbackEntries = [], preservePr
     rejectedCount: Number(report.stats?.rejectedCount || 0),
     sourceCounts: report.stats?.sourceCounts || {},
     xDiscovery: normalizeXDiscovery(report.stats?.xDiscovery),
+    discoveryCoverage: normalizeDiscoveryCoverage(report.stats?.discoveryCoverage),
+    externalSources: normalizeExternalSources(report.stats?.externalSources),
   };
 
   return report;
+}
+
+function normalizeDiscoveryCoverage(value = {}) {
+  return {
+    highValidation: Number(value.highValidation || 0),
+    recentGrowth: Number(value.recentGrowth || 0),
+    emerging: Number(value.emerging || 0),
+    multiSkillArtifacts: Number(value.multiSkillArtifacts || 0),
+  };
+}
+
+function normalizeExternalSources(value = {}) {
+  return {
+    ossInsightSearched: Boolean(value.ossInsightSearched),
+    radarAiSearched: Boolean(value.radarAiSearched),
+    openSsfChecked: Number(value.openSsfChecked || 0),
+    depsDevChecked: Number(value.depsDevChecked || 0),
+  };
 }
 
 export function normalizeXDiscovery(value = {}) {
@@ -283,11 +316,12 @@ export function validateStructuredSemantics(report, { recentSources = [] } = {})
   const items = Array.isArray(report.items) ? report.items : [];
   const recent = new Map(
     recentSources.map((entry) => [
-      String(entry.canonicalUrl || ""),
+      String(entry.artifactKey || entry.canonicalUrl || ""),
       Array.isArray(entry.dates) ? entry.dates : [entry.reportDate].filter(Boolean),
     ]),
   );
   const seen = new Set();
+  const seenRepositories = new Set();
 
   if (!REPORT_STATUSES.has(report.status)) {
     errors.push(`Unsupported report status: ${report.status}`);
@@ -304,8 +338,19 @@ export function validateStructuredSemantics(report, { recentSources = [] } = {})
   if (Number(report.stats?.selectedCount) !== items.length) {
     errors.push("stats.selectedCount must match items.length");
   }
-  if (Number(report.stats?.reviewedCount) < 8) {
-    errors.push("stats.reviewedCount must be at least 8");
+  if (Number(report.stats?.reviewedCount) < 15) {
+    errors.push("stats.reviewedCount must be at least 15");
+  }
+  for (const lane of ["highValidation", "recentGrowth", "emerging"]) {
+    if (Number(report.stats?.discoveryCoverage?.[lane] || 0) < 4) {
+      errors.push(`stats.discoveryCoverage.${lane} must be at least 4`);
+    }
+  }
+  if (report.stats?.externalSources?.ossInsightSearched !== true) {
+    errors.push("stats.externalSources.ossInsightSearched must be true");
+  }
+  if (report.stats?.externalSources?.radarAiSearched !== true) {
+    errors.push("stats.externalSources.radarAiSearched must be true");
   }
   if (report.stats?.xDiscovery?.searched !== true) {
     errors.push("stats.xDiscovery.searched must be true for Stage 2 reports");
@@ -331,13 +376,21 @@ export function validateStructuredSemantics(report, { recentSources = [] } = {})
     if (item.canonicalUrl !== canonicalUrl) {
       errors.push(`${label}: canonicalUrl does not match sourceUrl`);
     }
-    if (item.id !== stableSourceId(canonicalUrl)) {
-      errors.push(`${label}: id does not match canonicalUrl`);
+    const artifactKey = artifactKeyFor(item);
+    if (item.artifactKey !== artifactKey) {
+      errors.push(`${label}: artifactKey does not match source and evidence`);
     }
-    if (seen.has(canonicalUrl)) {
+    if (item.id !== stableSourceId(artifactKey)) {
+      errors.push(`${label}: id does not match artifactKey`);
+    }
+    if (seen.has(artifactKey)) {
       errors.push(`${label}: duplicate source in the same report`);
     }
-    seen.add(canonicalUrl);
+    seen.add(artifactKey);
+    if (seenRepositories.has(canonicalUrl)) {
+      errors.push(`${label}: only one artifact per repository is allowed in a daily report`);
+    }
+    seenRepositories.add(canonicalUrl);
 
     if (!RECOMMENDATIONS.has(item.recommendation)) {
       errors.push(`${label}: unsupported recommendation`);
@@ -359,12 +412,19 @@ export function validateStructuredSemantics(report, { recentSources = [] } = {})
       errors.push(`${label}: bilingual primary caution is required`);
     }
 
-    const previousDates = recent.get(canonicalUrl) || [];
+    const previousDates = recent.get(artifactKey) || [];
     if (previousDates.length && item.quality?.history?.materialChange !== true) {
       errors.push(`${label}: source appeared within 30 days without a material change`);
     }
     if (item.quality?.history?.materialChange === true && !String(item.quality?.history?.changeEvidence || "").trim()) {
       errors.push(`${label}: material change requires evidence`);
+    }
+    const recentRepositoryDates = recentSources
+      .filter((entry) => entry.canonicalUrl === canonicalUrl)
+      .flatMap((entry) => entry.dates || [entry.reportDate].filter(Boolean))
+      .filter((date) => daysBetween(date, report.reportDate) >= 1 && daysBetween(date, report.reportDate) <= 7);
+    if (new Set(recentRepositoryDates).size >= 2 && item.quality?.history?.materialChange !== true) {
+      errors.push(`${label}: repository already appeared twice in the previous 7 days`);
     }
   }
 
@@ -376,6 +436,10 @@ function validateQualityEvidence(item, label, errors) {
   const evidence = quality.evidence || {};
   const dimensions = quality.dimensions || {};
   if (!ARTIFACT_SCOPES.has(evidence.artifactScope)) errors.push(`${label}: unsupported artifactScope`);
+  if (["focused_skill_pack", "general_skill_collection", "official_catalog", "mixed_toolkit"].includes(evidence.artifactScope)
+    && !normalizeArtifactPath(evidence.artifactPath)) {
+    errors.push(`${label}: multi-artifact repositories require artifactPath`);
+  }
   if (!Array.isArray(evidence.declaredPlatforms) || evidence.declaredPlatforms.length === 0) {
     errors.push(`${label}: at least one declared platform is required`);
   } else if (evidence.declaredPlatforms.some((platform) => !SUPPORTED_PLATFORMS.has(platform))) {
@@ -391,15 +455,44 @@ function validateQualityEvidence(item, label, errors) {
   if (Number(dimensions.trustSafetyLicense) < 6) errors.push(`${label}: trust, safety, and license is below 6`);
 
   const community = evidence.community || {};
-  const lowValidation = numeric(community.stars) !== null
-    && numeric(community.stars) < 50
-    && !numberAtLeast(community.independentAdoptions, 1);
+  const lowValidation = Number(dimensions.communityValidation) < 3
+    && !numberAtLeast(community.independentAdoptions, 1)
+    && !isMet(community.credibleOrganizationBacking)
+    && !isMet(community.itemLevelAdoptionEvidence);
+  if (lowValidation) errors.push(`${label}: community validation is below the publication gate`);
   if (item.recommendation === "install" && lowValidation) {
     errors.push(`${label}: install requires at least 50 stars or independent adoption evidence`);
   }
   if (item.recommendation === "install" && !isMet(evidence.security?.licensePresent)) {
     errors.push(`${label}: install requires a declared license`);
   }
+}
+
+function evidenceBackedCopy(input = {}) {
+  const evidence = structuredClone(input || {});
+  const refs = new Set((evidence.evidenceRefs || []).flatMap((ref) => [ref.field, ...(ref.fields || [])].filter(Boolean).map(String)));
+  for (const groupName of ["value", "usability", "implementation", "security", "differentiation"]) {
+    const group = evidence[groupName] || {};
+    for (const [field, value] of Object.entries(group)) {
+      if (field === "comparisonSources") continue;
+      if (value === "met" && !refs.has(`${groupName}.${field}`)) group[field] = "unknown";
+    }
+  }
+  for (const groupName of ["maintenance", "community"]) {
+    const group = evidence[groupName] || {};
+    for (const [field, value] of Object.entries(group)) {
+      if (value !== null && value !== undefined && !refs.has(`${groupName}.${field}`)) {
+        group[field] = typeof value === "boolean" ? null : null;
+      }
+    }
+  }
+  return evidence;
+}
+
+function normalizeArtifactPath(value) {
+  const path = String(value || "").trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  if (!path || path.includes("..")) return null;
+  return path;
 }
 
 function hasSecurityBlocker(security = {}) {
@@ -435,6 +528,12 @@ function numberAtLeast(value, threshold) {
 function numberBelow(value, threshold) {
   const result = numeric(value);
   return result !== null && result < threshold;
+}
+
+function daysBetween(from, to) {
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`);
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.round((end - start) / 86400000) : Number.NaN;
 }
 
 export function normalizeSegment(value) {

@@ -12,7 +12,7 @@
     "en": "Prefer small audited skills over blind full-package installs."
   },
   "stats": {
-    "reviewedCount": 8,
+    "reviewedCount": 15,
     "selectedCount": 1,
     "duplicateCount": 1,
     "rejectedCount": 6,
@@ -27,7 +27,9 @@
       "selectedCount": 0,
       "rejectedCount": 0,
       "deferredCount": 1
-    }
+    },
+    "discoveryCoverage": { "highValidation": 4, "recentGrowth": 4, "emerging": 4, "multiSkillArtifacts": 1 },
+    "externalSources": { "ossInsightSearched": true, "radarAiSearched": true, "openSsfChecked": 1, "depsDevChecked": 1 }
   },
   "items": [
     {
@@ -37,6 +39,7 @@
       "category": "coding workflow",
       "sourceUrl": "https://github.com/example/agent-skill",
       "canonicalUrl": "https://github.com/example/agent-skill",
+      "artifactKey": "https://github.com/example/agent-skill",
       "recommendation": "adapt",
       "discovery": {
         "type": "github",
@@ -80,6 +83,7 @@
         },
         "evidence": {
           "artifactScope": "individual_skill",
+          "artifactPath": null,
           "declaredPlatforms": ["claude-code", "codex"],
           "value": {
             "specificTaskDefined": "met",
@@ -127,7 +131,7 @@
             "starsGrowth30d": 80,
             "starsGrowth90d": 240,
             "credibleOrganizationBacking": "met",
-            "verifiableUsageCase": "met",
+            "externalVerifiableUsageCase": "met",
             "itemLevelAdoptionEvidence": "met",
             "skillSpecificAttentionEvidence": "met"
           },
@@ -157,6 +161,15 @@
           "evidenceRefs": [
             {
               "field": "usability.reusableContentPresent",
+              "fields": [
+                "value.specificTaskDefined", "value.targetUserDefined", "value.inputsOutputsDefined", "value.workflowImprovementDefined", "value.officialDemonstration",
+                "usability.targetPlatformsDocumented", "usability.nativeInstallInstructions", "usability.nativeUsageExample", "usability.dependenciesAndPermissionsDocumented", "usability.validationMethodAvailable", "usability.coreInstructionsPortable", "usability.multiPlatformSupport",
+                "implementation.documentedStructureMatches", "implementation.coreFilesSubstantive", "implementation.triggerOrScopeDefined", "implementation.executableStepsDefined", "implementation.constraintsAndFailureModesDefined", "implementation.testsOrReviewableExamples",
+                "maintenance.repositoryAgeDays", "maintenance.commitCount90d", "maintenance.activeMonths12m", "maintenance.releaseCount12m", "maintenance.contributorCount12m", "maintenance.independentIssueOrPrParticipants90d", "maintenance.hasUnresolvedBlockingIssues", "maintenance.archived", "maintenance.maintenanceEnded",
+                "community.stars", "community.contributors", "community.independentParticipants90d", "community.independentAdoptions", "community.starsGrowth30d", "community.starsGrowth90d", "community.credibleOrganizationBacking", "community.externalVerifiableUsageCase", "community.itemLevelAdoptionEvidence", "community.skillSpecificAttentionEvidence",
+                "security.licensePresent", "security.permissionsDocumented", "security.externalBehaviorDocumented", "security.dangerousActionsRequireConfirmation", "security.installationAuditable", "security.securityPolicyPresent",
+                "differentiation.newProblemCoverage", "differentiation.newAgentFormatOrWorkflow", "differentiation.newValidationMechanism", "differentiation.newSecurityOrCollaborationBoundary"
+              ],
               "source": "github",
               "location": "skills/example/SKILL.md",
               "observedAt": "2026-07-06T00:00:00.000Z"

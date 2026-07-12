@@ -7,6 +7,7 @@ import {
   calculateBaseScore,
   calculateQualityScore,
   calculateStarPoints,
+  artifactKeyFor,
   calculatePreferenceAdjustment,
   canonicalizeUrl,
   enrichStructuredReport,
@@ -70,6 +71,40 @@ test("treats unavailable numeric evidence as unknown rather than zero", () => {
   const result = calculateQualityScore(evidence);
   assert.equal(result.dimensions.maintenanceHealth, 10);
   assert.equal(result.dimensions.communityValidation, 7);
+});
+
+test("does not score met fields without exact evidence references", () => {
+  const evidence = evidenceFixture();
+  evidence.evidenceRefs = [{
+    field: "usability.reusableContentPresent",
+    source: "github",
+    location: "skills/example/SKILL.md",
+    observedAt: "2026-07-06T00:00:00.000Z",
+  }];
+  assert.equal(calculateQualityScore(evidence).baseScore, 4);
+});
+
+test("uses artifact-level identity inside multi-skill repositories", () => {
+  const first = reportFixture().items[0];
+  first.quality.evidence.artifactScope = "general_skill_collection";
+  first.quality.evidence.artifactPath = "skills/pdf";
+  const second = structuredClone(first);
+  second.quality.evidence.artifactPath = "skills/docx";
+  assert.notEqual(artifactKeyFor(first), artifactKeyFor(second));
+  assert.match(artifactKeyFor(first), /#artifact=skills\/pdf$/);
+});
+
+test("rejects two artifacts from the same repository in one daily report", () => {
+  const fixture = reportFixture();
+  fixture.items[0].quality.evidence.artifactScope = "general_skill_collection";
+  fixture.items[0].quality.evidence.artifactPath = "skills/pdf";
+  const second = structuredClone(fixture.items[0]);
+  second.title = "openai/skills docx";
+  second.sourceUrl = "https://github.com/OpenAI/skills/tree/main/skills/docx";
+  second.quality.evidence.artifactPath = "skills/docx";
+  fixture.items.push(second);
+  const report = enrichStructuredReport(fixture);
+  assert.match(validateStructuredSemantics(report).join("\n"), /only one artifact per repository/);
 });
 
 test("preference adjustment is category-based and clamped", () => {
@@ -137,6 +172,46 @@ test("allows a repeated source with material-change evidence", () => {
   assert.deepEqual(errors, []);
 });
 
+test("allows an unreviewed artifact from a previously seen multi-skill repository", () => {
+  const fixture = reportFixture();
+  fixture.items[0].sourceUrl = "https://github.com/OpenAI/skills/tree/main/skills/docx";
+  fixture.items[0].quality.evidence.artifactScope = "general_skill_collection";
+  fixture.items[0].quality.evidence.artifactPath = "skills/docx";
+  const report = enrichStructuredReport(fixture);
+  const errors = validateStructuredSemantics(report, {
+    recentSources: [{
+      artifactKey: "https://github.com/openai/skills#artifact=skills/pdf",
+      canonicalUrl: "https://github.com/openai/skills",
+      dates: ["2026-07-01"],
+    }],
+  });
+  assert.deepEqual(errors, []);
+});
+
+test("rejects a repository after two appearances in the previous seven days", () => {
+  const fixture = reportFixture();
+  fixture.reportDate = "2026-07-06";
+  fixture.items[0].sourceUrl = "https://github.com/OpenAI/skills/tree/main/skills/docx";
+  fixture.items[0].quality.evidence.artifactScope = "general_skill_collection";
+  fixture.items[0].quality.evidence.artifactPath = "skills/docx";
+  const report = enrichStructuredReport(fixture);
+  const errors = validateStructuredSemantics(report, {
+    recentSources: [
+      {
+        artifactKey: "https://github.com/openai/skills#artifact=skills/pdf",
+        canonicalUrl: "https://github.com/openai/skills",
+        dates: ["2026-07-01"],
+      },
+      {
+        artifactKey: "https://github.com/openai/skills#artifact=skills/browser",
+        canonicalUrl: "https://github.com/openai/skills",
+        dates: ["2026-07-04"],
+      },
+    ],
+  });
+  assert.match(errors.join("\n"), /repository already appeared twice/);
+});
+
 test("rejects reports below the quality threshold", () => {
   const fixture = reportFixture();
   const evidence = fixture.items[0].quality.evidence;
@@ -181,7 +256,7 @@ function reportFixture() {
       en: "Audit before installation.",
     },
     stats: {
-      reviewedCount: 8,
+      reviewedCount: 15,
       selectedCount: 1,
       duplicateCount: 1,
       rejectedCount: 6,
@@ -194,6 +269,8 @@ function reportFixture() {
         rejectedCount: 0,
         deferredCount: 0,
       },
+      discoveryCoverage: { highValidation: 4, recentGrowth: 4, emerging: 4, multiSkillArtifacts: 1 },
+      externalSources: { ossInsightSearched: true, radarAiSearched: true, openSsfChecked: 1, depsDevChecked: 1 },
     },
     items: [{
       id: "placeholder",
@@ -238,6 +315,7 @@ function reportFixture() {
 function evidenceFixture() {
   return {
     artifactScope: "individual_skill",
+    artifactPath: null,
     declaredPlatforms: ["claude-code", "codex"],
     value: {
       specificTaskDefined: "met",
@@ -285,7 +363,7 @@ function evidenceFixture() {
       starsGrowth30d: 80,
       starsGrowth90d: 240,
       credibleOrganizationBacking: "met",
-      verifiableUsageCase: "met",
+      externalVerifiableUsageCase: "met",
       itemLevelAdoptionEvidence: "met",
       skillSpecificAttentionEvidence: "met",
     },
@@ -314,6 +392,30 @@ function evidenceFixture() {
     },
     evidenceRefs: [{
       field: "usability.reusableContentPresent",
+      fields: [
+        "value.specificTaskDefined", "value.targetUserDefined", "value.inputsOutputsDefined",
+        "value.workflowImprovementDefined", "value.officialDemonstration",
+        "usability.targetPlatformsDocumented", "usability.nativeInstallInstructions",
+        "usability.nativeUsageExample", "usability.dependenciesAndPermissionsDocumented",
+        "usability.validationMethodAvailable", "usability.coreInstructionsPortable",
+        "usability.multiPlatformSupport",
+        "implementation.documentedStructureMatches", "implementation.coreFilesSubstantive",
+        "implementation.triggerOrScopeDefined", "implementation.executableStepsDefined",
+        "implementation.constraintsAndFailureModesDefined", "implementation.testsOrReviewableExamples",
+        "maintenance.repositoryAgeDays", "maintenance.commitCount90d", "maintenance.activeMonths12m",
+        "maintenance.releaseCount12m", "maintenance.contributorCount12m",
+        "maintenance.independentIssueOrPrParticipants90d", "maintenance.hasUnresolvedBlockingIssues",
+        "maintenance.archived", "maintenance.maintenanceEnded",
+        "community.stars", "community.contributors", "community.independentParticipants90d",
+        "community.independentAdoptions", "community.starsGrowth30d", "community.starsGrowth90d",
+        "community.credibleOrganizationBacking", "community.externalVerifiableUsageCase",
+        "community.itemLevelAdoptionEvidence", "community.skillSpecificAttentionEvidence",
+        "security.licensePresent", "security.permissionsDocumented", "security.externalBehaviorDocumented",
+        "security.dangerousActionsRequireConfirmation", "security.installationAuditable",
+        "security.securityPolicyPresent",
+        "differentiation.newProblemCoverage", "differentiation.newAgentFormatOrWorkflow",
+        "differentiation.newValidationMechanism", "differentiation.newSecurityOrCollaborationBoundary"
+      ],
       source: "github",
       location: "skills/example/SKILL.md",
       observedAt: "2026-07-06T00:00:00.000Z",

@@ -25,7 +25,18 @@ The context contains:
 
 - sources recommended in the last 30 days;
 - coarse interest feedback (`interested` and `not_interested`);
-- pending or deferred X candidates.
+- pending or deferred X candidates;
+- an optional deterministic GitHub candidate and metrics evidence pack.
+
+When `githubDiscovery` is present, use its artifact-level candidates to build
+the daily funnel before broad web searches. GitHub API fields in that pack may
+be cited for the exact metrics they name; do not re-estimate those metrics from
+search snippets. Still open and inspect the primary `sourceUrl` for every
+shortlisted artifact before making semantic judgments.
+
+If the evidence pack is absent or older than 36 hours, continue with web
+research but record that deterministic discovery data was unavailable. A
+missing collector run is not evidence that no high-quality projects exist.
 
 Do not recommend a recent source again unless an important release, structural
 change, or security change is verified from a primary source. A material change
@@ -52,8 +63,14 @@ Prioritize document processing, coding workflows, browser automation, data
 analysis, design, GitHub, PDF/Word handling, productivity, and context
 management.
 
-Review at least 8 candidates. Use GitHub repositories and official project
+Review at least 15 candidates. Use GitHub repositories and official project
 documentation as primary evidence.
+
+The candidate pool must cover at least 4 high-community-validation candidates,
+4 recent-growth candidates, and 4 emerging candidates. Candidates may overlap
+between lanes. Also inspect unreviewed individual skill directories inside
+popular multi-skill repositories. These are discovery coverage requirements,
+not quotas for the final report.
 
 Run two discovery lanes:
 
@@ -77,6 +94,12 @@ GitHub or official search provides stronger candidates.
 Do not scrape X, use an X API, depend on logged-in Chrome, or search
 Xiaohongshu. Social popularity is not quality evidence and does not add ranking
 weight.
+
+Also perform at least one public OSS Insight search and one RadarAI trend or
+skills search on every successful run. Record actual attempts in
+`stats.externalSources`; do not mark a source searched unless it was opened or
+queried during this run. OpenSSF and deps.dev checks are optional per candidate
+and must record their actual counts.
 
 For pending social candidates, either:
 
@@ -113,16 +136,29 @@ verifiable. Use OSS Insight for historical trends and OpenSSF or deps.dev for
 applicable security evidence when available. RadarAI, X, and curated lists are
 discovery sources, not direct quality proof. Do not estimate unavailable
 numeric metrics: use `null`. Use only `met`, `not_met`, `unknown`, or
-`not_applicable` for evidence-state fields.
+`not_applicable` for evidence-state fields. Every `met` field and every non-null
+numeric or boolean metric that contributes to scoring must be named by an exact
+`quality.evidence.evidenceRefs[].field` or `.fields` entry. A repository's own
+example is not external adoption evidence.
 
 Classify `artifactScope` accurately. Stars from curated lists never transfer to
 listed projects. Stars from broad collections or mixed toolkits do not fully
 validate an individual sub-skill without item-level evidence.
 
+For a specific skill inside a multi-skill repository, set `artifactPath` to its
+repository-relative directory and use that directory URL as `sourceUrl`.
+Repository metadata can be shared, but content evidence, history, and
+recommendation identity belong to the specific artifact.
+
+Select at most one artifact from the same repository in a daily report. The
+quality tool also limits a repository to two appearances in the preceding
+seven days unless a material change is evidenced. This repository-frequency
+rule is separate from the artifact-level 30-day repeat rule.
+
 Use:
 
 - `published` when one to six items qualify;
-- `no_update` when zero items qualify after reviewing at least eight candidates.
+- `no_update` when zero items qualify after reviewing at least fifteen candidates.
 
 A research, network, or tooling failure is not `no_update`. If the task cannot
 complete valid research, do not finalize a report.
@@ -145,7 +181,7 @@ For every selected item provide:
 - `discovery` with `type`, `url`, optional author, and optional publish time;
 - bilingual `display.zh` and `display.en`;
 - all display fields required by the JSON Schema;
-- `quality.evidence` with artifact scope, declared platforms, all required
+- `quality.evidence` with artifact scope, artifact path, declared platforms, all required
   evidence groups, raw community and maintenance metrics, and evidence refs;
 - `skillLike: true`;
 - `officialSourceVerified: true`;

@@ -1,6 +1,6 @@
 # Personal Radar Stage 2: Content Quality And Reading Experience
 
-Last updated: 2026-07-11
+Last updated: 2026-07-12
 
 ## Status
 
@@ -10,15 +10,41 @@ The local quality layer, structured report contract, forwarder validation, KV
 v2 compatibility, structured website rendering, and HTML PushPlus renderer are
 implemented. Worker v2 is deployed, three shadow runs passed, and the
 real-device HTML PushPlus comparison was accepted on 2026-07-09. Evidence-driven
-quality schema v2 was deployed on 2026-07-11; the comparable 14-day quality
-observation window starts on 2026-07-12.
+quality schema v2 was deployed on 2026-07-11. The first production result
+exposed evidence-binding and candidate-coverage weaknesses, so the comparable
+14-day quality observation is paused until Quality v2.1 passes shadow replay.
 
 This document is the single living record for the Stage 2 plan, rollout,
 checkpoints, and final acceptance.
 
-Latest local verification completed on 2026-07-11:
+Quality v2.1 calibration started on 2026-07-12 after a three-star repository
+received a score of 75 despite having only four evidence references. The item
+may still be useful, but the score was not sufficiently supported. The
+calibration therefore changes the scoring contract rather than adding a
+popularity quota:
 
-- 22 Node tests passed, including evidence-driven scoring, raised star bands,
+- every scored state or raw metric must be bound to an exact evidence field;
+- low-community candidates need independent adoption, credible organization
+  backing, or item-level adoption evidence to be publishable;
+- multi-skill repositories use artifact-level identity for the 30-day history;
+- only one artifact from a repository may appear per daily report, and a
+  repository may appear at most twice in the preceding seven days without a
+  material change;
+- daily discovery must review at least 15 candidates and cover high-validation,
+  recent-growth, and emerging lanes with at least four candidates each;
+- OSS Insight and RadarAI searches are required discovery attempts, while
+  GitHub and official files remain the source of verified facts.
+
+The goal is not a predetermined mix of popular and obscure projects. It is a
+defensible set of high-quality recommendations whose scores can be traced to
+observable evidence.
+
+Latest local verification completed on 2026-07-12:
+
+- 31 Node tests passed, including deterministic GitHub discovery, SQLite
+  snapshots, repository-diverse artifact export, field-level evidence binding, artifact-level
+  identity, same-report repository diversity, seven-day repository frequency,
+  raised star bands,
   repository-scope caps, missing-data handling, schema and semantic validation,
   same-day
   regeneration, `published` and `no_update`, 30-day repeat handling, v1/v2
@@ -28,6 +54,11 @@ Latest local verification completed on 2026-07-11:
 - Wrangler completed a local Worker bundle dry run.
 - Runtime reports, Sidecars, history, feedback, social candidates, summaries,
   and secrets were confirmed to remain outside Git.
+- The 2026-07-12 `autospec` production Sidecar replayed from 75 to 8 points. It
+  now fails publication because its positive claims lack exact evidence
+  bindings, only 10 candidates were reviewed, discovery lanes and required
+  external-source attempts were missing, its artifact path was absent, and its
+  low community score had no qualifying external adoption evidence.
 - Automated screenshot verification is still pending because the in-app browser
   blocked the local preview address. It must be completed before production
   rollout, together with the real-device PushPlus comparison.
@@ -67,9 +98,14 @@ and the lack of preference evidence.
 ## Production Data Flow
 
 ```text
+Windows GitHub discovery collector
+  -> GitHub API repository and artifact discovery
+  -> local SQLite metric snapshots
+  -> reports/inbox/github-candidates.json
 Codex Automation
   -> prepare local history and feedback context
-  -> research at least 8 candidates
+  -> read deterministic candidate evidence
+  -> deeply inspect shortlisted candidates
   -> write structured draft
   -> validate, score, and render
   -> Markdown + quality Sidecar
@@ -87,6 +123,27 @@ reports/outbox/skill-radar-YYYY-MM-DD.md
 
 The Sidecar is the source of truth. Markdown is generated deterministically for
 local review, portability, and legacy fallback.
+
+## Stage 2.1 Discovery Infrastructure
+
+Prompt-only web research proved insufficient for repeatable repository metrics
+and broad candidate coverage. Stage 2.1 separates deterministic data collection
+from semantic judgment:
+
+- a local Node collector queries the read-only GitHub API before Automation;
+- SQLite stores repositories, concrete skill/rule artifacts, discovery runs,
+  and daily metric snapshots;
+- the export limits each repository to five candidate artifacts so large skill
+  collections cannot occupy the full context;
+- the first snapshot records current facts; later snapshots calculate actual
+  30-day star growth instead of asking the model to estimate it;
+- Automation uses the evidence pack for discovery and numeric facts, then opens
+  primary files to judge value, portability, implementation, and risk;
+- GitHub authentication is optional, but a read-only token increases the API
+  allowance and collection breadth.
+
+This is intentionally not a general-purpose scraper. Site-specific connectors
+and additional sources can be added after the GitHub collector is stable.
 
 ## Quality Contract
 
@@ -124,6 +181,18 @@ and raised star bands: fewer than 50, 50-199, 200-999, 1,000-4,999,
 projects. General collections and mixed toolkits receive capped repository-star
 credit unless the recommended sub-skill has item-level adoption or attention
 evidence.
+
+Every positive scored state and every numeric or boolean repository metric must
+be named by an exact `evidenceRef.field` or `evidenceRef.fields` entry. A value
+without that binding is scored as unknown even if the draft labels it `met`.
+Repository ownership is not external adoption: an example inside the same
+repository cannot satisfy an independent usage claim.
+
+History identity is artifact-level for repositories that contain multiple
+skills. For example, `skills/pdf` and `skills/docx` are distinct reviewable
+artifacts, while the canonical repository URL is retained for frequency
+control. This permits discovery inside established collections without letting
+one repository dominate consecutive reports.
 
 GitHub and official files provide primary facts. OSS Insight may provide trend
 history; OpenSSF and deps.dev may provide applicable security evidence. RadarAI,
@@ -307,6 +376,7 @@ npm run quality:summary
 | --- | --- |
 | Product strategy and Stage 2 record | Implemented locally |
 | Schema, scoring, history, feedback, inbox, and Markdown renderer | Implemented locally |
+| Stage 2.1 GitHub collector, SQLite snapshots, and candidate export | Implemented; authenticated Task Scheduler run succeeded on 2026-07-12 with 22 public repositories and 7,783 artifacts |
 | Stage 2 Automation prompt | Implemented locally |
 | Sidecar-aware forwarder | Implemented locally |
 | Worker KV v2 and structured website | Implemented locally |
@@ -316,7 +386,8 @@ npm run quality:summary
 | Three successful shadow reports | 3 of 3 passed |
 | Worker production deployment | Initial v2 deployed 2026-07-08; evidence-driven quality schema v2 deployed 2026-07-11; PushPlus switched to `html` on 2026-07-09 |
 | Real-device HTML comparison | Accepted 2026-07-09 |
-| 14-day observation | Comparable quality window starts 2026-07-12 |
+| Quality v2.1 calibration | First shadow `no_update` passed 2026-07-12; one evidence-backed `published` shadow still required |
+| 14-day observation | Paused; restarts after Quality v2.1 shadow acceptance |
 | 30-day acceptance | Not started |
 
 The observation clock starts on the day after the structured website and the
@@ -332,6 +403,7 @@ PushPlus was switched to the HTML card format.
 
 | Date | Result | Items | Validation | Production impact | Notes |
 | --- | --- | ---: | --- | --- | --- |
+| 2026-07-12 Quality v2.1 | `no_update` | 0 | Schema and semantic validation passed | None | Reviewed 15 candidates across high-validation, growth, emerging, and multi-skill lanes; OSS Insight, RadarAI, and bounded X searches were attempted; no candidate had enough exact field-level evidence to pass the revised gate |
 | 2026-07-08 | `published` | 5 | Schema, semantic, and forwarder pair validation passed | None | Verified the new `xDiscovery` requirement: X auxiliary search attempted, 0 verifiable X candidates found, and production outbox files were not overwritten |
 | 2026-07-07 | `published` | 5 | Schema, semantic, and forwarder pair validation passed | None | Reviewed 10 candidates, selected 5 non-recent sources, and confirmed production outbox files were not overwritten |
 | 2026-07-06 | `published` | 6 | Schema, semantic, and forwarder pair validation passed | None | Found and fixed a forwarder false positive when a summary mentioned a later item title before its heading |

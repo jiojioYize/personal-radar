@@ -34,10 +34,12 @@
         "duplicateCount",
         "rejectedCount",
         "sourceCounts",
-        "xDiscovery"
+        "xDiscovery",
+        "discoveryCoverage",
+        "externalSources"
       ],
       "properties": {
-        "reviewedCount": { "type": "integer", "minimum": 8 },
+        "reviewedCount": { "type": "integer", "minimum": 15 },
         "selectedCount": { "type": "integer", "minimum": 0, "maximum": 6 },
         "duplicateCount": { "type": "integer", "minimum": 0 },
         "rejectedCount": { "type": "integer", "minimum": 0 },
@@ -66,6 +68,28 @@
             "selectedCount": { "type": "integer", "minimum": 0 },
             "rejectedCount": { "type": "integer", "minimum": 0 },
             "deferredCount": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "discoveryCoverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["highValidation", "recentGrowth", "emerging", "multiSkillArtifacts"],
+          "properties": {
+            "highValidation": { "type": "integer", "minimum": 4 },
+            "recentGrowth": { "type": "integer", "minimum": 4 },
+            "emerging": { "type": "integer", "minimum": 4 },
+            "multiSkillArtifacts": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "externalSources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ossInsightSearched", "radarAiSearched", "openSsfChecked", "depsDevChecked"],
+          "properties": {
+            "ossInsightSearched": { "const": true },
+            "radarAiSearched": { "const": true },
+            "openSsfChecked": { "type": "integer", "minimum": 0 },
+            "depsDevChecked": { "type": "integer", "minimum": 0 }
           }
         }
       }
@@ -155,6 +179,7 @@
       "additionalProperties": false,
       "required": [
         "artifactScope",
+        "artifactPath",
         "declaredPlatforms",
         "value",
         "usability",
@@ -176,6 +201,7 @@
             "mixed_toolkit"
           ]
         },
+        "artifactPath": { "type": ["string", "null"], "minLength": 1 },
         "declaredPlatforms": {
           "type": "array",
           "minItems": 1,
@@ -274,7 +300,7 @@
             "starsGrowth30d",
             "starsGrowth90d",
             "credibleOrganizationBacking",
-            "verifiableUsageCase",
+            "externalVerifiableUsageCase",
             "itemLevelAdoptionEvidence",
             "skillSpecificAttentionEvidence"
           ],
@@ -286,7 +312,7 @@
             "starsGrowth30d": { "type": ["integer", "null"], "minimum": 0 },
             "starsGrowth90d": { "type": ["integer", "null"], "minimum": 0 },
             "credibleOrganizationBacking": { "$ref": "#/$defs/evidenceState" },
-            "verifiableUsageCase": { "$ref": "#/$defs/evidenceState" },
+            "externalVerifiableUsageCase": { "$ref": "#/$defs/evidenceState" },
             "itemLevelAdoptionEvidence": { "$ref": "#/$defs/evidenceState" },
             "skillSpecificAttentionEvidence": { "$ref": "#/$defs/evidenceState" }
           }
@@ -343,6 +369,11 @@
             "required": ["field", "source", "location", "observedAt"],
             "properties": {
               "field": { "$ref": "#/$defs/nonEmptyString" },
+              "fields": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "$ref": "#/$defs/nonEmptyString" }
+              },
               "source": { "enum": ["github", "official-docs", "oss-insight", "openssf", "deps-dev", "radarai", "x", "manual-review"] },
               "location": { "$ref": "#/$defs/nonEmptyString" },
               "observedAt": { "type": "string", "format": "date-time" }
@@ -428,6 +459,7 @@
         "category",
         "sourceUrl",
         "canonicalUrl",
+        "artifactKey",
         "recommendation",
         "discovery",
         "display",
@@ -443,6 +475,7 @@
         "category": { "$ref": "#/$defs/nonEmptyString" },
         "sourceUrl": { "$ref": "#/$defs/httpsUrl" },
         "canonicalUrl": { "$ref": "#/$defs/httpsUrl" },
+        "artifactKey": { "$ref": "#/$defs/nonEmptyString" },
         "recommendation": { "enum": ["install", "adapt", "watch", "skip"] },
         "discovery": { "$ref": "#/$defs/discovery" },
         "display": {

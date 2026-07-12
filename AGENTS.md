@@ -25,14 +25,17 @@ The user wants practical recommendations that are worth installing, adapting, wa
 Current recommended production flow:
 
 ```text
-Local Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
+GitHub collector -> SQLite + candidate evidence pack -> Local Codex Automation
+-> reports/outbox -> local forwarder -> Worker /ingest-report
+-> KV + public site + PushPlus
 ```
 
 Local Codex Automation can read/write project files and run on schedule, but its shell network access may fail. Treat the local forwarder as the production delivery bridge.
 
 ## Schedule
 
-- Desired Codex deep-dive schedule: daily at Beijing time 08:05.
+- Desired GitHub discovery collector schedule: daily at Beijing time 07:10.
+- Desired Codex deep-dive schedule: daily at Beijing time 07:30.
 - Worker cron publishing is disabled. If a Worker cron trigger fires, it should be ignored.
 - The local forwarder should run after the Codex automation schedule, for example 08:20 Beijing time.
 
@@ -123,7 +126,13 @@ Current Stage 2 production rules:
 3. System failures must not be represented as `no_update`.
 4. X is an auxiliary web-search and inbox source; no scraper or X API is used.
 5. KV remains the production store and supports version 1 and version 2 reports.
-6. PushPlus stays on Markdown until the real-device HTML comparison is accepted.
+6. PushPlus uses the accepted HTML card format; Markdown remains a compatibility option.
+7. Quality v2.1 requires exact evidence-field bindings, at least 15 reviewed
+   candidates, three discovery lanes, and real OSS Insight and RadarAI search
+   attempts before a report can pass.
+8. Multi-skill repositories use artifact-level 30-day identity, with at most
+   one artifact per repository per report and two repository appearances in the
+   preceding seven days unless a material change is evidenced.
 
 ## Operational Notes
 
