@@ -384,10 +384,10 @@ npm run quality:summary
 | Automated tests and Worker bundle dry run | Passed |
 | Desktop and 390px visual verification | Pending local preview access |
 | Three successful shadow reports | 3 of 3 passed |
-| Worker production deployment | Initial v2 deployed 2026-07-08; evidence-driven quality schema v2 deployed 2026-07-11; PushPlus switched to `html` on 2026-07-09 |
+| Worker production deployment | Quality v2.1 deployed 2026-07-12 as Worker version `da93279a-ec58-4c55-8da4-c1abb1761971`; `/health` and `/` returned 200 |
 | Real-device HTML comparison | Accepted 2026-07-09 |
-| Quality v2.1 calibration | First shadow `no_update` passed 2026-07-12; one evidence-backed `published` shadow still required |
-| 14-day observation | Paused; restarts after Quality v2.1 shadow acceptance |
+| Quality v2.1 calibration | Accepted after `no_update` and evidence-backed `published` shadow runs on 2026-07-12 |
+| 14-day observation | Restarts on the first production day after Quality v2.1 deployment |
 | 30-day acceptance | Not started |
 
 The observation clock starts on the day after the structured website and the
@@ -403,6 +403,7 @@ PushPlus was switched to the HTML card format.
 
 | Date | Result | Items | Validation | Production impact | Notes |
 | --- | --- | ---: | --- | --- | --- |
+| 2026-07-13 Quality v2.1 | `published` | 1 | Schema, semantic, UTF-8, and forwarder pair validation passed; base score 74 | None | Used the deterministic GitHub evidence pack to select the previously unreviewed `anthropics/skills` `doc-coauthoring` artifact; retained unknown directory-level licensing and platform adaptation caveats instead of inheriting repository popularity as complete proof |
 | 2026-07-12 Quality v2.1 | `no_update` | 0 | Schema and semantic validation passed | None | Reviewed 15 candidates across high-validation, growth, emerging, and multi-skill lanes; OSS Insight, RadarAI, and bounded X searches were attempted; no candidate had enough exact field-level evidence to pass the revised gate |
 | 2026-07-08 | `published` | 5 | Schema, semantic, and forwarder pair validation passed | None | Verified the new `xDiscovery` requirement: X auxiliary search attempted, 0 verifiable X candidates found, and production outbox files were not overwritten |
 | 2026-07-07 | `published` | 5 | Schema, semantic, and forwarder pair validation passed | None | Reviewed 10 candidates, selected 5 non-recent sources, and confirmed production outbox files were not overwritten |
