@@ -15,19 +15,19 @@
     "stats": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["reviewedCount", "candidateCount", "selectedCount", "duplicateCount", "watchCount", "rejectedCount", "sourceCounts"],
+      "required": ["reviewedCount", "candidateCount", "selectedCount", "duplicateCount", "deferredCount", "rejectedCount", "sourceCounts"],
       "properties": {
-        "reviewedCount": { "const": 5 },
+        "reviewedCount": { "type": "integer", "minimum": 5, "maximum": 20 },
         "candidateCount": { "type": "integer", "minimum": 8, "maximum": 20 },
-        "selectedCount": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "selectedCount": { "type": "integer", "minimum": 0, "maximum": 20 },
         "duplicateCount": { "type": "integer", "minimum": 0 },
-        "watchCount": { "type": "integer", "minimum": 0, "maximum": 5 },
-        "rejectedCount": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "deferredCount": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "rejectedCount": { "type": "integer", "minimum": 0, "maximum": 20 },
         "sourceCounts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } }
       }
     },
-    "items": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/item" } },
-    "decisions": { "type": "array", "minItems": 5, "maxItems": 5, "items": { "$ref": "#/$defs/decision" } }
+    "items": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/item" } },
+    "decisions": { "type": "array", "minItems": 5, "maxItems": 20, "items": { "$ref": "#/$defs/decision" } }
   },
   "$defs": {
     "text": { "type": "string", "minLength": 1 },
@@ -68,12 +68,12 @@
     },
     "item": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "rank", "title", "category", "sourceUrl", "canonicalUrl", "artifactKey", "recommendation", "discovery", "display", "quality"],
+      "required": ["id", "rank", "title", "category", "sourceUrl", "canonicalUrl", "artifactKey", "discovery", "display", "quality"],
       "properties": {
-        "id": { "type": "string", "pattern": "^src_[a-f0-9]{8}$" }, "rank": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "id": { "type": "string", "pattern": "^src_[a-f0-9]{8}$" }, "rank": { "type": "integer", "minimum": 1, "maximum": 20 },
         "title": { "$ref": "#/$defs/text" }, "category": { "$ref": "#/$defs/text" },
         "sourceUrl": { "$ref": "#/$defs/httpsUrl" }, "canonicalUrl": { "$ref": "#/$defs/httpsUrl" },
-        "artifactKey": { "$ref": "#/$defs/text" }, "recommendation": { "enum": ["install", "adapt"] },
+        "artifactKey": { "$ref": "#/$defs/text" },
         "discovery": { "$ref": "#/$defs/discovery" },
         "display": { "type": "object", "additionalProperties": false, "required": ["zh", "en"], "properties": { "zh": { "$ref": "#/$defs/display" }, "en": { "$ref": "#/$defs/display" } } },
         "quality": { "$ref": "#/$defs/quality" }
@@ -86,8 +86,8 @@
         "id": { "type": "string" }, "title": { "$ref": "#/$defs/text" }, "category": { "$ref": "#/$defs/text" },
         "sourceUrl": { "$ref": "#/$defs/httpsUrl" }, "canonicalUrl": { "$ref": "#/$defs/httpsUrl" }, "artifactKey": { "$ref": "#/$defs/text" },
         "artifactScope": { "type": "string" }, "artifactPath": { "type": ["string", "null"] },
-        "discovery": { "$ref": "#/$defs/discovery" }, "decision": { "enum": ["recommend", "watch", "reject"] },
-        "reason": { "$ref": "#/$defs/text" }, "recommendation": { "enum": ["install", "adapt"] },
+        "discovery": { "$ref": "#/$defs/discovery" }, "decision": { "enum": ["recommend", "defer", "reject"] },
+        "reason": { "$ref": "#/$defs/text" },
         "officialSourceVerified": { "const": true }, "sourceCheckedAt": { "type": "string", "format": "date-time" },
         "license": { "type": ["string", "null"] }, "history": { "$ref": "#/$defs/history" }
       }

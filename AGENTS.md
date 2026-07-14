@@ -10,7 +10,8 @@ Personal Radar is a small long-running recommendation system for discovering use
 - Cline, Roo, and Roo Code rules or portable rule packs.
 - Reusable coding-agent rule packs that can be adapted into Codex skills.
 
-The user wants practical recommendations that are worth installing, adapting, watching, or skipping.
+The user wants practical recommendations that clearly explain what each skill
+does, how to start using it, and where its trust boundaries are.
 
 ## Current Architecture
 
@@ -26,7 +27,7 @@ Current recommended production flow:
 
 ```text
 Three curated skill directories -> Local Codex Automation
--> code-owned artifact history filter -> five primary-source decisions
+-> code-owned artifact and review-state filter -> verify every eligible source
 -> reports/outbox -> local forwarder -> Worker /ingest-report
 -> KV + public site + PushPlus
 ```
@@ -125,7 +126,7 @@ Stage 2 implementation and acceptance are maintained in
 Current Stage 2 production rules:
 
 1. The quality Sidecar is the source of truth; Markdown is generated from it.
-2. Automation verifies exactly five distinct eligible artifacts. One to five
+2. Automation verifies every distinct eligible artifact. One or more
    `recommend` decisions produce `published`; zero produces `no_update`.
 3. System failures must not be represented as `no_update`.
 4. Daily discovery uses Awesome Claude Skills, Agent Plugins, and
@@ -135,10 +136,14 @@ Current Stage 2 production rules:
    1, 2, and 3.
 6. PushPlus uses the accepted HTML card format; Markdown remains a compatibility option.
 7. Model-generated numeric scoring is not used in v3. Automation records
-   `recommend`, `watch`, or `reject` with explicit primary-source reasons.
+   `recommend`, `defer`, or `reject` with explicit primary-source reasons.
+   `defer` is filtered for 14 days and `reject` for 90 days unless a material
+   change is evidenced.
 8. Multi-skill repositories use artifact-level 30-day identity, with at most
    one artifact per repository per report and two repository appearances in the
    preceding seven days unless a material change is evidenced.
+9. Version 3 public cards do not show `install` or `adapt` labels. They explain
+   what the skill does, who it suits, how to start, and the main caution.
 
 ## Operational Notes
 

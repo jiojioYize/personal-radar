@@ -50,7 +50,37 @@ test("ingests and renders a simplified structured v3 report", async () => {
   const html = await page.text();
   assert.match(html, /Example Skill/);
   assert.match(html, /structured-report/);
+  assert.match(html, /How to use/);
+  assert.doesNotMatch(html, /action-tag action-/);
   assert.doesNotMatch(html, /baseScore/);
+});
+
+test("renders v3 PushPlus cards around understanding and usage", async () => {
+  const kv = new MemoryKv();
+  const structured = enrichCuratedReport(curatedFixture());
+  const originalFetch = globalThis.fetch;
+  let pushPayload;
+  globalThis.fetch = async (_url, options) => {
+    pushPayload = JSON.parse(options.body);
+    return new Response('{"code":200}', { status: 200 });
+  };
+
+  try {
+    const response = await ingest(kv, structured, {
+      generatedAt: "2026-07-14T02:00:00.000Z",
+      sourceRunId: "structured-v3-push",
+      envOverrides: {
+        PUSHPLUS_TOKEN: "test-token",
+        PUSHPLUS_TEMPLATE: "html",
+      },
+    });
+    assert.equal(response.status, 200);
+    assert.match(pushPayload.content, /怎么用：/);
+    assert.match(pushPayload.content, /Adapt it in a sandbox/);
+    assert.doesNotMatch(pushPayload.content, />install<|>adapt<|>watch</i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 test("keeps v1 Markdown reports readable", async () => {
   const kv = new MemoryKv();

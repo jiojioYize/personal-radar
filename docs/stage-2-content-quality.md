@@ -22,8 +22,10 @@ The v3 direction is:
   over at most three filter passes;
 - code owns URL normalization, exact-artifact identity, 30-day history, and
   repository-frequency rules;
-- Automation verifies exactly five primary sources and records `recommend`,
-  `watch`, or `reject` with explicit reasons;
+- Automation verifies every code-eligible primary source and records
+  `recommend`, `defer`, or `reject` with explicit reasons;
+- code stores `defer` for a 14-day cooldown and `reject` for a 90-day cooldown,
+  preventing repeated review without permanently blocking material changes;
 - no numeric model scoring, discovery-lane quotas, OSS Insight, RadarAI, or X
   requirement blocks the daily report;
 - the existing outbox, forwarder, Worker, website, and PushPlus delivery chain
@@ -136,8 +138,8 @@ Three curated skill directories
   -> Codex Automation builds an initial 8-12 candidate pool
   -> code filters exact-artifact history and repository frequency
   -> bounded replenishment when fewer than five remain eligible
-  -> Automation verifies exactly five primary sources
-  -> recommend, watch, or reject decisions
+  -> Automation verifies every eligible primary source
+  -> recommend, defer, or reject decisions
   -> deterministic v3 validation and rendering
   -> Markdown + quality Sidecar
   -> Windows forwarder validates the pair
@@ -433,7 +435,7 @@ npm run quality:summary
 | Worker production deployment | v3 compatibility deployed 2026-07-14 as Worker version `131b514d-9073-4f29-b98e-59afaf1e9b77`; `/health` and `/` returned 200 |
 | Real-device HTML comparison | Accepted 2026-07-09 |
 | Quality v2.1 calibration | Accepted after `no_update` and evidence-backed `published` shadow runs on 2026-07-12 |
-| Curated-source v3 simplification | Real Automation shadow passed with 11 candidates, 5 verified decisions, and 3 recommendations; Worker compatibility deployed and production prompt switched on 2026-07-14 |
+| Curated-source v3 simplification | Initial Automation shadow passed with 11 candidates, 5 verified decisions, and 3 recommendations; contract then expanded to verify every eligible candidate, persist 14/90-day review outcomes, and replace visible action labels with direct usage guidance before the first scheduled production run |
 | 14-day observation | Restarts on the first successful scheduled v3 production day |
 | 30-day acceptance | Not started |
 

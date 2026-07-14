@@ -1,7 +1,6 @@
 import { artifactKeyFor, canonicalizeUrl, stableSourceId } from "./report-structure.js";
 
-const DECISIONS = new Set(["recommend", "watch", "reject"]);
-const ACTIONS = new Set(["install", "adapt"]);
+const DECISIONS = new Set(["recommend", "defer", "reject"]);
 const COLLECTION_SCOPES = new Set(["general_skill_collection", "official_catalog", "mixed_toolkit"]);
 const DISPLAY_FIELDS = [
   "oneLiner", "whyNow", "bestFor", "action", "primaryCaution",
@@ -48,7 +47,6 @@ export function enrichCuratedReport(input, { recentSources = [] } = {}) {
     sourceUrl: decision.sourceUrl,
     canonicalUrl: decision.canonicalUrl,
     artifactKey: decision.artifactKey,
-    recommendation: decision.recommendation,
     discovery: decision.discovery,
     display: decision.display,
     quality: {
@@ -70,7 +68,7 @@ export function enrichCuratedReport(input, { recentSources = [] } = {}) {
       candidateCount: Number(draft.candidateCount || 0),
       selectedCount: items.length,
       duplicateCount: Number(draft.duplicateCount || 0),
-      watchCount: enrichedDecisions.filter((entry) => entry.decision === "watch").length,
+      deferredCount: enrichedDecisions.filter((entry) => entry.decision === "defer").length,
       rejectedCount: enrichedDecisions.filter((entry) => entry.decision === "reject").length,
       sourceCounts: draft.sourceCounts || {},
     },
@@ -86,8 +84,10 @@ export function validateCuratedReport(report) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(report.reportDate || "")) errors.push("reportDate must use YYYY-MM-DD");
   if (!localized(report.summary) || !localized(report.conclusion)) errors.push("summary and conclusion must be bilingual");
   if (report.stats?.candidateCount < 8 || report.stats?.candidateCount > 20) errors.push("candidateCount must be 8-20");
-  if (!Array.isArray(report.decisions) || report.decisions.length !== 5) errors.push("exactly five verified decisions are required");
-  if (!Array.isArray(report.items) || report.items.length > 5) errors.push("items must contain at most five recommendations");
+  if (!Array.isArray(report.decisions) || report.decisions.length < 5 || report.decisions.length > 20) errors.push("five to twenty verified decisions are required");
+  if (!Array.isArray(report.items) || report.items.length > 20) errors.push("items must contain at most twenty recommendations");
+  if (report.stats?.reviewedCount !== report.decisions.length) errors.push("reviewedCount must match decisions");
+  if (report.stats?.reviewedCount > report.stats?.candidateCount) errors.push("reviewedCount cannot exceed candidateCount");
   if (report.status === "published" && report.items.length < 1) errors.push("published requires at least one item");
   if (report.status === "no_update" && report.items.length !== 0) errors.push("no_update requires zero items");
   if (report.stats?.selectedCount !== report.items.length) errors.push("selectedCount must match items");
@@ -111,7 +111,6 @@ export function validateCuratedReport(report) {
     if (decisionArtifacts.has(decision.artifactKey)) errors.push(`${label} repeats another verified artifact`);
     decisionArtifacts.add(decision.artifactKey);
     if (decision.decision === "recommend") {
-      if (!ACTIONS.has(decision.recommendation)) errors.push(`${label}.recommendation must be install or adapt`);
       if (!localizedDisplay(decision.display)) errors.push(`${label}.display must contain all bilingual fields`);
       if (!selectedIds.has(decision.id)) errors.push(`${label} is missing from selected items`);
       if (repositories.has(decision.canonicalUrl)) errors.push("only one recommended artifact per repository is allowed");

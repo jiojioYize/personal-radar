@@ -217,7 +217,8 @@ Please read and execute prompts/skill-radar-local.md.
 ```
 
 That prompt builds a bounded candidate pool from three curated directories,
-applies code-owned artifact history, verifies five primary sources, and writes:
+applies code-owned artifact and review-state filters, verifies every eligible
+primary source, and writes:
 
 ```text
 reports/outbox/skill-radar-YYYY-MM-DD.quality.json

@@ -14,27 +14,29 @@ export function curatedFixture() {
       sourceUrl: "https://github.com/example/skills/tree/main/skills/example",
       artifactPath: "skills/example",
       decision: "recommend",
-      recommendation: "adapt",
       reason: "A concrete and portable workflow.",
       display: displayFixture(),
     },
-    watchDecision(base, "Watch One", "watch-one", "awesome-claude-skills"),
-    watchDecision(base, "Watch Two", "watch-two", "open-agent-skill"),
-    rejectDecision(base, "Reject One", "reject-one"),
-    rejectDecision(base, "Reject Two", "reject-two"),
+    deferDecision(base, "Defer One", "defer-one", "awesome-claude-skills"),
+    deferDecision(base, "Defer Two", "defer-two", "open-agent-skill"),
+    rejectDecision(base, "Reject One", "reject-one", "agent-plugins"),
+    rejectDecision(base, "Reject Two", "reject-two", "agent-plugins"),
+    rejectDecision(base, "Reject Three", "reject-three", "awesome-claude-skills"),
+    rejectDecision(base, "Reject Four", "reject-four", "awesome-claude-skills"),
+    rejectDecision(base, "Reject Five", "reject-five", "open-agent-skill"),
   ];
   return {
     reportDate: "2026-07-14",
     summary: { zh: "Today's simplified test.", en: "Today's simplified test." },
     conclusion: { zh: "Only verified items are recommended.", en: "Only verified items are recommended." },
-    candidateCount: 10,
+    candidateCount: 8,
     duplicateCount: 1,
-    sourceCounts: { awesomeClaudeSkills: 3, agentPlugins: 4, openAgentSkill: 3 },
+    sourceCounts: { awesomeClaudeSkills: 3, agentPlugins: 3, openAgentSkill: 2 },
     decisions,
   };
 }
 
-function watchDecision(base, title, slug, type) {
+function deferDecision(base, title, slug, type) {
   return {
     ...base,
     title,
@@ -42,18 +44,19 @@ function watchDecision(base, title, slug, type) {
     artifactScope: "individual_skill",
     artifactPath: null,
     discovery: { type, url: "https://example.com/directory" },
-    decision: "watch",
+    decision: "defer",
     reason: "Useful but needs more maintenance evidence.",
   };
 }
 
-function rejectDecision(base, title, slug) {
+function rejectDecision(base, title, slug, type) {
   return {
     ...base,
     title,
     sourceUrl: `https://github.com/example/${slug}`,
     artifactScope: "individual_skill",
     artifactPath: null,
+    discovery: { type, url: "https://example.com/directory" },
     decision: "reject",
     reason: "Not sufficiently reusable.",
   };

@@ -254,12 +254,16 @@ function renderPushHtml(report, reportUrl) {
   const cards = report.items.map((item, index) => {
     const display = item.display.zh;
     const border = index === 0 ? "#0b6b59" : "#d9ded7";
+    const actionTag = report.schemaVersion >= 3 || !item.recommendation
+      ? ""
+      : `<div style="font-size:12px;font-weight:700;color:#994d1f;text-transform:uppercase">${escapeHtml(item.recommendation)}</div>`;
     return [
       `<section style="border-left:4px solid ${border};padding:10px 12px;margin:12px 0;background:#f7f8f4">`,
-      `<div style="font-size:12px;font-weight:700;color:#994d1f;text-transform:uppercase">${escapeHtml(item.recommendation)}</div>`,
+      actionTag,
       `<h3 style="margin:2px 0 6px;font-size:17px">${escapeHtml(item.title)}</h3>`,
       `<p style="margin:4px 0">${escapeHtml(display.oneLiner)}</p>`,
       `<p style="margin:4px 0;color:#667064"><strong>适合：</strong>${escapeHtml(display.bestFor)}</p>`,
+      `<p style="margin:4px 0;color:#667064"><strong>怎么用：</strong>${escapeHtml(display.action)}</p>`,
       `<p style="margin:4px 0;color:#667064"><strong>注意：</strong>${escapeHtml(display.primaryCaution)}</p>`,
       "</section>",
     ].join("");
@@ -289,11 +293,15 @@ function renderPushMarkdown(report, reportUrl) {
 
   for (const item of report.items) {
     const display = item.display.zh;
+    const heading = report.schemaVersion >= 3 || !item.recommendation
+      ? `### ${item.title}`
+      : `### ${item.title} · ${item.recommendation}`;
     lines.push(
       "",
-      `### ${item.title} · ${item.recommendation}`,
+      heading,
       truncateText(display.oneLiner, 72),
       `- 适合：${truncateText(display.bestFor, 50)}`,
+      `- 怎么用：${truncateText(display.action, 72)}`,
       `- 注意：${truncateText(display.primaryCaution, 72)}`,
     );
   }
@@ -480,7 +488,7 @@ function renderStructuredReport(report, language) {
         duplicates: "Recent duplicates",
         bestFor: "Best for",
         caution: "Main caution",
-        action: "Recommended action",
+        action: "How to use",
         details: "Detailed analysis",
         whyNow: "Why it matters now",
         problem: "Problem solved",
@@ -498,7 +506,7 @@ function renderStructuredReport(report, language) {
         duplicates: "近期重复",
         bestFor: "适合",
         caution: "主要风险",
-        action: "建议行动",
+        action: "怎么用",
         details: "查看详细分析",
         whyNow: "为什么现在值得看",
         problem: "解决什么问题",
@@ -533,10 +541,13 @@ function renderStructuredReport(report, language) {
 
   const recommendations = report.items.map((item, index) => {
     const display = item.display[language];
+    const actionTag = report.schemaVersion >= 3 || !item.recommendation
+      ? ""
+      : `<span class="action-tag action-${escapeHtml(item.recommendation)}">${escapeHtml(item.recommendation)}</span>`;
     return [
       `<section class="recommendation${index === 0 ? " featured" : ""}">`,
       '<div class="recommendation-head">',
-      `<div><span class="recommendation-index">${item.rank}</span><span class="action-tag action-${escapeHtml(item.recommendation)}">${escapeHtml(item.recommendation)}</span></div>`,
+      `<div><span class="recommendation-index">${item.rank}</span>${actionTag}</div>`,
       `<span class="category-label">${escapeHtml(item.category)}</span>`,
       "</div>",
       `<h2>${escapeHtml(item.title)}</h2>`,

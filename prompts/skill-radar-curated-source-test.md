@@ -91,26 +91,28 @@ If fewer than five candidates remain eligible after those bounded attempts,
 end the run as a candidate-shortage failure. Do not write a curated draft, do
 not generate `no_update`, and do not weaken or override the history filter.
 
-## 4. Verify Five Primary Sources
+## 4. Verify Every Eligible Primary Source
 
-Choose exactly five eligible candidates based on apparent task usefulness,
+Open and verify every entry in `eligibleCandidates`. Do not perform another
+prompt-only shortlist. Order the decisions by apparent task usefulness,
 maintenance, adoption, and relevance to coding, documents, browser automation,
 data, design, GitHub, productivity, or context management.
 
 Open the canonical GitHub repository, exact skill directory, or official
-documentation for all five. Classify each as:
+documentation for every eligible candidate. Classify each as:
 
 - `recommend`: real reusable instructions, clear use case, usable native path,
   reasonable portability, and no unresolved major trust concern;
-- `watch`: useful but maintenance, portability, documentation, license,
-  permissions, or evidence remains uncertain;
+- `defer`: useful but maintenance, portability, documentation, license,
+  permissions, or evidence remains uncertain and should be reviewed later;
 - `reject`: not truly skill-like, inaccessible, deprecated, misleading, or
   unsafe without disproportionate review.
 
 Do not assign numeric scores. For every decision record what it solves, primary
 evidence, native usability, portability, main trust caveat, and one concise
-decision reason. A network or research failure is a failed run, not
-`no_update`.
+decision reason. Use `no_update` only when every eligible candidate was
+verified and none was `recommend`. A network or research failure is a failed
+run, not `no_update`.
 
 ## 5. Write Curated Draft
 
@@ -124,7 +126,8 @@ Required top-level fields:
 
 - `reportDate`;
 - bilingual `summary` and `conclusion` with `zh` and `en`;
-- `decisions` containing exactly five entries.
+- `decisions` containing exactly one entry for every eligible candidate, in
+  recommendation priority order.
 
 Do not write candidate counts, duplicate counts, or source counts into the
 draft. The finalizer calculates them from the filtered candidate file.
@@ -137,18 +140,20 @@ Every decision requires:
   known license or `null`.
 
 The finalizer replaces title, source, artifact identity, and discovery fields
-with the authoritative values from the filtered candidate file. Do not select
-the same artifact more than once.
+with the authoritative values from the filtered candidate file. It rejects
+drafts that omit an eligible artifact or select the same artifact more than
+once.
 
-For each `recommend` decision also provide:
+For each `recommend` decision also provide bilingual `display.zh` and
+`display.en`. In each language include:
 
-- `recommendation`: `install` or `adapt`;
-- bilingual `display.zh` and `display.en`;
-- in each language: `oneLiner`, `whyNow`, `bestFor`, `action`,
+- `oneLiner`, `whyNow`, `bestFor`, `action`,
   `primaryCaution`, `problem`, `usability`, `adaptation`, and `trust`.
 
 Keep names, commands, URLs, and identifiers in English. Do not include raw
-HTML. `watch` and `reject` decisions do not need display content.
+HTML. `defer` and `reject` decisions do not need display content. The finalizer
+stores `defer` for a 14-day cooldown and `reject` for a 90-day cooldown; do not
+calculate or write those dates yourself.
 
 ## 6. Finalize
 
@@ -168,6 +173,6 @@ reports/shadow/outbox/skill-radar-YYYY-MM-DD.quality.json
 reports/shadow/outbox/skill-radar-YYYY-MM-DD.md
 ```
 
-After success report the date, candidate count, code-excluded count, five
-decision counts, output paths, production files changed (`no`), and forwarding
+After success report the date, candidate count, code-excluded count, decision
+counts, output paths, production files changed (`no`), and forwarding
 (`disabled`).

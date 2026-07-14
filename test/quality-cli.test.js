@@ -282,6 +282,14 @@ test("history v2 archives legacy repository records and filters exact artifacts"
         discoveryType: "awesomeClaudeSkills",
         discoveryUrl: "https://awesomeclaudeskills.com/example",
       },
+      {
+        title: "DOCX Skill duplicate listing",
+        sourceUrl: "https://github.com/example/collection/tree/main/skills/docx",
+        artifactScope: "general_skill_collection",
+        artifactPath: "skills/docx",
+        discoveryType: "openAgentSkill",
+        discoveryUrl: "https://www.openagentskill.com/skills/example-docx",
+      },
     ],
   }), "utf8");
   await execFileAsync(
@@ -303,8 +311,9 @@ test("history v2 archives legacy repository records and filters exact artifacts"
   assert.equal(filtered.version, 2);
   assert.equal(filtered.minimumEligibleCandidates, 5);
   assert.equal(filtered.needsReplenishment, true);
-  assert.equal(filtered.excludedCandidates.length, 1);
+  assert.equal(filtered.excludedCandidates.length, 2);
   assert.equal(filtered.excludedCandidates[0].history.exclusionReason, "exact-artifact-within-30-days");
+  assert.equal(filtered.excludedCandidates[1].history.exclusionReason, "duplicate-in-candidate-pool");
   assert.equal(filtered.eligibleCandidates.length, 1);
   assert.match(filtered.eligibleCandidates[0].artifactKey, /#artifact=skills\/docx$/);
   assert.equal(filtered.eligibleCandidates[0].discoveryUrl, "https://awesomeclaudeskills.com/example");
@@ -340,17 +349,6 @@ test("quality CLI finalizes a code-filtered curated v3 report", async () => {
     discoveryType: typeMap[decision.discovery.type],
     discoveryUrl: decision.discovery.url,
   }));
-  for (let index = 0; index < 5; index += 1) {
-    candidates.push({
-      title: `Extra ${index}`,
-      sourceUrl: `https://github.com/example/extra-${index}`,
-      artifactScope: "individual_skill",
-      artifactPath: null,
-      discoveryType: ["awesomeClaudeSkills", "agentPlugins", "openAgentSkill"][index % 3],
-      discoveryUrl: ["https://awesomeclaudeskills.com/", "https://github.com/dmgrok/agent-plugins", "https://www.openagentskill.com/skills"][index % 3],
-    });
-  }
-
   await fs.writeFile(path.join(stateDir, "curated-candidates.json"), JSON.stringify({
     asOf: draft.reportDate,
     candidates,
@@ -363,6 +361,20 @@ test("quality CLI finalizes a code-filtered curated v3 report", async () => {
       "filter-candidates", "--input", "reports/state/curated-candidates.json", "--date", draft.reportDate,
     ],
     { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+  );
+  const incompleteDraft = { ...draft, decisions: draft.decisions.slice(0, -1) };
+  await fs.writeFile(path.join(stateDir, "curated-incomplete.json"), JSON.stringify(incompleteDraft), "utf8");
+  await assert.rejects(
+    execFileAsync(
+      process.execPath,
+      [
+        path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+        "finalize-curated", "--input", "reports/state/curated-incomplete.json",
+        "--candidates", "reports/state/skill-radar-candidates-filtered.json",
+      ],
+      { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+    ),
+    /curated decisions must cover every eligible candidate/,
   );
   const result = await execFileAsync(
     process.execPath,
@@ -379,10 +391,33 @@ test("quality CLI finalizes a code-filtered curated v3 report", async () => {
     "utf8",
   ));
   assert.equal(sidecar.schemaVersion, 3);
-  assert.equal(sidecar.stats.candidateCount, 10);
-  assert.equal(sidecar.stats.reviewedCount, 5);
+  assert.equal(sidecar.stats.candidateCount, 8);
+  assert.equal(sidecar.stats.reviewedCount, 8);
   assert.equal(sidecar.items.length, 1);
+  assert.equal("recommendation" in sidecar.items[0], false);
   assert.equal("baseScore" in sidecar.items[0].quality, false);
+  const reviewState = JSON.parse(await fs.readFile(
+    path.join(stateDir, "skill-radar-review-state.json"),
+    "utf8",
+  ));
+  assert.equal(reviewState.entries.filter((entry) => entry.outcome === "defer").length, 2);
+  assert.equal(reviewState.entries.filter((entry) => entry.outcome === "reject").length, 5);
+
+  await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "filter-candidates", "--input", "reports/state/curated-candidates.json", "--date", "2099-02-02",
+    ],
+    { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+  );
+  const cooled = JSON.parse(await fs.readFile(
+    path.join(stateDir, "skill-radar-candidates-filtered.json"),
+    "utf8",
+  ));
+  assert.equal(cooled.eligibleCandidates.length, 0);
+  assert.equal(cooled.excludedCandidates.filter((candidate) => candidate.history.exclusionReason.startsWith("defer-until-")).length, 2);
+  assert.equal(cooled.excludedCandidates.filter((candidate) => candidate.history.exclusionReason.startsWith("reject-until-")).length, 5);
 
   await fs.rm(root, { recursive: true, force: true });
 });

@@ -97,7 +97,10 @@ async function filterCandidates(options) {
   const asOf = normalizeDate(options.date || input.asOf || beijingDate());
   const history = await buildHistory(asOf, null, { includeShadow: paths.shadow });
   const recentByArtifact = new Map(history.sources.map((entry) => [entry.artifactKey, entry]));
+  const reviewState = await readJson(paths.reviewStatePath, { version: 1, channel: "skill-radar", entries: [] });
+  const reviewByArtifact = new Map((reviewState.entries || []).map((entry) => [entry.artifactKey, entry]));
   const sevenDayCutoff = addDays(asOf, -7);
+  const seenCandidateArtifacts = new Set();
 
   const candidates = input.candidates.map((candidate, index) => {
     const title = String(candidate.title || "").trim();
@@ -130,7 +133,10 @@ async function filterCandidates(options) {
     };
     const canonicalUrl = canonicalizeUrl(sourceUrl);
     const artifactKey = artifactKeyFor(item);
+    const duplicateInCandidatePool = seenCandidateArtifacts.has(artifactKey);
+    seenCandidateArtifacts.add(artifactKey);
     const prior = recentByArtifact.get(artifactKey);
+    const priorReview = reviewByArtifact.get(artifactKey);
     const repositoryDates = history.sources
       .filter((entry) => entry.canonicalUrl === canonicalUrl)
       .flatMap((entry) => entry.dates)
@@ -139,12 +145,19 @@ async function filterCandidates(options) {
       && Boolean(String(candidate.changeEvidence || "").trim());
     const exactDuplicate = Boolean(prior);
     const repositoryAppearances7d = new Set(repositoryDates).size;
-    const eligible = materialChange || (!exactDuplicate && repositoryAppearances7d < 2);
+    const reviewBlocked = ["defer", "reject"].includes(priorReview?.outcome)
+      && String(priorReview.reviewAfter || "") > asOf;
+    const eligible = !duplicateInCandidatePool
+      && (materialChange || (!exactDuplicate && repositoryAppearances7d < 2 && !reviewBlocked));
     const exclusionReason = eligible
       ? null
-      : exactDuplicate
+      : duplicateInCandidatePool
+        ? "duplicate-in-candidate-pool"
+        : exactDuplicate
         ? "exact-artifact-within-30-days"
-        : "repository-appeared-twice-within-7-days";
+        : repositoryAppearances7d >= 2
+          ? "repository-appeared-twice-within-7-days"
+          : `${priorReview.outcome}-until-${priorReview.reviewAfter}`;
 
     return {
       ...candidate,
@@ -157,8 +170,11 @@ async function filterCandidates(options) {
       id: stableSourceId(artifactKey),
       history: {
         exactDuplicate,
+        duplicateInCandidatePool,
         previousDates: prior?.dates || [],
         repositoryAppearances7d,
+        previousOutcome: priorReview?.outcome || null,
+        reviewAfter: priorReview?.reviewAfter || null,
         materialChange,
         eligible,
         exclusionReason,
@@ -249,7 +265,9 @@ async function finalizeCuratedReport(options) {
   const deterministicRaw = {
     ...raw,
     candidateCount: filtered.candidates.length,
-    duplicateCount: filtered.excludedCandidates.filter((candidate) => candidate.history?.exactDuplicate).length,
+    duplicateCount: filtered.excludedCandidates.filter((candidate) =>
+      candidate.history?.exactDuplicate || candidate.history?.duplicateInCandidatePool
+    ).length,
     sourceCounts,
   };
   const reportDate = normalizeDate(deterministicRaw.reportDate || beijingDate());
@@ -260,6 +278,7 @@ async function finalizeCuratedReport(options) {
     filtered.eligibleCandidates.map((candidate) => [candidate.artifactKey, candidate]),
   );
   const boundDecisions = (Array.isArray(deterministicRaw.decisions) ? deterministicRaw.decisions : []).map((decision) => {
+    const { recommendation: _legacyRecommendation, ...decisionWithoutLegacyAction } = decision;
     const identityInput = {
       sourceUrl: String(decision.sourceUrl || ""),
       quality: {
@@ -275,7 +294,7 @@ async function finalizeCuratedReport(options) {
       throw new Error(`curated decision was not eligible after code filtering: ${decision.title || artifactKey}`);
     }
     return {
-      ...decision,
+      ...decisionWithoutLegacyAction,
       title: candidate.title,
       sourceUrl: candidate.sourceUrl,
       artifactScope: candidate.artifactScope,
@@ -286,6 +305,14 @@ async function finalizeCuratedReport(options) {
       },
     };
   });
+  const decisionArtifactKeys = new Set(boundDecisions.map((decision) => artifactKeyFor({
+    sourceUrl: decision.sourceUrl,
+    quality: { evidence: { artifactScope: decision.artifactScope, artifactPath: decision.artifactPath } },
+  })));
+  const missingDecision = filtered.eligibleCandidates.find((candidate) => !decisionArtifactKeys.has(candidate.artifactKey));
+  if (boundDecisions.length !== filtered.eligibleCandidates.length || missingDecision) {
+    throw new Error(`curated decisions must cover every eligible candidate${missingDecision ? `; missing: ${missingDecision.title}` : ""}`);
+  }
   deterministicRaw.decisions = boundDecisions;
   const sidecarPath = path.join(paths.outboxDir, `skill-radar-${reportDate}.quality.json`);
   const history = await buildHistory(reportDate, sidecarPath, { includeShadow: paths.shadow });
@@ -306,6 +333,7 @@ async function finalizeCuratedReport(options) {
   const markdownPath = path.join(paths.outboxDir, `skill-radar-${reportDate}.md`);
   await writeJson(sidecarPath, enriched);
   await fs.writeFile(markdownPath, renderMarkdown(enriched), "utf8");
+  await updateCuratedReviewState(paths.reviewStatePath, enriched.decisions, reportDate);
   await writeJson(paths.historyPath, await buildHistory(reportDate, null, { includeShadow: paths.shadow }));
   console.log(`Finalized${paths.shadow ? " shadow" : ""} curated report: ${relative(sidecarPath)}`);
   console.log(`Rendered bilingual Markdown: ${relative(markdownPath)}`);
@@ -317,6 +345,33 @@ function discoveryLabel(discoveryType) {
     agentPlugins: "agent-plugins",
     openAgentSkill: "open-agent-skill",
   }[discoveryType];
+}
+
+async function updateCuratedReviewState(reviewStatePath, decisions, reportDate) {
+  const state = await readJson(reviewStatePath, { version: 1, channel: "skill-radar", entries: [] });
+  const entries = new Map((state.entries || []).map((entry) => [entry.artifactKey, entry]));
+  for (const decision of decisions) {
+    if (decision.decision === "recommend") {
+      entries.delete(decision.artifactKey);
+      continue;
+    }
+    const cooldownDays = decision.decision === "defer" ? 14 : 90;
+    entries.set(decision.artifactKey, {
+      artifactKey: decision.artifactKey,
+      canonicalUrl: decision.canonicalUrl,
+      title: decision.title,
+      outcome: decision.decision,
+      reason: decision.reason,
+      reviewedAt: reportDate,
+      reviewAfter: addDays(reportDate, cooldownDays),
+    });
+  }
+  await writeJson(reviewStatePath, {
+    version: 1,
+    channel: "skill-radar",
+    updatedAt: reportDate,
+    entries: [...entries.values()].sort((a, b) => a.artifactKey.localeCompare(b.artifactKey)),
+  });
 }
 
 async function recordFeedback(options) {
@@ -573,7 +628,7 @@ function renderLanguage(report, language) {
         usability: "可用性",
         adaptation: "平台适配",
         trust: "信任/安全",
-        recommendation: "建议",
+        recommendation: "怎么用",
         conclusion: "今日结论",
       }
     : {
@@ -585,7 +640,7 @@ function renderLanguage(report, language) {
         usability: "Usability",
         adaptation: "Platform adaptation",
         trust: "Trust/security",
-        recommendation: "Recommendation",
+        recommendation: "How to use",
         conclusion: "Bottom line",
       };
   const lines = [`<!-- ${marker} -->`, heading, "", report.summary[language]];
@@ -609,7 +664,7 @@ function renderLanguage(report, language) {
       `- **${labels.usability}:** ${display.usability}`,
       `- **${labels.adaptation}:** ${display.adaptation}`,
       `- **${labels.trust}:** ${display.trust}`,
-      `- **${labels.recommendation}:** **${item.recommendation}** - ${display.action}`,
+      `- **${labels.recommendation}:** ${display.action}`,
     );
   }
 
@@ -689,6 +744,9 @@ async function ensureLocalFiles(paths = runtimePaths({})) {
   ]);
   if (!(await exists(FEEDBACK_PATH))) await writeJson(FEEDBACK_PATH, { version: 1, entries: [] });
   if (!(await exists(SOCIAL_PATH))) await writeJson(SOCIAL_PATH, emptyInbox());
+  if (!(await exists(paths.reviewStatePath))) {
+    await writeJson(paths.reviewStatePath, { version: 1, channel: "skill-radar", entries: [] });
+  }
 }
 
 function emptyInbox() {
@@ -704,6 +762,7 @@ function runtimePaths(options) {
     stateDir,
     historyPath: path.join(stateDir, "skill-radar-history.json"),
     contextPath: path.join(stateDir, "skill-radar-context.json"),
+    reviewStatePath: path.join(stateDir, "skill-radar-review-state.json"),
   };
 }
 
