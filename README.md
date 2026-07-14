@@ -198,16 +198,17 @@ Local Codex Automation is suitable for scheduled research and report generation,
 
 - `prompts/skill-radar-local.md`: production prompt for local automation.
 
-Before Automation runs, collect deterministic GitHub candidates and repository
-metrics:
+The current curated-source v3 production flow does not require the GitHub
+collector. The following command is retained only for optional evidence-scoring
+experiments:
 
 ```powershell
 npm run discovery:github
 ```
 
 This writes local-only SQLite snapshots and
-`reports/inbox/github-candidates.json`. See
-`tools/discovery/README.md` for token and Windows scheduling guidance.
+`reports/inbox/github-candidates.json`. Do not schedule it for the standard v3
+flow. See `tools/discovery/README.md` for the archived experiment details.
 
 For the formal daily automation, use:
 
@@ -215,8 +216,8 @@ For the formal daily automation, use:
 Please read and execute prompts/skill-radar-local.md.
 ```
 
-That prompt prepares local history and feedback, validates a structured report,
-and writes:
+That prompt builds a bounded candidate pool from three curated directories,
+applies code-owned artifact history, verifies five primary sources, and writes:
 
 ```text
 reports/outbox/skill-radar-YYYY-MM-DD.quality.json

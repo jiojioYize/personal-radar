@@ -1,8 +1,10 @@
-# GitHub Discovery Collector
+# GitHub Discovery Collector (Optional Experiment)
 
-This deterministic collector runs before Codex Automation. It uses the GitHub
-API to discover repositories, enumerate concrete skill/rule artifacts, store
-daily metrics in local SQLite, and export an Automation-readable evidence pack.
+This Stage 2.1 experiment is not part of the current curated-source v3
+production flow. It remains available for offline evidence-scoring research.
+It uses the GitHub API to discover repositories, enumerate concrete skill/rule
+artifacts, store daily metrics in local SQLite, and export an
+Automation-readable evidence pack.
 
 Run it with:
 
@@ -38,13 +40,18 @@ If collection fails, the previous database and evidence pack remain intact.
 All repository searches explicitly include `is:public`; authenticated discovery
 does not ingest private repositories.
 
-## Windows Task Scheduler
+## Windows Task Scheduler (Legacy)
 
-Create a daily task before Codex Automation, for example 07:10 Beijing time.
+Do not create or enable this task for the standard v3 flow. If the old 07:10
+collector task still exists, disable it unless the evidence-scoring experiment
+is intentionally resumed.
+
+Legacy task configuration:
 
 - Program: `powershell.exe`
 - Arguments: `-NoProfile -ExecutionPolicy Bypass -File "tools\discovery\run-github-discovery.ps1"`
 - Start in: the cloned `personal-radar` directory
 
-Codex Automation can then run at 07:30 and read the exported candidate evidence
-pack through the normal quality context. The forwarder schedule is unchanged.
+The v2.1 Automation could run at 07:30 and read the exported candidate evidence
+pack. The v3 Automation ignores this output; the forwarder schedule is
+unchanged.

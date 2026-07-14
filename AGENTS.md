@@ -25,7 +25,8 @@ The user wants practical recommendations that are worth installing, adapting, wa
 Current recommended production flow:
 
 ```text
-GitHub collector -> SQLite + candidate evidence pack -> Local Codex Automation
+Three curated skill directories -> Local Codex Automation
+-> code-owned artifact history filter -> five primary-source decisions
 -> reports/outbox -> local forwarder -> Worker /ingest-report
 -> KV + public site + PushPlus
 ```
@@ -34,7 +35,9 @@ Local Codex Automation can read/write project files and run on schedule, but its
 
 ## Schedule
 
-- Desired GitHub discovery collector schedule: daily at Beijing time 07:10.
+- The Stage 2.1 GitHub collector is no longer required by the v3 production
+  flow and should remain disabled unless the evidence-scoring experiment is
+  intentionally resumed.
 - Desired Codex deep-dive schedule: daily at Beijing time 07:30.
 - Worker cron publishing is disabled. If a Worker cron trigger fires, it should be ignored.
 - The local forwarder should run after the Codex automation schedule, for example 08:20 Beijing time.
@@ -51,10 +54,10 @@ Formal daily automation should read and execute:
 prompts/skill-radar-local.md
 ```
 
-Manual Stage 2 shadow runs should read and execute:
+Manual v3 shadow runs should read and execute:
 
 ```text
-prompts/skill-radar-shadow.md
+prompts/skill-radar-curated-source-test.md
 ```
 
 Shadow runs write only to `reports/shadow/` and must never invoke the forwarder.
@@ -122,14 +125,17 @@ Stage 2 implementation and acceptance are maintained in
 Current Stage 2 production rules:
 
 1. The quality Sidecar is the source of truth; Markdown is generated from it.
-2. One to six qualified items produce `published`; zero produces `no_update`.
+2. Automation verifies exactly five distinct eligible artifacts. One to five
+   `recommend` decisions produce `published`; zero produces `no_update`.
 3. System failures must not be represented as `no_update`.
-4. X is an auxiliary web-search and inbox source; no scraper or X API is used.
-5. KV remains the production store and supports version 1 and version 2 reports.
+4. Daily discovery uses Awesome Claude Skills, Agent Plugins, and
+   OpenAgentSkill. The initial pool is 8-12 candidates and may be replenished
+   to 20 over at most three filter passes when fewer than five remain eligible.
+5. KV remains the production store and the Worker reads report schema versions
+   1, 2, and 3.
 6. PushPlus uses the accepted HTML card format; Markdown remains a compatibility option.
-7. Quality v2.1 requires exact evidence-field bindings, at least 15 reviewed
-   candidates, three discovery lanes, and real OSS Insight and RadarAI search
-   attempts before a report can pass.
+7. Model-generated numeric scoring is not used in v3. Automation records
+   `recommend`, `watch`, or `reject` with explicit primary-source reasons.
 8. Multi-skill repositories use artifact-level 30-day identity, with at most
    one artifact per repository per report and two repository appearances in the
    preceding seven days unless a material change is evidenced.

@@ -10,9 +10,9 @@ On 2026-07-14, two consecutive Automation shadow tests showed that bounded
 curated-source discovery and qualitative primary-source review were more stable
 than the Quality v2.1 seven-dimension evidence workflow. Stage 2 is therefore
 moving toward a simplified version 3 contract. A real Automation-generated v3
-Sidecar and Markdown pair passed shadow validation on 2026-07-14. Production
-remains on version 2 until the accepted local changes are committed, the Worker
-v3 compatibility code is deployed, and the production prompt is switched.
+Sidecar and Markdown pair passed shadow validation on 2026-07-14. Worker v3
+compatibility was deployed and the production prompt was switched the same
+day. The first scheduled v3 production report is pending.
 
 The v3 direction is:
 
@@ -127,21 +127,18 @@ and the lack of preference evidence.
 
 ## Production Data Flow
 
-The currently deployed production task still follows the Quality v2.1 flow
-below. The v3 replacement passed its first real Automation shadow run on
-2026-07-14 but has not yet been enabled in production.
+The production task now follows the curated-source v3 flow below. Quality v2.1
+and the deterministic GitHub collector remain documented as completed
+experiments but are no longer part of the daily production path.
 
 ```text
-Windows GitHub discovery collector
-  -> GitHub API repository and artifact discovery
-  -> local SQLite metric snapshots
-  -> reports/inbox/github-candidates.json
-Codex Automation
-  -> prepare local history and feedback context
-  -> read deterministic candidate evidence
-  -> deeply inspect shortlisted candidates
-  -> write structured draft
-  -> validate, score, and render
+Three curated skill directories
+  -> Codex Automation builds an initial 8-12 candidate pool
+  -> code filters exact-artifact history and repository frequency
+  -> bounded replenishment when fewer than five remain eligible
+  -> Automation verifies exactly five primary sources
+  -> recommend, watch, or reject decisions
+  -> deterministic v3 validation and rendering
   -> Markdown + quality Sidecar
   -> Windows forwarder validates the pair
   -> Worker /ingest-report
@@ -433,11 +430,11 @@ npm run quality:summary
 | Automated tests and Worker bundle dry run | Passed |
 | Desktop and 390px visual verification | Pending local preview access |
 | Three successful shadow reports | 3 of 3 passed |
-| Worker production deployment | Quality v2.1 deployed 2026-07-12 as Worker version `da93279a-ec58-4c55-8da4-c1abb1761971`; `/health` and `/` returned 200 |
+| Worker production deployment | v3 compatibility deployed 2026-07-14 as Worker version `131b514d-9073-4f29-b98e-59afaf1e9b77`; `/health` and `/` returned 200 |
 | Real-device HTML comparison | Accepted 2026-07-09 |
 | Quality v2.1 calibration | Accepted after `no_update` and evidence-backed `published` shadow runs on 2026-07-12 |
-| Curated-source v3 simplification | History v2, bounded replenishment, candidate filter, v3 schema, renderer compatibility, forwarder validation, and Worker dry-run implemented locally; real Automation v3 shadow passed on 2026-07-14 with 11 candidates, 5 verified decisions, and 3 recommendations |
-| 14-day observation | Restarts on the first production day after Quality v2.1 deployment |
+| Curated-source v3 simplification | Real Automation shadow passed with 11 candidates, 5 verified decisions, and 3 recommendations; Worker compatibility deployed and production prompt switched on 2026-07-14 |
+| 14-day observation | Restarts on the first successful scheduled v3 production day |
 | 30-day acceptance | Not started |
 
 The observation clock starts on the day after the structured website and the
