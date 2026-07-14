@@ -2,6 +2,7 @@ import {
   enrichStructuredReport,
   validateStructuredSemantics,
 } from "./report-structure.js";
+import { validateCuratedReport } from "./curated-report.js";
 
 const DEFAULT_CATEGORY = "skill-radar";
 const DEFAULT_TIME_ZONE = "Asia/Shanghai";
@@ -151,15 +152,20 @@ function normalizeIngestedStructuredReport(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("structuredReport must be an object");
   }
-  if (Number(input.schemaVersion) !== 2) {
+  const schemaVersion = Number(input.schemaVersion);
+  if (![2, 3].includes(schemaVersion)) {
     throw new Error("Unsupported structuredReport schemaVersion");
   }
   if (input.channel !== DEFAULT_CATEGORY) {
     throw new Error("structuredReport channel must be skill-radar");
   }
 
-  const report = enrichStructuredReport(input, { preservePreference: true });
-  const errors = validateStructuredSemantics(report);
+  const report = schemaVersion === 2
+    ? enrichStructuredReport(input, { preservePreference: true })
+    : structuredClone(input);
+  const errors = schemaVersion === 2
+    ? validateStructuredSemantics(report)
+    : validateCuratedReport(report);
   const requiredLocalized = [report.summary, report.conclusion];
   if (requiredLocalized.some((value) => !value?.zh?.trim() || !value?.en?.trim())) {
     errors.push("structuredReport requires bilingual summary and conclusion");
@@ -184,6 +190,9 @@ function normalizeIngestedStructuredReport(input) {
 
   if (containsRawHtml(report.summary) || containsRawHtml(report.conclusion)) {
     errors.push("structuredReport summary and conclusion must not contain raw HTML");
+  }
+  if (schemaVersion === 3 && containsRawHtml(report.decisions)) {
+    errors.push("structuredReport decisions must not contain raw HTML");
   }
   if (errors.length) {
     throw new Error(`Invalid structuredReport: ${errors.join("; ")}`);

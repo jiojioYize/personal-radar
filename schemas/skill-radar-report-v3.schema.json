@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar.dailyingest.cn/schemas/skill-radar-report-v3.json",
+  "title": "Personal Radar curated-source skill report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "channel", "reportDate", "summary", "conclusion", "stats", "items", "decisions"],
+  "properties": {
+    "schemaVersion": { "const": 3 },
+    "status": { "enum": ["published", "no_update"] },
+    "channel": { "const": "skill-radar" },
+    "reportDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "summary": { "$ref": "#/$defs/localizedText" },
+    "conclusion": { "$ref": "#/$defs/localizedText" },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewedCount", "candidateCount", "selectedCount", "duplicateCount", "watchCount", "rejectedCount", "sourceCounts"],
+      "properties": {
+        "reviewedCount": { "const": 5 },
+        "candidateCount": { "type": "integer", "minimum": 8, "maximum": 20 },
+        "selectedCount": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "duplicateCount": { "type": "integer", "minimum": 0 },
+        "watchCount": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "rejectedCount": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "sourceCounts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } }
+      }
+    },
+    "items": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/item" } },
+    "decisions": { "type": "array", "minItems": 5, "maxItems": 5, "items": { "$ref": "#/$defs/decision" } }
+  },
+  "$defs": {
+    "text": { "type": "string", "minLength": 1 },
+    "httpsUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+    "localizedText": {
+      "type": "object", "additionalProperties": false, "required": ["zh", "en"],
+      "properties": { "zh": { "$ref": "#/$defs/text" }, "en": { "$ref": "#/$defs/text" } }
+    },
+    "display": {
+      "type": "object", "additionalProperties": false,
+      "required": ["oneLiner", "whyNow", "bestFor", "action", "primaryCaution", "problem", "usability", "adaptation", "trust"],
+      "properties": {
+        "oneLiner": { "$ref": "#/$defs/text" }, "whyNow": { "$ref": "#/$defs/text" },
+        "bestFor": { "$ref": "#/$defs/text" }, "action": { "$ref": "#/$defs/text" },
+        "primaryCaution": { "$ref": "#/$defs/text" }, "problem": { "$ref": "#/$defs/text" },
+        "usability": { "$ref": "#/$defs/text" }, "adaptation": { "$ref": "#/$defs/text" },
+        "trust": { "$ref": "#/$defs/text" }
+      }
+    },
+    "discovery": {
+      "type": "object", "additionalProperties": false, "required": ["type", "url"],
+      "properties": { "type": { "enum": ["awesome-claude-skills", "agent-plugins", "open-agent-skill"] }, "url": { "$ref": "#/$defs/httpsUrl" } }
+    },
+    "history": {
+      "type": "object", "additionalProperties": false, "required": ["exactDuplicate", "previousDates"],
+      "properties": {
+        "exactDuplicate": { "type": "boolean" },
+        "previousDates": { "type": "array", "items": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" } }
+      }
+    },
+    "quality": {
+      "type": "object", "additionalProperties": false, "required": ["sourceCheckedAt", "license", "history"],
+      "properties": {
+        "sourceCheckedAt": { "type": "string", "format": "date-time" },
+        "license": { "type": ["string", "null"] },
+        "history": { "$ref": "#/$defs/history" }
+      }
+    },
+    "item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "rank", "title", "category", "sourceUrl", "canonicalUrl", "artifactKey", "recommendation", "discovery", "display", "quality"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^src_[a-f0-9]{8}$" }, "rank": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "title": { "$ref": "#/$defs/text" }, "category": { "$ref": "#/$defs/text" },
+        "sourceUrl": { "$ref": "#/$defs/httpsUrl" }, "canonicalUrl": { "$ref": "#/$defs/httpsUrl" },
+        "artifactKey": { "$ref": "#/$defs/text" }, "recommendation": { "enum": ["install", "adapt"] },
+        "discovery": { "$ref": "#/$defs/discovery" },
+        "display": { "type": "object", "additionalProperties": false, "required": ["zh", "en"], "properties": { "zh": { "$ref": "#/$defs/display" }, "en": { "$ref": "#/$defs/display" } } },
+        "quality": { "$ref": "#/$defs/quality" }
+      }
+    },
+    "decision": {
+      "type": "object", "additionalProperties": true,
+      "required": ["id", "title", "category", "sourceUrl", "canonicalUrl", "artifactKey", "artifactScope", "artifactPath", "discovery", "decision", "reason", "officialSourceVerified", "sourceCheckedAt", "license", "history"],
+      "properties": {
+        "id": { "type": "string" }, "title": { "$ref": "#/$defs/text" }, "category": { "$ref": "#/$defs/text" },
+        "sourceUrl": { "$ref": "#/$defs/httpsUrl" }, "canonicalUrl": { "$ref": "#/$defs/httpsUrl" }, "artifactKey": { "$ref": "#/$defs/text" },
+        "artifactScope": { "type": "string" }, "artifactPath": { "type": ["string", "null"] },
+        "discovery": { "$ref": "#/$defs/discovery" }, "decision": { "enum": ["recommend", "watch", "reject"] },
+        "reason": { "$ref": "#/$defs/text" }, "recommendation": { "enum": ["install", "adapt"] },
+        "officialSourceVerified": { "const": true }, "sourceCheckedAt": { "type": "string", "format": "date-time" },
+        "license": { "type": ["string", "null"] }, "history": { "$ref": "#/$defs/history" }
+      }
+    }
+  }
+}

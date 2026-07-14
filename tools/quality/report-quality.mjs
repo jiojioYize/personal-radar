@@ -10,6 +10,7 @@ import {
   stableSourceId,
   validateStructuredSemantics,
 } from "../../src/report-structure.js";
+import { enrichCuratedReport, validateCuratedReport } from "../../src/curated-report.js";
 
 const ROOT = process.env.PERSONAL_RADAR_ROOT
   ? path.resolve(process.env.PERSONAL_RADAR_ROOT)
@@ -23,12 +24,14 @@ const SHADOW_DIR = path.join(ROOT, "reports", "shadow");
 const SHADOW_OUTBOX_DIR = path.join(SHADOW_DIR, "outbox");
 const SHADOW_STATE_DIR = path.join(SHADOW_DIR, "state");
 const HISTORY_PATH = path.join(STATE_DIR, "skill-radar-history.json");
+const HISTORY_V1_ARCHIVE_PATH = path.join(STATE_DIR, "skill-radar-history-v1-archive.json");
 const CONTEXT_PATH = path.join(STATE_DIR, "skill-radar-context.json");
 const FEEDBACK_PATH = path.join(FEEDBACK_DIR, "skill-radar.json");
 const SOCIAL_PATH = path.join(INBOX_DIR, "social-candidates.json");
 const GITHUB_CANDIDATES_PATH = path.join(INBOX_DIR, "github-candidates.json");
 const SUMMARY_PATH = path.join(QUALITY_DIR, "skill-radar-summary.md");
 const SCHEMA_PATH = path.join(ROOT, "schemas", "skill-radar-report.schema.json");
+const CURATED_SCHEMA_PATH = path.join(ROOT, "schemas", "skill-radar-report-v3.schema.json");
 
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0] || "help";
@@ -36,6 +39,8 @@ const command = args._[0] || "help";
 try {
   if (command === "prepare") await prepareContext(args);
   else if (command === "finalize") await finalizeReport(args);
+  else if (command === "finalize-curated") await finalizeCuratedReport(args);
+  else if (command === "filter-candidates") await filterCandidates(args);
   else if (command === "feedback") await recordFeedback(args);
   else if (command === "social-add") await addSocialCandidate(args);
   else if (command === "summary") await writeQualitySummary(args);
@@ -48,6 +53,7 @@ try {
 async function prepareContext(options) {
   const paths = runtimePaths(options);
   await ensureLocalFiles(paths);
+  if (!paths.shadow) await archiveLegacyHistory();
   const asOf = normalizeDate(options.date || beijingDate());
   const history = await buildHistory(asOf, null, { includeShadow: paths.shadow });
   const feedback = await readJson(FEEDBACK_PATH, { version: 1, entries: [] });
@@ -73,6 +79,108 @@ async function prepareContext(options) {
   console.log(`Prepared${paths.shadow ? " shadow" : ""} quality context: ${relative(paths.contextPath)}`);
   console.log(`Recent sources: ${history.sources.length}; pending social candidates: ${context.pendingSocialCandidates.length}`);
   console.log(`GitHub discovery candidates: ${context.githubDiscovery?.candidates?.length || 0}`);
+}
+
+async function filterCandidates(options) {
+  const paths = runtimePaths(options);
+  const inputPath = resolveRequiredInput(options.input, "filter-candidates");
+  const outputPath = options.output
+    ? resolveInput(options.output)
+    : path.join(paths.stateDir, "skill-radar-candidates-filtered.json");
+  const input = await readJsonRequired(inputPath);
+  if (!Array.isArray(input.candidates)) {
+    throw new Error("filter-candidates input requires a candidates array");
+  }
+
+  await ensureLocalFiles(paths);
+  if (!paths.shadow) await archiveLegacyHistory();
+  const asOf = normalizeDate(options.date || input.asOf || beijingDate());
+  const history = await buildHistory(asOf, null, { includeShadow: paths.shadow });
+  const recentByArtifact = new Map(history.sources.map((entry) => [entry.artifactKey, entry]));
+  const sevenDayCutoff = addDays(asOf, -7);
+
+  const candidates = input.candidates.map((candidate, index) => {
+    const title = String(candidate.title || "").trim();
+    if (!title) throw new Error(`candidates[${index}].title is required`);
+    const sourceUrl = String(candidate.sourceUrl || "").trim();
+    const discoveryType = String(candidate.discoveryType || "");
+    if (!["awesomeClaudeSkills", "agentPlugins", "openAgentSkill"].includes(discoveryType)) {
+      throw new Error(`candidates[${index}].discoveryType is invalid`);
+    }
+    const discoveryUrl = String(candidate.discoveryUrl || "").trim();
+    let parsedDiscoveryUrl;
+    try {
+      parsedDiscoveryUrl = new URL(discoveryUrl);
+    } catch {
+      throw new Error(`candidates[${index}].discoveryUrl is invalid`);
+    }
+    if (parsedDiscoveryUrl.protocol !== "https:") {
+      throw new Error(`candidates[${index}].discoveryUrl must use HTTPS`);
+    }
+    const artifactScope = String(candidate.artifactScope || "individual_skill");
+    const artifactPath = candidate.artifactPath == null ? null : String(candidate.artifactPath).trim();
+    if (["general_skill_collection", "official_catalog", "mixed_toolkit"].includes(artifactScope) && !artifactPath) {
+      throw new Error(`candidates[${index}] requires artifactPath for ${artifactScope}`);
+    }
+    const item = {
+      sourceUrl,
+      discoveryType,
+      discoveryUrl,
+      quality: { evidence: { artifactScope, artifactPath } },
+    };
+    const canonicalUrl = canonicalizeUrl(sourceUrl);
+    const artifactKey = artifactKeyFor(item);
+    const prior = recentByArtifact.get(artifactKey);
+    const repositoryDates = history.sources
+      .filter((entry) => entry.canonicalUrl === canonicalUrl)
+      .flatMap((entry) => entry.dates)
+      .filter((date) => date >= sevenDayCutoff && date < asOf);
+    const materialChange = candidate.materialChange === true
+      && Boolean(String(candidate.changeEvidence || "").trim());
+    const exactDuplicate = Boolean(prior);
+    const repositoryAppearances7d = new Set(repositoryDates).size;
+    const eligible = materialChange || (!exactDuplicate && repositoryAppearances7d < 2);
+    const exclusionReason = eligible
+      ? null
+      : exactDuplicate
+        ? "exact-artifact-within-30-days"
+        : "repository-appeared-twice-within-7-days";
+
+    return {
+      ...candidate,
+      title,
+      sourceUrl,
+      artifactScope,
+      artifactPath,
+      canonicalUrl,
+      artifactKey,
+      id: stableSourceId(artifactKey),
+      history: {
+        exactDuplicate,
+        previousDates: prior?.dates || [],
+        repositoryAppearances7d,
+        materialChange,
+        eligible,
+        exclusionReason,
+      },
+    };
+  });
+
+  const output = {
+    version: 2,
+    channel: "skill-radar",
+    asOf,
+    historyVersion: history.version,
+    minimumEligibleCandidates: 5,
+    needsReplenishment: candidates.filter((candidate) => candidate.history.eligible).length < 5,
+    candidates,
+    eligibleCandidates: candidates.filter((candidate) => candidate.history.eligible),
+    excludedCandidates: candidates.filter((candidate) => !candidate.history.eligible),
+  };
+  await writeJson(outputPath, output);
+  console.log(`Filtered candidates with artifact history v2: ${relative(outputPath)}`);
+  console.log(`Candidates: ${candidates.length}; eligible: ${output.eligibleCandidates.length}; excluded: ${output.excludedCandidates.length}`);
+  if (output.needsReplenishment) console.log("Replenishment required: fewer than five eligible candidates");
 }
 
 function summarizeGithubDiscovery(discovery) {
@@ -124,6 +232,91 @@ async function finalizeReport(options) {
   );
   console.log(`Finalized${paths.shadow ? " shadow" : ""} structured report: ${relative(sidecarPath)}`);
   console.log(`Rendered bilingual Markdown: ${relative(markdownPath)}`);
+}
+
+async function finalizeCuratedReport(options) {
+  const paths = runtimePaths(options);
+  const inputPath = resolveRequiredInput(options.input, "finalize-curated");
+  const candidatesPath = resolveRequiredInput(options.candidates, "finalize-curated --candidates");
+  await ensureLocalFiles(paths);
+  if (!paths.shadow) await archiveLegacyHistory();
+  const raw = await readJsonRequired(inputPath);
+  const filtered = await readJsonRequired(candidatesPath);
+  if (!Array.isArray(filtered.candidates) || !Array.isArray(filtered.excludedCandidates)) {
+    throw new Error("finalize-curated candidates file must be filter-candidates output");
+  }
+  const sourceCounts = countBy(filtered.candidates, (candidate) => candidate.discoveryType);
+  const deterministicRaw = {
+    ...raw,
+    candidateCount: filtered.candidates.length,
+    duplicateCount: filtered.excludedCandidates.filter((candidate) => candidate.history?.exactDuplicate).length,
+    sourceCounts,
+  };
+  const reportDate = normalizeDate(deterministicRaw.reportDate || beijingDate());
+  if (filtered.asOf !== reportDate) {
+    throw new Error("curated draft reportDate must match filtered candidate date");
+  }
+  const eligibleCandidatesByArtifact = new Map(
+    filtered.eligibleCandidates.map((candidate) => [candidate.artifactKey, candidate]),
+  );
+  const boundDecisions = (Array.isArray(deterministicRaw.decisions) ? deterministicRaw.decisions : []).map((decision) => {
+    const identityInput = {
+      sourceUrl: String(decision.sourceUrl || ""),
+      quality: {
+        evidence: {
+          artifactScope: String(decision.artifactScope || "individual_skill"),
+          artifactPath: decision.artifactPath == null ? null : String(decision.artifactPath),
+        },
+      },
+    };
+    const artifactKey = artifactKeyFor(identityInput);
+    const candidate = eligibleCandidatesByArtifact.get(artifactKey);
+    if (!candidate) {
+      throw new Error(`curated decision was not eligible after code filtering: ${decision.title || artifactKey}`);
+    }
+    return {
+      ...decision,
+      title: candidate.title,
+      sourceUrl: candidate.sourceUrl,
+      artifactScope: candidate.artifactScope,
+      artifactPath: candidate.artifactPath,
+      discovery: {
+        type: discoveryLabel(candidate.discoveryType),
+        url: candidate.discoveryUrl,
+      },
+    };
+  });
+  deterministicRaw.decisions = boundDecisions;
+  const sidecarPath = path.join(paths.outboxDir, `skill-radar-${reportDate}.quality.json`);
+  const history = await buildHistory(reportDate, sidecarPath, { includeShadow: paths.shadow });
+  const enriched = enrichCuratedReport(deterministicRaw, { recentSources: history.sources });
+  const schema = await readJsonRequired(CURATED_SCHEMA_PATH);
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  addFormats(ajv);
+  const validate = ajv.compile(schema);
+  if (!validate(enriched)) {
+    const details = validate.errors.map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ");
+    throw new Error(`curated schema validation failed: ${details}`);
+  }
+  const semanticErrors = validateCuratedReport(enriched);
+  if (semanticErrors.length) {
+    throw new Error(`curated semantic validation failed: ${semanticErrors.join("; ")}`);
+  }
+
+  const markdownPath = path.join(paths.outboxDir, `skill-radar-${reportDate}.md`);
+  await writeJson(sidecarPath, enriched);
+  await fs.writeFile(markdownPath, renderMarkdown(enriched), "utf8");
+  await writeJson(paths.historyPath, await buildHistory(reportDate, null, { includeShadow: paths.shadow }));
+  console.log(`Finalized${paths.shadow ? " shadow" : ""} curated report: ${relative(sidecarPath)}`);
+  console.log(`Rendered bilingual Markdown: ${relative(markdownPath)}`);
+}
+
+function discoveryLabel(discoveryType) {
+  return {
+    awesomeClaudeSkills: "awesome-claude-skills",
+    agentPlugins: "agent-plugins",
+    openAgentSkill: "open-agent-skill",
+  }[discoveryType];
 }
 
 async function recordFeedback(options) {
@@ -276,34 +469,12 @@ async function buildHistory(asOf, excludedPath = null, { includeShadow = false }
     }
   }
 
-  const markdownFiles = await listFiles(OUTBOX_DIR, /^skill-radar-(\d{4}-\d{2}-\d{2})\.md$/);
-  for (const file of markdownFiles) {
-    const match = path.basename(file).match(/^skill-radar-(\d{4}-\d{2}-\d{2})\.md$/);
-    const reportDate = match?.[1];
-    if (!reportDate || reportDate < cutoff || reportDate > asOf) continue;
-    const sidecarPath = file.replace(/\.md$/, ".quality.json");
-    if (await exists(sidecarPath)) continue;
-    const markdown = await fs.readFile(file, "utf8");
-    const urls = markdown.match(/https:\/\/github\.com\/[^\s)>]+/g) || [];
-    for (const url of urls) {
-      try {
-        addHistorySource(sourceMap, {
-          canonicalUrl: canonicalizeUrl(url.replace(/[.,;]+$/, "")),
-          title: null,
-          category: null,
-          reportDate,
-        });
-      } catch {
-        // Legacy reports may contain malformed prose-adjacent URLs.
-      }
-    }
-  }
-
   return {
-    version: 1,
+    version: 2,
     channel: "skill-radar",
     asOf,
     windowDays: 30,
+    identity: "exact-artifact",
     sources: [...sourceMap.values()]
       .map((entry) => ({
         ...entry,
@@ -471,12 +642,22 @@ function addHistorySource(sourceMap, entry) {
     artifactKey,
     title: entry.title || null,
     category: entry.category || null,
+    identityScope: artifactKey.includes("#artifact=") ? "artifact_path" : "repository_artifact",
+    exactArtifactKnown: true,
     dates: [],
   };
   existing.title ||= entry.title || null;
   existing.category ||= entry.category || null;
   existing.dates.push(entry.reportDate);
   sourceMap.set(artifactKey, existing);
+}
+
+async function archiveLegacyHistory() {
+  if (!(await exists(HISTORY_PATH)) || await exists(HISTORY_V1_ARCHIVE_PATH)) return;
+  const current = await readJson(HISTORY_PATH, null);
+  if (!current || Number(current.version) !== 1) return;
+  await fs.copyFile(HISTORY_PATH, HISTORY_V1_ARCHIVE_PATH);
+  console.log(`Archived legacy repository history: ${relative(HISTORY_V1_ARCHIVE_PATH)}`);
 }
 
 async function loadSidecars(excludedPath = null, { includeShadow = false } = {}) {
@@ -568,6 +749,11 @@ function resolveInput(value) {
   return path.isAbsolute(value) ? value : path.resolve(ROOT, value);
 }
 
+function resolveRequiredInput(value, commandName) {
+  if (!value) throw new Error(`${commandName} requires --input`);
+  return path.isAbsolute(value) ? value : path.resolve(ROOT, value);
+}
+
 function normalizeDate(value) {
   const text = String(value || "").slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) throw new Error(`Invalid date: ${value}`);
@@ -635,6 +821,8 @@ function printHelp() {
 Commands:
   prepare [--date YYYY-MM-DD] [--shadow]
   finalize --input reports/state/skill-radar-draft.json [--shadow]
+  finalize-curated --input FILE --candidates FILTERED_FILE [--shadow]
+  filter-candidates --input FILE [--output FILE] [--date YYYY-MM-DD] [--shadow]
   feedback --url URL --rating interested|not_interested [--date YYYY-MM-DD] [--category NAME] [--note TEXT]
   social-add --url https://x.com/... [--note TEXT]
   summary [--days 30] [--date YYYY-MM-DD]`);

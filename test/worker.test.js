@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import worker from "../src/index.js";
+import { enrichCuratedReport } from "../src/curated-report.js";
+import { curatedFixture } from "../test-support/curated-report.js";
 
 test("ingests and renders a structured v2 report", async () => {
   const kv = new MemoryKv();
@@ -26,6 +28,28 @@ test("ingests and renders a structured v2 report", async () => {
   assert.match(html, /structured-report/);
   assert.match(html, /查看详细分析/);
   assert.match(html, /example\/agent-skill/);
+  assert.doesNotMatch(html, /baseScore/);
+});
+
+test("ingests and renders a simplified structured v3 report", async () => {
+  const kv = new MemoryKv();
+  const structured = enrichCuratedReport(curatedFixture());
+  const response = await ingest(kv, structured, {
+    generatedAt: "2026-07-14T01:00:00.000Z",
+    sourceRunId: "structured-v3",
+  });
+  const result = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(result));
+  assert.equal(result.report.schemaVersion, 3);
+  assert.equal(result.report.selectedCount, 1);
+
+  const page = await worker.fetch(
+    new Request("https://radar.example/reports/skill-radar/2026-07-14?lang=en"),
+    env(kv),
+  );
+  const html = await page.text();
+  assert.match(html, /Example Skill/);
+  assert.match(html, /structured-report/);
   assert.doesNotMatch(html, /baseScore/);
 });
 test("keeps v1 Markdown reports readable", async () => {

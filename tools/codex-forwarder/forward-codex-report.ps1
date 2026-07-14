@@ -164,7 +164,7 @@ function Read-StructuredReport {
   }
 
   $structured = Get-Content -Raw -Encoding UTF8 -LiteralPath $SidecarPath | ConvertFrom-Json
-  if ($structured.schemaVersion -ne 2) {
+  if ($structured.schemaVersion -notin @(2, 3)) {
     throw "Unsupported structured report schemaVersion in $SidecarPath"
   }
   if ($structured.channel -ne "skill-radar") {

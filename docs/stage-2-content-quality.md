@@ -1,10 +1,40 @@
 # Personal Radar Stage 2: Content Quality And Reading Experience
 
-Last updated: 2026-07-12
+Last updated: 2026-07-14
 
 ## Status
 
 Stage 2 implementation is in progress.
+
+On 2026-07-14, two consecutive Automation shadow tests showed that bounded
+curated-source discovery and qualitative primary-source review were more stable
+than the Quality v2.1 seven-dimension evidence workflow. Stage 2 is therefore
+moving toward a simplified version 3 contract. A real Automation-generated v3
+Sidecar and Markdown pair passed shadow validation on 2026-07-14. Production
+remains on version 2 until the accepted local changes are committed, the Worker
+v3 compatibility code is deployed, and the production prompt is switched.
+
+The v3 direction is:
+
+- Awesome Claude Skills, Agent Plugins, and OpenAgentSkill provide an initial
+  8-12 item discovery pool; when history filtering leaves fewer than five
+  eligible artifacts, Automation may replenish the pool up to 20 candidates
+  over at most three filter passes;
+- code owns URL normalization, exact-artifact identity, 30-day history, and
+  repository-frequency rules;
+- Automation verifies exactly five primary sources and records `recommend`,
+  `watch`, or `reject` with explicit reasons;
+- no numeric model scoring, discovery-lane quotas, OSS Insight, RadarAI, or X
+  requirement blocks the daily report;
+- the existing outbox, forwarder, Worker, website, and PushPlus delivery chain
+  remains unchanged.
+
+History was migrated from version 1 repository records to version 2
+exact-artifact records on 2026-07-14. The 122-entry v1 file is retained only as
+`reports/state/skill-radar-history-v1-archive.json` for local audit. It is not
+read by Automation or used for duplicate decisions. Active history was rebuilt
+from structured Sidecars and contained 31 exact recommendation records at the
+migration point.
 
 The local quality layer, structured report contract, forwarder validation, KV
 v2 compatibility, structured website rendering, and HTML PushPlus renderer are
@@ -96,6 +126,10 @@ Stage 2 also targets semantic overlap, inconsistent evaluation, content density,
 and the lack of preference evidence.
 
 ## Production Data Flow
+
+The currently deployed production task still follows the Quality v2.1 flow
+below. The v3 replacement passed its first real Automation shadow run on
+2026-07-14 but has not yet been enabled in production.
 
 ```text
 Windows GitHub discovery collector
@@ -320,6 +354,21 @@ Prepare history and feedback context:
 npm run quality:prepare
 ```
 
+Filter a curated candidate pool with code-owned artifact history:
+
+```powershell
+node tools/quality/report-quality.mjs filter-candidates `
+  --input reports/state/skill-radar-curated-candidates.json
+```
+
+Finalize a simplified curated-source draft:
+
+```powershell
+node tools/quality/report-quality.mjs finalize-curated `
+  --input reports/state/skill-radar-curated-draft.json `
+  --candidates reports/state/skill-radar-candidates-filtered.json
+```
+
 Finalize an Automation draft:
 
 ```powershell
@@ -387,6 +436,7 @@ npm run quality:summary
 | Worker production deployment | Quality v2.1 deployed 2026-07-12 as Worker version `da93279a-ec58-4c55-8da4-c1abb1761971`; `/health` and `/` returned 200 |
 | Real-device HTML comparison | Accepted 2026-07-09 |
 | Quality v2.1 calibration | Accepted after `no_update` and evidence-backed `published` shadow runs on 2026-07-12 |
+| Curated-source v3 simplification | History v2, bounded replenishment, candidate filter, v3 schema, renderer compatibility, forwarder validation, and Worker dry-run implemented locally; real Automation v3 shadow passed on 2026-07-14 with 11 candidates, 5 verified decisions, and 3 recommendations |
 | 14-day observation | Restarts on the first production day after Quality v2.1 deployment |
 | 30-day acceptance | Not started |
 
@@ -403,6 +453,7 @@ PushPlus was switched to the HTML card format.
 
 | Date | Result | Items | Validation | Production impact | Notes |
 | --- | --- | ---: | --- | --- | --- |
+| 2026-07-14 curated-source v3 | `published` | 3 | Schema v3, exact-artifact history, five unique decisions, UTF-8, and deterministic Markdown validation passed | None | Initial pool contained 11 candidates from all three curated sources; all 11 remained eligible, so replenishment was not needed; decisions were 3 `recommend`, 2 `watch`, and 0 `reject` |
 | 2026-07-13 Quality v2.1 | `published` | 1 | Schema, semantic, UTF-8, and forwarder pair validation passed; base score 74 | None | Used the deterministic GitHub evidence pack to select the previously unreviewed `anthropics/skills` `doc-coauthoring` artifact; retained unknown directory-level licensing and platform adaptation caveats instead of inheriting repository popularity as complete proof |
 | 2026-07-12 Quality v2.1 | `no_update` | 0 | Schema and semantic validation passed | None | Reviewed 15 candidates across high-validation, growth, emerging, and multi-skill lanes; OSS Insight, RadarAI, and bounded X searches were attempted; no candidate had enough exact field-level evidence to pass the revised gate |
 | 2026-07-08 | `published` | 5 | Schema, semantic, and forwarder pair validation passed | None | Verified the new `xDiscovery` requirement: X auxiliary search attempted, 0 verifiable X candidates found, and production outbox files were not overwritten |
