@@ -432,7 +432,7 @@ npm run quality:summary
 | Automated tests and Worker bundle dry run | Passed |
 | Desktop and 390px visual verification | Pending local preview access |
 | Three successful shadow reports | 3 of 3 passed |
-| Worker production deployment | v3 compatibility deployed 2026-07-14 as Worker version `131b514d-9073-4f29-b98e-59afaf1e9b77`; `/health` and `/` returned 200 |
+| Worker production deployment | Full eligible-candidate lifecycle and user-focused v3 cards deployed 2026-07-14 as Worker version `4acc0df2-7eca-4c09-95d7-4ae0fadfa714`; `/health` and `/` returned 200 |
 | Real-device HTML comparison | Accepted 2026-07-09 |
 | Quality v2.1 calibration | Accepted after `no_update` and evidence-backed `published` shadow runs on 2026-07-12 |
 | Curated-source v3 simplification | Initial Automation shadow passed with 11 candidates, 5 verified decisions, and 3 recommendations; contract then expanded to verify every eligible candidate, persist 14/90-day review outcomes, and replace visible action labels with direct usage guidance before the first scheduled production run |
