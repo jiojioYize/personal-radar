@@ -421,3 +421,194 @@ test("quality CLI finalizes a code-filtered curated v3 report", async () => {
 
   await fs.rm(root, { recursive: true, force: true });
 });
+
+test("source portfolio mode supports production while keeping shadow state isolated", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "personal-radar-source-portfolio-"));
+  const shadowStateDir = path.join(root, "reports", "shadow", "state");
+  await fs.mkdir(shadowStateDir, { recursive: true });
+  await fs.mkdir(path.join(root, "schemas"), { recursive: true });
+  await fs.copyFile(
+    path.join(projectRoot, "schemas", "skill-radar-report-v3.schema.json"),
+    path.join(root, "schemas", "skill-radar-report-v3.schema.json"),
+  );
+
+  const draft = curatedFixture();
+  draft.reportDate = "2099-03-01";
+  delete draft.candidateCount;
+  delete draft.duplicateCount;
+  delete draft.sourceCounts;
+  const lanes = [
+    ["registryPulse", "skillsSh"],
+    ["officialRotation", "anthropicSkills"],
+    ["communityTrend", "awesomeClaudeSkills"],
+    ["registryPulse", "skillsSh"],
+    ["officialRotation", "openAiPlugins"],
+    ["communityTrend", "openAgentSkill"],
+    ["registryPulse", "skillsSh"],
+    ["officialRotation", "githubAwesomeCopilot"],
+  ];
+  const candidates = draft.decisions.map((decision, index) => ({
+    title: decision.title,
+    sourceUrl: decision.sourceUrl,
+    artifactScope: decision.artifactScope,
+    artifactPath: decision.artifactPath,
+    discoveryType: lanes[index][0],
+    sourceId: lanes[index][1],
+    discoveryUrl: `https://example.com/discovery/${index}`,
+    containerType: "repository",
+    containerUrl: decision.sourceUrl,
+    artifactType: "skill",
+    provenance: index === 1 ? "first_party" : "independent",
+    discoverySignals: ["catalog-listing"],
+    dependencies: ["none"],
+    registryView: lanes[index][0] === "registryPulse" ? "all_time" : null,
+  }));
+  const candidatesPath = path.join(shadowStateDir, "portfolio-candidates.json");
+  await fs.writeFile(candidatesPath, JSON.stringify({ asOf: draft.reportDate, candidates }), "utf8");
+  await fs.writeFile(path.join(shadowStateDir, "portfolio-draft.json"), JSON.stringify(draft), "utf8");
+
+  await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "prepare", "--shadow", "--source-portfolio", "--date", draft.reportDate,
+    ],
+    { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+  );
+  const plan = JSON.parse(await fs.readFile(path.join(shadowStateDir, "skill-radar-source-plan.json"), "utf8"));
+  assert.equal(plan.registryFocus, "all_time");
+  assert.deepEqual(plan.officialSources.map((source) => source.id), [
+    "anthropicSkills", "openAiPlugins", "githubAwesomeCopilot",
+  ]);
+
+  const invalidCandidatesPath = path.join(shadowStateDir, "portfolio-candidates-invalid.json");
+  const invalidCandidates = structuredClone(candidates);
+  invalidCandidates[0].sourceId = "anthropicSkills";
+  await fs.writeFile(invalidCandidatesPath, JSON.stringify({ asOf: draft.reportDate, candidates: invalidCandidates }), "utf8");
+  await assert.rejects(
+    execFileAsync(
+      process.execPath,
+      [
+        path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+        "filter-candidates", "--shadow", "--source-portfolio", "--input", invalidCandidatesPath,
+      ],
+      { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+    ),
+    /sourceId is invalid for registryPulse/,
+  );
+
+  await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "filter-candidates", "--shadow", "--source-portfolio", "--date", draft.reportDate,
+      "--input", candidatesPath,
+    ],
+    { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+  );
+  const filteredPath = path.join(shadowStateDir, "skill-radar-candidates-filtered.json");
+  const filtered = JSON.parse(await fs.readFile(filteredPath, "utf8"));
+  assert.equal(filtered.sourceProfile, "portfolio-v1");
+  assert.equal(filtered.eligibleCandidates.length, 8);
+  assert.equal(filtered.eligibleCandidates[1].sourceId, "anthropicSkills");
+
+  await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "finalize-curated", "--shadow", "--input", path.join(shadowStateDir, "portfolio-draft.json"),
+      "--candidates", filteredPath,
+    ],
+    { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+  );
+  const sidecar = JSON.parse(await fs.readFile(
+    path.join(root, "reports", "shadow", "outbox", `skill-radar-${draft.reportDate}.quality.json`),
+    "utf8",
+  ));
+  assert.deepEqual(sidecar.stats.sourceCounts, {
+    registryPulse: 3,
+    officialRotation: 3,
+    communityTrend: 2,
+  });
+  assert.equal(sidecar.items[0].discovery.type, "skills-sh");
+  assert.deepEqual(sidecar.decisions[0].sourceContext.dependencies, ["none"]);
+  assert.equal(sidecar.decisions[0].sourceContext.registryView, "all_time");
+  assert.equal(sidecar.decisions[1].sourceContext.provenance, "first_party");
+  const rotation = JSON.parse(await fs.readFile(path.join(shadowStateDir, "skill-radar-source-rotation.json"), "utf8"));
+  assert.equal(rotation.entries[0].status, "completed");
+  await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "prepare", "--shadow", "--source-portfolio", "--date", "2099-03-02",
+    ],
+    { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+  );
+  const nextPlan = JSON.parse(await fs.readFile(path.join(shadowStateDir, "skill-radar-source-plan.json"), "utf8"));
+  assert.equal(nextPlan.registryFocus, "trending");
+  assert.deepEqual(nextPlan.officialSources.map((source) => source.id), [
+    "cursorMarketplace", "geminiExtensions", "nvidiaSkills",
+  ]);
+  assert.deepEqual(await fs.readdir(path.join(root, "reports", "outbox")), []);
+
+  await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "prepare", "--source-portfolio", "--date", draft.reportDate,
+    ],
+    { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+  );
+  const productionStateDir = path.join(root, "reports", "state");
+  const productionPlan = JSON.parse(await fs.readFile(
+    path.join(productionStateDir, "skill-radar-source-plan.json"),
+    "utf8",
+  ));
+  assert.equal(productionPlan.registryFocus, "all_time");
+  assert.deepEqual(productionPlan.officialSources.map((source) => source.id), [
+    "anthropicSkills", "openAiPlugins", "githubAwesomeCopilot",
+  ]);
+
+  await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "filter-candidates", "--source-portfolio", "--date", draft.reportDate,
+      "--input", candidatesPath,
+    ],
+    { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+  );
+  const productionFilteredPath = path.join(productionStateDir, "skill-radar-candidates-filtered.json");
+  const productionFiltered = JSON.parse(await fs.readFile(productionFilteredPath, "utf8"));
+  assert.equal(productionFiltered.sourceProfile, "portfolio-v1");
+  assert.equal(productionFiltered.eligibleCandidates.length, 8);
+
+  await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "finalize-curated", "--input", path.join(shadowStateDir, "portfolio-draft.json"),
+      "--candidates", productionFilteredPath,
+    ],
+    { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+  );
+  const productionSidecar = JSON.parse(await fs.readFile(
+    path.join(root, "reports", "outbox", `skill-radar-${draft.reportDate}.quality.json`),
+    "utf8",
+  ));
+  assert.equal(productionSidecar.items.length, 1);
+  assert.equal(productionSidecar.decisions[0].sourceContext.lane, "registryPulse");
+  const productionRotation = JSON.parse(await fs.readFile(
+    path.join(productionStateDir, "skill-radar-source-rotation.json"),
+    "utf8",
+  ));
+  assert.equal(productionRotation.entries[0].status, "completed");
+  const unchangedShadowNextPlan = JSON.parse(await fs.readFile(
+    path.join(shadowStateDir, "skill-radar-source-plan.json"),
+    "utf8",
+  ));
+  assert.equal(unchangedShadowNextPlan.reportDate, "2099-03-02");
+  assert.equal(unchangedShadowNextPlan.registryFocus, "trending");
+
+  await fs.rm(root, { recursive: true, force: true });
+});

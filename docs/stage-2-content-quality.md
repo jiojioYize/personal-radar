@@ -1,6 +1,6 @@
 # Personal Radar Stage 2: Content Quality And Reading Experience
 
-Last updated: 2026-07-14
+Last updated: 2026-07-16
 
 ## Status
 
@@ -14,12 +14,21 @@ Sidecar and Markdown pair passed shadow validation on 2026-07-14. Worker v3
 compatibility was deployed and the production prompt was switched the same
 day. The first scheduled v3 production report is pending.
 
-The v3 direction is:
+On 2026-07-16, two additional source-portfolio shadow runs established that a
+code-owned registry, official-catalog, and community rotation could broaden
+coverage without weakening exact-artifact checks. The portfolio was promoted
+to the production prompt under a controlled three-production-day observation.
+The model-recovery branch for fewer than five eligible candidates remains a
+recorded residual risk; failure must stop the run rather than emit `no_update`.
 
-- Awesome Claude Skills, Agent Plugins, and OpenAgentSkill provide an initial
-  8-12 item discovery pool; when history filtering leaves fewer than five
-  eligible artifacts, Automation may replenish the pool up to 20 candidates
-  over at most three filter passes;
+The v3 production direction is:
+
+- a code-generated daily plan rotates skills.sh registry views and
+  first-party catalogs while retaining bounded community discovery; each lane
+  is searched independently to build an initial 8-12 item pool;
+- when history filtering leaves fewer than five eligible artifacts,
+  Automation may replenish the pool up to 20 candidates over at most three
+  filter passes and use up to three evidence-backed correction attempts;
 - code owns URL normalization, exact-artifact identity, 30-day history, and
   repository-frequency rules;
 - Automation verifies every code-eligible primary source and records
@@ -30,6 +39,11 @@ The v3 direction is:
   requirement blocks the daily report;
 - the existing outbox, forwarder, Worker, website, and PushPlus delivery chain
   remains unchanged.
+
+A source-landscape review was completed on 2026-07-15 and is maintained in
+`docs/skill-source-audit.md`. Its layered registry, official-catalog, and
+community-trend portfolio entered controlled production on 2026-07-16. The
+periodic rules/modes lane remains outside the daily schedule.
 
 History was migrated from version 1 repository records to version 2
 exact-artifact records on 2026-07-14. The 122-entry v1 file is retained only as
@@ -324,6 +338,18 @@ does not create D1 or R2 resources.
 
 ## Reading Experience
 
+Public copy follows a strict reader-facing contract. `summary`, `conclusion`,
+and card display fields explain useful themes, user value, suitable users,
+how to start, and practical cautions. Discovery directories, candidate pools,
+source quotas, filtering, internal decision labels, Sidecar, Schema, and
+deferred/rejected-item narration remain in internal decision and statistics
+data. Deterministic validation rejects these internal terms before a v3 report
+can be finalized or ingested.
+
+Internal report counts remain available in Sidecar and KV metadata but are not
+rendered in the website overview or PushPlus body. Readers see the theme summary
+first, followed directly by recommendations or the no-update explanation.
+
 ### PushPlus
 
 - HTML cards contain no generated images.
@@ -436,6 +462,7 @@ npm run quality:summary
 | Real-device HTML comparison | Accepted 2026-07-09 |
 | Quality v2.1 calibration | Accepted after `no_update` and evidence-backed `published` shadow runs on 2026-07-12 |
 | Curated-source v3 simplification | Initial Automation shadow passed with 11 candidates, 5 verified decisions, and 3 recommendations; contract then expanded to verify every eligible candidate, persist 14/90-day review outcomes, and replace visible action labels with direct usage guidance before the first scheduled production run |
+| Source portfolio production | Promoted 2026-07-16 after two successful isolated runs; production now uses an independent code-owned plan and rotation under a three-day observation, while legacy fixed-source logic remains a short-term rollback reference |
 | 14-day observation | Restarts on the first successful scheduled v3 production day |
 | 30-day acceptance | Not started |
 
@@ -452,6 +479,8 @@ PushPlus was switched to the HTML card format.
 
 | Date | Result | Items | Validation | Production impact | Notes |
 | --- | --- | ---: | --- | --- | --- |
+| 2026-07-16 source portfolio v1 | `published` | 4 | 10 candidates covered registry, official, and community lanes 4/3/3; code retained 5 eligible artifacts; all received decisions; planned Trending view and two-source official minimum passed | None | Decisions were 4 `recommend`, 1 `defer`, and 0 `reject`; the official lane used Gemini and NVIDIA from the assigned set, while the bounded recovery path was not needed because exactly five candidates remained eligible |
+| 2026-07-15 source portfolio v1 | `published` | 7 | All 9 eligible artifacts received decisions; three daily lanes were covered 3/3/3; exact artifact paths, source context, dependencies, Schema v3, and shadow-only output passed | None | Decisions were 7 `recommend`, 2 `defer`, and 0 `reject`; six selected artifacts came from the new registry/official lanes, all seven selected artifacts differed from the same-day production report, and the two community candidates with substantial runtime or permission boundaries were deferred |
 | 2026-07-14 curated lifecycle v3 | `published` | 6 | All 10 eligible artifacts received unique decisions; Schema v3, UTF-8, deterministic Markdown, and 14-day defer-state writes passed | None | Decisions were 6 `recommend`, 4 `defer`, and 0 `reject`; all public items contained bilingual usage guidance and no legacy `install`/`adapt` label; production outbox was unchanged |
 | 2026-07-14 curated-source v3 | `published` | 3 | Schema v3, exact-artifact history, five unique decisions, UTF-8, and deterministic Markdown validation passed | None | Initial pool contained 11 candidates from all three curated sources; all 11 remained eligible, so replenishment was not needed; decisions were 3 `recommend`, 2 `watch`, and 0 `reject` |
 | 2026-07-13 Quality v2.1 | `published` | 1 | Schema, semantic, UTF-8, and forwarder pair validation passed; base score 74 | None | Used the deterministic GitHub evidence pack to select the previously unreviewed `anthropics/skills` `doc-coauthoring` artifact; retained unknown directory-level licensing and platform adaptation caveats instead of inheriting repository popularity as complete proof |

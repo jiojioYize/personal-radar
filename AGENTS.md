@@ -26,7 +26,7 @@ does, how to start using it, and where its trust boundaries are.
 Current recommended production flow:
 
 ```text
-Three curated skill directories -> Local Codex Automation
+Code-generated registry/official/community source plan -> Local Codex Automation
 -> code-owned artifact and review-state filter -> verify every eligible source
 -> reports/outbox -> local forwarder -> Worker /ingest-report
 -> KV + public site + PushPlus
@@ -49,6 +49,11 @@ If Codex automations are tested again, create or update them from this `personal
 
 - `prompts/skill-radar-local.md`: production prompt for local Codex Automation.
 
+The production prompt uses `portfolio-v1`: `prepare --source-portfolio`
+generates the authoritative daily source plan in `reports/state/`, and
+Automation must follow that plan. Production and shadow portfolio runs use
+separate plan, rotation, history, review-state, and outbox files.
+
 Formal daily automation should read and execute:
 
 ```text
@@ -60,6 +65,21 @@ Manual v3 shadow runs should read and execute:
 ```text
 prompts/skill-radar-curated-source-test.md
 ```
+
+Source-portfolio shadow runs should read and execute:
+
+```text
+prompts/skill-radar-source-portfolio-test.md
+```
+
+Source-portfolio runs must include `--shadow --source-portfolio`. They use
+separate shadow history and cannot write or forward a production report.
+The `prepare` command writes the authoritative daily plan to
+`reports/shadow/state/skill-radar-source-plan.json`; Automation must follow it
+rather than remembering or choosing the rotation itself.
+When portfolio filtering rejects candidate input, Automation should follow the
+bounded recovery protocol in the prompt and retry evidence-backed corrections
+instead of stopping after the first correctable error.
 
 Shadow runs write only to `reports/shadow/` and must never invoke the forwarder.
 
@@ -129,9 +149,11 @@ Current Stage 2 production rules:
 2. Automation verifies every distinct eligible artifact. One or more
    `recommend` decisions produce `published`; zero produces `no_update`.
 3. System failures must not be represented as `no_update`.
-4. Daily discovery uses Awesome Claude Skills, Agent Plugins, and
-   OpenAgentSkill. The initial pool is 8-12 candidates and may be replenished
-   to 20 over at most three filter passes when fewer than five remain eligible.
+4. Daily discovery uses a code-rotated portfolio: one skills.sh registry view,
+   at least two of three assigned first-party catalogs, and bounded community
+   directories. The initial pool is 8-12 candidates and may be
+   replenished to 20 over at most three filter passes when fewer than five
+   remain eligible.
 5. KV remains the production store and the Worker reads report schema versions
    1, 2, and 3.
 6. PushPlus uses the accepted HTML card format; Markdown remains a compatibility option.

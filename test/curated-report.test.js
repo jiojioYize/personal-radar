@@ -50,3 +50,24 @@ test("publishes every recommended decision", () => {
   assert.equal(report.items.length, 2);
   assert.deepEqual(validateCuratedReport(report), []);
 });
+
+test("validates the isolated source portfolio lanes without changing legacy requirements", () => {
+  const fixture = curatedFixture();
+  fixture.sourceCounts = { registryPulse: 3, officialRotation: 3, communityTrend: 2 };
+  const report = enrichCuratedReport(fixture);
+  assert.match(validateCuratedReport(report, { sourceProfile: "portfolio-v1" }).join("\n"), /sourceContext is incomplete/);
+  assert.match(validateCuratedReport(report, { sourceProfile: "legacy-v3" }).join("\n"), /sourceCounts\.awesomeClaudeSkills/);
+});
+
+test("rejects internal pipeline language in public report copy", () => {
+  const fixture = curatedFixture();
+  fixture.summary.zh = "本期从三个固定目录筛选并逐项核验候选。";
+  fixture.summary.en = "This edition verifies candidates from three required directories.";
+  fixture.conclusion.zh = "其余条目因证据不足暂缓。";
+  fixture.decisions[0].display.zh.oneLiner = "读取 Sidecar 中的 sourceCounts。";
+  const errors = validateCuratedReport(enrichCuratedReport(fixture)).join("\n");
+  assert.match(errors, /summary\.zh must use reader-facing language/);
+  assert.match(errors, /summary\.en must use reader-facing language/);
+  assert.match(errors, /conclusion\.zh must use reader-facing language/);
+  assert.match(errors, /display\.zh\.oneLiner must use reader-facing language/);
+});

@@ -6,6 +6,13 @@ const DISPLAY_FIELDS = [
   "oneLiner", "whyNow", "bestFor", "action", "primaryCaution",
   "problem", "usability", "adaptation", "trust",
 ];
+const INTERNAL_PUBLIC_COPY_PATTERNS = [
+  /(?:三个|3\s*个|three)\s*(?:固定|指定|required|fixed|specified)?\s*(?:目录|来源|directories|sources)/i,
+  /候选池|候选数量|代码过滤|过滤轮次|逐项核验|内部评分|candidate pool|candidate count|code[- ]owned filter|filter pass/i,
+  /\b(?:Sidecar|sourceCounts|eligibleCandidates|schemaVersion)\b/i,
+  /(?:其余|剩余).{0,24}(?:暂缓|拒绝)|(?:remaining|other) items?.{0,24}(?:defer|reject)/i,
+  /`(?:recommend|defer|reject)`/i,
+];
 
 export function enrichCuratedReport(input, { recentSources = [] } = {}) {
   const draft = structuredClone(input || {});
@@ -77,12 +84,18 @@ export function enrichCuratedReport(input, { recentSources = [] } = {}) {
   };
 }
 
-export function validateCuratedReport(report) {
+export function validateCuratedReport(report, { sourceProfile = null } = {}) {
   const errors = [];
+  sourceProfile ||= Object.hasOwn(report.stats?.sourceCounts || {}, "registryPulse")
+    ? "portfolio-v1"
+    : "legacy-v3";
   if (report.schemaVersion !== 3) errors.push("schemaVersion must be 3");
   if (report.channel !== "skill-radar") errors.push("channel must be skill-radar");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(report.reportDate || "")) errors.push("reportDate must use YYYY-MM-DD");
   if (!localized(report.summary) || !localized(report.conclusion)) errors.push("summary and conclusion must be bilingual");
+  for (const [field, value] of publicCopyFields(report)) {
+    if (containsInternalProcessLanguage(value)) errors.push(`${field} must use reader-facing language`);
+  }
   if (report.stats?.candidateCount < 8 || report.stats?.candidateCount > 20) errors.push("candidateCount must be 8-20");
   if (!Array.isArray(report.decisions) || report.decisions.length < 5 || report.decisions.length > 20) errors.push("five to twenty verified decisions are required");
   if (!Array.isArray(report.items) || report.items.length > 20) errors.push("items must contain at most twenty recommendations");
@@ -91,7 +104,10 @@ export function validateCuratedReport(report) {
   if (report.status === "published" && report.items.length < 1) errors.push("published requires at least one item");
   if (report.status === "no_update" && report.items.length !== 0) errors.push("no_update requires zero items");
   if (report.stats?.selectedCount !== report.items.length) errors.push("selectedCount must match items");
-  for (const source of ["awesomeClaudeSkills", "agentPlugins", "openAgentSkill"]) {
+  const requiredSources = sourceProfile === "portfolio-v1"
+    ? ["registryPulse", "officialRotation", "communityTrend"]
+    : ["awesomeClaudeSkills", "agentPlugins", "openAgentSkill"];
+  for (const source of requiredSources) {
     if (Number(report.stats?.sourceCounts?.[source] || 0) < 1) errors.push(`sourceCounts.${source} must be at least 1`);
   }
   const sourceTotal = Object.values(report.stats?.sourceCounts || {}).reduce((total, value) => total + Number(value || 0), 0);
@@ -106,6 +122,9 @@ export function validateCuratedReport(report) {
     if (!text(decision.title) || !text(decision.category) || !text(decision.reason)) errors.push(`${label} requires title, category, and reason`);
     if (!https(decision.sourceUrl) || !https(decision.discovery?.url)) errors.push(`${label} sources must use HTTPS`);
     if (decision.officialSourceVerified !== true || !dateTime(decision.sourceCheckedAt)) errors.push(`${label} requires verified primary-source evidence`);
+    if (sourceProfile === "portfolio-v1" && !validSourceContext(decision.sourceContext)) {
+      errors.push(`${label}.sourceContext is incomplete`);
+    }
     if (COLLECTION_SCOPES.has(decision.artifactScope) && !text(decision.artifactPath)) errors.push(`${label}.artifactPath is required for collection scope`);
     if (decision.history?.exactDuplicate === true) errors.push(`${label} repeats an exact artifact within 30 days`);
     if (decisionArtifacts.has(decision.artifactKey)) errors.push(`${label} repeats another verified artifact`);
@@ -118,6 +137,41 @@ export function validateCuratedReport(report) {
     }
   }
   return errors;
+}
+
+function publicCopyFields(report) {
+  const fields = [
+    ["summary.zh", report.summary?.zh], ["summary.en", report.summary?.en],
+    ["conclusion.zh", report.conclusion?.zh], ["conclusion.en", report.conclusion?.en],
+  ];
+  for (const [index, decision] of (report.decisions || []).entries()) {
+    if (decision.decision !== "recommend") continue;
+    for (const language of ["zh", "en"]) {
+      for (const field of DISPLAY_FIELDS) {
+        fields.push([`decisions[${index}].display.${language}.${field}`, decision.display?.[language]?.[field]]);
+      }
+    }
+  }
+  return fields;
+}
+
+function containsInternalProcessLanguage(value) {
+  const content = String(value || "");
+  return INTERNAL_PUBLIC_COPY_PATTERNS.some((pattern) => pattern.test(content));
+}
+
+function validSourceContext(value) {
+  return text(value?.lane)
+    && text(value?.sourceId)
+    && text(value?.containerType)
+    && https(value?.containerUrl)
+    && text(value?.artifactType)
+    && text(value?.provenance)
+    && Array.isArray(value?.discoverySignals)
+    && value.discoverySignals.length > 0
+    && Array.isArray(value?.dependencies)
+    && value.dependencies.length > 0
+    && (value.registryView === null || ["all_time", "trending", "hot", "official"].includes(value.registryView));
 }
 
 function localized(value) {

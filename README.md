@@ -14,6 +14,7 @@ The site publishes public AI-agent skill and rule radar reports. Pages default t
 
 - [MVP Stage 1 Record](docs/mvp-stage-1.md): current production flow, completed scope, operational checklist, and next-stage candidates.
 - [Stage 2 Content Quality](docs/stage-2-content-quality.md): structured reports, quality rules, rollout status, and 14/30-day acceptance.
+- [Skill Source Audit](docs/skill-source-audit.md): source landscape, artifact boundaries, and the production source-portfolio decision.
 - [Stage 2 Shadow Prompt](prompts/skill-radar-shadow.md): safely test structured generation without publishing or replacing a production report.
 - [Product Strategy](docs/product-strategy.md): long-term product positioning, user model, hosted and self-hosted paths, website evolution, and storage roadmap.
 - [Encoding Playbook](docs/encoding-playbook.md): UTF-8 and PowerShell lessons from the report delivery chain.
@@ -34,7 +35,7 @@ Personal Radar 支持两条使用路径：
 当前推荐主线是本地 Codex Automation 加本地 forwarder：
 
 ```text
-GitHub collector -> SQLite candidate evidence -> Local Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
+代码生成每日来源计划 -> Local Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
 ```
 
 原因是 Codex Automation 目前更适合在本地/工作树环境里创建和调度，但自动化 shell 的网络出站可能失败。让 Codex Automation 只生成报告文件，再由普通 Windows PowerShell 运行 forwarder 负责联网推送，是当前最稳的生产路径。
@@ -57,6 +58,8 @@ reports/outbox/skill-radar-YYYY-MM-DD.md
 ```
 
 Sidecar 是正式数据源，Markdown 由本地质量工具确定性生成。运行前会读取近 30 天历史、个人反馈和 X 候选收件箱。
+
+生产流程会先由代码轮换 `skills.sh` 视图和官方技能、插件或扩展目录，再分别搜索注册表、官方目录和社区趋势三条发现线。目录、插件和扩展只是发现容器；最终推荐单位仍是经过一手来源核验的具体 skill、rule、mode 或 instruction pack。
 
 ### 本地密钥
 
@@ -189,7 +192,7 @@ The current example channel is `skill-radar`, which discovers practical AI-agent
 The current recommended path uses local Codex Automation plus the local forwarder:
 
 ```text
-GitHub collector -> SQLite candidate evidence -> Local Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
+Code-generated daily source plan -> Local Codex Automation -> reports/outbox -> local forwarder -> Worker /ingest-report -> KV + public site + PushPlus
 ```
 
 Local Codex Automation is suitable for scheduled research and report generation, but its shell network access may fail. It writes a report file under `reports/outbox/`; the forwarder runs from normal Windows PowerShell and handles network delivery to the Worker.
@@ -216,9 +219,10 @@ For the formal daily automation, use:
 Please read and execute prompts/skill-radar-local.md.
 ```
 
-That prompt builds a bounded candidate pool from three curated directories,
-applies code-owned artifact and review-state filters, verifies every eligible
-primary source, and writes:
+That prompt follows a code-generated rotation across a skill registry,
+first-party catalogs, and bounded community sources. It applies code-owned
+artifact and review-state filters, verifies every eligible primary source, and
+writes:
 
 ```text
 reports/outbox/skill-radar-YYYY-MM-DD.quality.json

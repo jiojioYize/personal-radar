@@ -132,6 +132,16 @@ Required top-level fields:
 Do not write candidate counts, duplicate counts, or source counts into the
 draft. The finalizer calculates them from the filtered candidate file.
 
+### Public copy contract
+
+`summary`, `conclusion`, and every bilingual `display` field are reader-facing
+website or WeChat copy. Describe today's useful themes, what each artifact
+does, who it suits, how to start, and practical cautions. Never mention fixed
+directories, candidate pools, source quotas, filter passes, reviewed or
+excluded candidates, internal decision labels, Sidecar, Schema, or why other
+items were deferred or rejected. Keep that process evidence in `reason`,
+`stats`, history, and source metadata only.
+
 Every decision requires:
 
 - `title`, `category`, `sourceUrl`, `artifactScope`, and `artifactPath`; copy

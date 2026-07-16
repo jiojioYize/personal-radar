@@ -53,6 +53,7 @@ test("ingests and renders a simplified structured v3 report", async () => {
   assert.match(html, /How to use/);
   assert.doesNotMatch(html, /action-tag action-/);
   assert.doesNotMatch(html, /baseScore/);
+  assert.doesNotMatch(html, /report-stats|Reviewed|Recent duplicates/);
 });
 
 test("renders v3 PushPlus cards around understanding and usage", async () => {
@@ -78,6 +79,7 @@ test("renders v3 PushPlus cards around understanding and usage", async () => {
     assert.match(pushPayload.content, /怎么用：/);
     assert.match(pushPayload.content, /Adapt it in a sandbox/);
     assert.doesNotMatch(pushPayload.content, />install<|>adapt<|>watch</i);
+    assert.doesNotMatch(pushPayload.content, /检查 .*排除重复/);
   } finally {
     globalThis.fetch = originalFetch;
   }

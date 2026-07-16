@@ -32,6 +32,32 @@ const GITHUB_CANDIDATES_PATH = path.join(INBOX_DIR, "github-candidates.json");
 const SUMMARY_PATH = path.join(QUALITY_DIR, "skill-radar-summary.md");
 const SCHEMA_PATH = path.join(ROOT, "schemas", "skill-radar-report.schema.json");
 const CURATED_SCHEMA_PATH = path.join(ROOT, "schemas", "skill-radar-report-v3.schema.json");
+const LEGACY_DISCOVERY_TYPES = new Set(["awesomeClaudeSkills", "agentPlugins", "openAgentSkill"]);
+const PORTFOLIO_DISCOVERY_TYPES = new Set(["registryPulse", "officialRotation", "communityTrend", "rulesModes"]);
+const PORTFOLIO_SOURCES = {
+  registryPulse: new Set(["skillsSh"]),
+  officialRotation: new Set([
+    "anthropicSkills", "openAiPlugins", "githubAwesomeCopilot", "cursorMarketplace",
+    "geminiExtensions", "nvidiaSkills", "huggingFaceSkills", "microsoftAgentSkills",
+  ]),
+  communityTrend: new Set(["awesomeClaudeSkills", "openAgentSkill"]),
+  rulesModes: new Set(["githubAwesomeCopilot", "rooModes"]),
+};
+const CONTAINER_TYPES = new Set(["registry_entry", "repository", "plugin", "extension", "marketplace_entry"]);
+const ARTIFACT_TYPES = new Set(["skill", "rule", "mode", "instruction_pack"]);
+const PROVENANCE_TYPES = new Set(["first_party", "officially_governed_community", "independent"]);
+const DEPENDENCY_TYPES = new Set(["none", "mcp", "cli", "api", "hooks", "authentication", "runtime", "platform"]);
+const REGISTRY_VIEWS = ["all_time", "trending", "hot", "official"];
+const OFFICIAL_SOURCE_ROTATION = [
+  { id: "anthropicSkills", url: "https://github.com/anthropics/skills" },
+  { id: "openAiPlugins", url: "https://github.com/openai/plugins" },
+  { id: "githubAwesomeCopilot", url: "https://github.com/github/awesome-copilot" },
+  { id: "cursorMarketplace", url: "https://cursor.com/marketplace" },
+  { id: "geminiExtensions", url: "https://github.com/google-gemini/gemini-cli/blob/main/docs/extensions/index.md" },
+  { id: "nvidiaSkills", url: "https://github.com/NVIDIA/skills" },
+  { id: "huggingFaceSkills", url: "https://github.com/huggingface/skills" },
+  { id: "microsoftAgentSkills", url: "https://github.com/MicrosoftDocs/agent-skills" },
+];
 
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0] || "help";
@@ -52,9 +78,11 @@ try {
 
 async function prepareContext(options) {
   const paths = runtimePaths(options);
+  const sourcePortfolio = flag(options["source-portfolio"]);
   await ensureLocalFiles(paths);
   if (!paths.shadow) await archiveLegacyHistory();
   const asOf = normalizeDate(options.date || beijingDate());
+  if (sourcePortfolio) await prepareSourcePortfolioPlan(paths, asOf);
   const history = await buildHistory(asOf, null, { includeShadow: paths.shadow });
   const feedback = await readJson(FEEDBACK_PATH, { version: 1, entries: [] });
   const inbox = await expireDeferredCandidates(await readJson(SOCIAL_PATH, emptyInbox()), asOf);
@@ -83,6 +111,7 @@ async function prepareContext(options) {
 
 async function filterCandidates(options) {
   const paths = runtimePaths(options);
+  const sourcePortfolio = flag(options["source-portfolio"]);
   const inputPath = resolveRequiredInput(options.input, "filter-candidates");
   const outputPath = options.output
     ? resolveInput(options.output)
@@ -95,6 +124,7 @@ async function filterCandidates(options) {
   await ensureLocalFiles(paths);
   if (!paths.shadow) await archiveLegacyHistory();
   const asOf = normalizeDate(options.date || input.asOf || beijingDate());
+  const sourcePlan = sourcePortfolio ? await readSourcePlan(paths, asOf) : null;
   const history = await buildHistory(asOf, null, { includeShadow: paths.shadow });
   const recentByArtifact = new Map(history.sources.map((entry) => [entry.artifactKey, entry]));
   const reviewState = await readJson(paths.reviewStatePath, { version: 1, channel: "skill-radar", entries: [] });
@@ -107,7 +137,8 @@ async function filterCandidates(options) {
     if (!title) throw new Error(`candidates[${index}].title is required`);
     const sourceUrl = String(candidate.sourceUrl || "").trim();
     const discoveryType = String(candidate.discoveryType || "");
-    if (!["awesomeClaudeSkills", "agentPlugins", "openAgentSkill"].includes(discoveryType)) {
+    const allowedDiscoveryTypes = sourcePortfolio ? PORTFOLIO_DISCOVERY_TYPES : LEGACY_DISCOVERY_TYPES;
+    if (!allowedDiscoveryTypes.has(discoveryType)) {
       throw new Error(`candidates[${index}].discoveryType is invalid`);
     }
     const discoveryUrl = String(candidate.discoveryUrl || "").trim();
@@ -125,6 +156,7 @@ async function filterCandidates(options) {
     if (["general_skill_collection", "official_catalog", "mixed_toolkit"].includes(artifactScope) && !artifactPath) {
       throw new Error(`candidates[${index}] requires artifactPath for ${artifactScope}`);
     }
+    if (sourcePortfolio) validatePortfolioCandidate(candidate, index, discoveryType, artifactPath, sourcePlan);
     const item = {
       sourceUrl,
       discoveryType,
@@ -182,8 +214,11 @@ async function filterCandidates(options) {
     };
   });
 
+  if (sourcePortfolio) validatePortfolioCoverage(candidates, sourcePlan);
+
   const output = {
     version: 2,
+    sourceProfile: sourcePortfolio ? "portfolio-v1" : "legacy-v3",
     channel: "skill-radar",
     asOf,
     historyVersion: history.version,
@@ -197,6 +232,194 @@ async function filterCandidates(options) {
   console.log(`Filtered candidates with artifact history v2: ${relative(outputPath)}`);
   console.log(`Candidates: ${candidates.length}; eligible: ${output.eligibleCandidates.length}; excluded: ${output.excludedCandidates.length}`);
   if (output.needsReplenishment) console.log("Replenishment required: fewer than five eligible candidates");
+}
+
+function validatePortfolioCandidate(candidate, index, discoveryType, artifactPath, sourcePlan) {
+  const sourceId = String(candidate.sourceId || "");
+  if (!PORTFOLIO_SOURCES[discoveryType]?.has(sourceId)) {
+    throw new Error(`candidates[${index}].sourceId is invalid for ${discoveryType}`);
+  }
+  const containerType = String(candidate.containerType || "");
+  if (!CONTAINER_TYPES.has(containerType)) {
+    throw new Error(`candidates[${index}].containerType is invalid`);
+  }
+  if (["plugin", "extension", "marketplace_entry"].includes(containerType) && !artifactPath) {
+    throw new Error(`candidates[${index}] requires artifactPath for ${containerType} containers`);
+  }
+  if (!ARTIFACT_TYPES.has(String(candidate.artifactType || ""))) {
+    throw new Error(`candidates[${index}].artifactType is invalid`);
+  }
+  if (!PROVENANCE_TYPES.has(String(candidate.provenance || ""))) {
+    throw new Error(`candidates[${index}].provenance is invalid`);
+  }
+  const containerUrl = String(candidate.containerUrl || "");
+  if (!isHttpsUrl(containerUrl)) {
+    throw new Error(`candidates[${index}].containerUrl must use HTTPS`);
+  }
+  if (!Array.isArray(candidate.discoverySignals) || candidate.discoverySignals.length < 1
+    || candidate.discoverySignals.some((signal) => !String(signal || "").trim())) {
+    throw new Error(`candidates[${index}].discoverySignals requires at least one non-empty signal`);
+  }
+  if (!Array.isArray(candidate.dependencies) || candidate.dependencies.length < 1
+    || candidate.dependencies.some((dependency) => !DEPENDENCY_TYPES.has(dependency))) {
+    throw new Error(`candidates[${index}].dependencies is invalid`);
+  }
+  if (candidate.dependencies.includes("none") && candidate.dependencies.length !== 1) {
+    throw new Error(`candidates[${index}].dependencies cannot combine none with another dependency`);
+  }
+  if (discoveryType === "registryPulse" && candidate.registryView !== sourcePlan.registryFocus) {
+    throw new Error(`candidates[${index}].registryView must match today's ${sourcePlan.registryFocus} plan`);
+  }
+  if (discoveryType === "officialRotation"
+    && !sourcePlan.officialSources.some((source) => source.id === sourceId)) {
+    throw new Error(`candidates[${index}].sourceId is not assigned in today's official rotation`);
+  }
+}
+
+function validatePortfolioCoverage(candidates, sourcePlan) {
+  for (const lane of ["registryPulse", "officialRotation", "communityTrend"]) {
+    if (!candidates.some((candidate) => candidate.discoveryType === lane)) {
+      throw new Error(`source portfolio requires at least one ${lane} candidate`);
+    }
+  }
+  const officialSources = new Set(
+    candidates.filter((candidate) => candidate.discoveryType === "officialRotation").map((candidate) => candidate.sourceId),
+  );
+  if (officialSources.size < sourcePlan.minimumOfficialSources) {
+    throw new Error(`source portfolio requires at least ${sourcePlan.minimumOfficialSources} assigned official sources`);
+  }
+}
+
+function isHttpsUrl(value) {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+async function prepareSourcePortfolioPlan(paths, asOf) {
+  const rotation = await readJson(paths.sourceRotationPath, { version: 1, channel: "skill-radar", entries: [] });
+  const completedRuns = await discoverCompletedPortfolioRuns(paths.outboxDir, asOf);
+  const entries = new Map((rotation.entries || []).map((entry) => [entry.reportDate, entry]));
+  for (const run of completedRuns) {
+    entries.set(run.reportDate, { ...entries.get(run.reportDate), ...run, status: "completed" });
+  }
+
+  const existing = entries.get(asOf);
+  let plan;
+  if (existing?.plan) {
+    plan = {
+      ...existing.plan,
+      registryUrl: registryUrlFor(existing.plan.registryFocus),
+    };
+    entries.set(asOf, { ...existing, plan });
+  } else {
+    const completedBeforeToday = [...entries.values()].filter(
+      (entry) => entry.status === "completed" && entry.reportDate < asOf,
+    );
+    const rotationIndex = completedBeforeToday.length;
+    const registryFocus = REGISTRY_VIEWS[rotationIndex % REGISTRY_VIEWS.length];
+    const officialSources = Array.from({ length: 3 }, (_, offset) =>
+      OFFICIAL_SOURCE_ROTATION[(rotationIndex * 3 + offset) % OFFICIAL_SOURCE_ROTATION.length]);
+    plan = {
+      version: 1,
+      sourceProfile: "portfolio-v1",
+      reportDate: asOf,
+      registryFocus,
+      registryUrl: registryUrlFor(registryFocus),
+      officialSources,
+      minimumOfficialSources: 2,
+      communitySources: [
+        { id: "awesomeClaudeSkills", url: "https://awesomeclaudeskills.com/" },
+        { id: "openAgentSkill", url: "https://www.openagentskill.com/skills" },
+      ],
+      completedRunCount: completedBeforeToday.length,
+    };
+    entries.set(asOf, { reportDate: asOf, status: "planned", plan });
+  }
+
+  await writeJson(paths.sourcePlanPath, plan);
+  await writeJson(paths.sourceRotationPath, {
+    version: 1,
+    channel: "skill-radar",
+    updatedAt: new Date().toISOString(),
+    entries: [...entries.values()].sort((a, b) => a.reportDate.localeCompare(b.reportDate)),
+  });
+  console.log(`Prepared source portfolio plan: ${relative(paths.sourcePlanPath)}`);
+  console.log(`Registry focus: ${plan.registryFocus}; official rotation: ${plan.officialSources.map((source) => source.id).join(", ")}`);
+}
+
+async function readSourcePlan(paths, asOf) {
+  const plan = await readJson(paths.sourcePlanPath, null);
+  if (!plan || plan.sourceProfile !== "portfolio-v1" || plan.reportDate !== asOf) {
+    throw new Error(`run prepare${paths.shadow ? " --shadow" : ""} --source-portfolio for this date before filtering candidates`);
+  }
+  return plan;
+}
+
+async function discoverCompletedPortfolioRuns(outboxDir, beforeOrOn) {
+  const files = await listFiles(outboxDir, /^skill-radar-\d{4}-\d{2}-\d{2}\.quality\.json$/);
+  const runs = [];
+  for (const file of files) {
+    const report = await readJson(file, null);
+    if (!report || report.reportDate > beforeOrOn
+      || !report.decisions?.some((decision) => decision.sourceContext)) continue;
+    const officialSourceIds = [...new Set(report.decisions
+      .filter((decision) => decision.sourceContext?.lane === "officialRotation")
+      .map((decision) => decision.sourceContext.sourceId))];
+    const registryDecision = report.decisions.find((decision) => decision.sourceContext?.lane === "registryPulse");
+    runs.push({
+      reportDate: report.reportDate,
+      status: "completed",
+      actual: {
+        registryFocus: registryDecision?.sourceContext?.registryView
+          || inferRegistryView(registryDecision?.sourceContext?.discoverySignals),
+        officialSourceIds,
+        sourceCounts: report.stats?.sourceCounts || {},
+      },
+    });
+  }
+  return runs;
+}
+
+async function completeSourcePortfolioPlan(paths, report) {
+  const rotation = await readJson(paths.sourceRotationPath, { version: 1, channel: "skill-radar", entries: [] });
+  const entries = new Map((rotation.entries || []).map((entry) => [entry.reportDate, entry]));
+  const current = entries.get(report.reportDate) || { reportDate: report.reportDate };
+  entries.set(report.reportDate, {
+    ...current,
+    status: "completed",
+    completedAt: new Date().toISOString(),
+    actual: {
+      registryFocus: current.plan?.registryFocus || null,
+      officialSourceIds: [...new Set(report.decisions
+        .filter((decision) => decision.sourceContext?.lane === "officialRotation")
+        .map((decision) => decision.sourceContext.sourceId))],
+      sourceCounts: report.stats.sourceCounts,
+      decisionCounts: countBy(report.decisions, (decision) => decision.decision),
+    },
+  });
+  await writeJson(paths.sourceRotationPath, {
+    version: 1,
+    channel: "skill-radar",
+    updatedAt: new Date().toISOString(),
+    entries: [...entries.values()].sort((a, b) => a.reportDate.localeCompare(b.reportDate)),
+  });
+}
+
+function registryUrlFor(view) {
+  return view === "all_time" ? "https://www.skills.sh/" : `https://www.skills.sh/${view}`;
+}
+
+function inferRegistryView(signals = []) {
+  const normalized = signals.map((signal) => String(signal).toLowerCase());
+  return REGISTRY_VIEWS.find((view) =>
+    normalized.some((signal) => signal.includes(view.replace("_", "-")))) || null;
+}
+
+function flag(value) {
+  return value === true || value === "true";
 }
 
 function summarizeGithubDiscovery(discovery) {
@@ -261,6 +484,7 @@ async function finalizeCuratedReport(options) {
   if (!Array.isArray(filtered.candidates) || !Array.isArray(filtered.excludedCandidates)) {
     throw new Error("finalize-curated candidates file must be filter-candidates output");
   }
+  const sourceProfile = filtered.sourceProfile || "legacy-v3";
   const sourceCounts = countBy(filtered.candidates, (candidate) => candidate.discoveryType);
   const deterministicRaw = {
     ...raw,
@@ -300,9 +524,22 @@ async function finalizeCuratedReport(options) {
       artifactScope: candidate.artifactScope,
       artifactPath: candidate.artifactPath,
       discovery: {
-        type: discoveryLabel(candidate.discoveryType),
+        type: discoveryLabel(candidate.discoveryType, candidate.sourceId),
         url: candidate.discoveryUrl,
       },
+      ...(sourceProfile === "portfolio-v1" ? {
+        sourceContext: {
+          lane: candidate.discoveryType,
+          sourceId: candidate.sourceId,
+          containerType: candidate.containerType,
+          containerUrl: candidate.containerUrl,
+          artifactType: candidate.artifactType,
+          provenance: candidate.provenance,
+          discoverySignals: candidate.discoverySignals,
+          dependencies: candidate.dependencies,
+          registryView: candidate.registryView || null,
+        },
+      } : {}),
     };
   });
   const decisionArtifactKeys = new Set(boundDecisions.map((decision) => artifactKeyFor({
@@ -325,7 +562,7 @@ async function finalizeCuratedReport(options) {
     const details = validate.errors.map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ");
     throw new Error(`curated schema validation failed: ${details}`);
   }
-  const semanticErrors = validateCuratedReport(enriched);
+  const semanticErrors = validateCuratedReport(enriched, { sourceProfile });
   if (semanticErrors.length) {
     throw new Error(`curated semantic validation failed: ${semanticErrors.join("; ")}`);
   }
@@ -334,12 +571,29 @@ async function finalizeCuratedReport(options) {
   await writeJson(sidecarPath, enriched);
   await fs.writeFile(markdownPath, renderMarkdown(enriched), "utf8");
   await updateCuratedReviewState(paths.reviewStatePath, enriched.decisions, reportDate);
+  if (sourceProfile === "portfolio-v1") await completeSourcePortfolioPlan(paths, enriched);
   await writeJson(paths.historyPath, await buildHistory(reportDate, null, { includeShadow: paths.shadow }));
   console.log(`Finalized${paths.shadow ? " shadow" : ""} curated report: ${relative(sidecarPath)}`);
   console.log(`Rendered bilingual Markdown: ${relative(markdownPath)}`);
 }
 
-function discoveryLabel(discoveryType) {
+function discoveryLabel(discoveryType, sourceId) {
+  if (sourceId) {
+    return {
+      skillsSh: "skills-sh",
+      anthropicSkills: "anthropic-skills",
+      openAiPlugins: "openai-plugins",
+      githubAwesomeCopilot: "github-awesome-copilot",
+      cursorMarketplace: "cursor-marketplace",
+      geminiExtensions: "gemini-extensions",
+      nvidiaSkills: "nvidia-skills",
+      huggingFaceSkills: "hugging-face-skills",
+      microsoftAgentSkills: "microsoft-agent-skills",
+      awesomeClaudeSkills: "awesome-claude-skills",
+      openAgentSkill: "open-agent-skill",
+      rooModes: "roo-modes",
+    }[sourceId];
+  }
   return {
     awesomeClaudeSkills: "awesome-claude-skills",
     agentPlugins: "agent-plugins",
@@ -763,6 +1017,8 @@ function runtimePaths(options) {
     historyPath: path.join(stateDir, "skill-radar-history.json"),
     contextPath: path.join(stateDir, "skill-radar-context.json"),
     reviewStatePath: path.join(stateDir, "skill-radar-review-state.json"),
+    sourcePlanPath: path.join(stateDir, "skill-radar-source-plan.json"),
+    sourceRotationPath: path.join(stateDir, "skill-radar-source-rotation.json"),
   };
 }
 
@@ -878,10 +1134,10 @@ function printHelp() {
   console.log(`Personal Radar quality tool
 
 Commands:
-  prepare [--date YYYY-MM-DD] [--shadow]
+  prepare [--date YYYY-MM-DD] [--shadow] [--source-portfolio]
   finalize --input reports/state/skill-radar-draft.json [--shadow]
   finalize-curated --input FILE --candidates FILTERED_FILE [--shadow]
-  filter-candidates --input FILE [--output FILE] [--date YYYY-MM-DD] [--shadow]
+  filter-candidates --input FILE [--output FILE] [--date YYYY-MM-DD] [--shadow] [--source-portfolio]
   feedback --url URL --rating interested|not_interested [--date YYYY-MM-DD] [--category NAME] [--note TEXT]
   social-add --url https://x.com/... [--note TEXT]
   summary [--days 30] [--date YYYY-MM-DD]`);

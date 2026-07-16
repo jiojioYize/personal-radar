@@ -49,13 +49,41 @@
     },
     "discovery": {
       "type": "object", "additionalProperties": false, "required": ["type", "url"],
-      "properties": { "type": { "enum": ["awesome-claude-skills", "agent-plugins", "open-agent-skill"] }, "url": { "$ref": "#/$defs/httpsUrl" } }
+      "properties": {
+        "type": {
+          "enum": [
+            "awesome-claude-skills", "agent-plugins", "open-agent-skill", "skills-sh",
+            "anthropic-skills", "openai-plugins", "github-awesome-copilot", "cursor-marketplace",
+            "gemini-extensions", "nvidia-skills", "hugging-face-skills", "microsoft-agent-skills",
+            "roo-modes"
+          ]
+        },
+        "url": { "$ref": "#/$defs/httpsUrl" }
+      }
     },
     "history": {
       "type": "object", "additionalProperties": false, "required": ["exactDuplicate", "previousDates"],
       "properties": {
         "exactDuplicate": { "type": "boolean" },
         "previousDates": { "type": "array", "items": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" } }
+      }
+    },
+    "sourceContext": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lane", "sourceId", "containerType", "containerUrl", "artifactType", "provenance", "discoverySignals", "dependencies", "registryView"],
+      "properties": {
+        "lane": { "enum": ["registryPulse", "officialRotation", "communityTrend", "rulesModes"] },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "containerType": { "enum": ["registry_entry", "repository", "plugin", "extension", "marketplace_entry"] },
+        "containerUrl": { "$ref": "#/$defs/httpsUrl" },
+        "artifactType": { "enum": ["skill", "rule", "mode", "instruction_pack"] },
+        "provenance": { "enum": ["first_party", "officially_governed_community", "independent"] },
+        "discoverySignals": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/text" } },
+        "dependencies": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "enum": ["none", "mcp", "cli", "api", "hooks", "authentication", "runtime", "platform"] }
+        },
+        "registryView": { "type": ["string", "null"], "enum": ["all_time", "trending", "hot", "official", null] }
       }
     },
     "quality": {
@@ -89,7 +117,8 @@
         "discovery": { "$ref": "#/$defs/discovery" }, "decision": { "enum": ["recommend", "defer", "reject"] },
         "reason": { "$ref": "#/$defs/text" },
         "officialSourceVerified": { "const": true }, "sourceCheckedAt": { "type": "string", "format": "date-time" },
-        "license": { "type": ["string", "null"] }, "history": { "$ref": "#/$defs/history" }
+        "license": { "type": ["string", "null"] }, "history": { "$ref": "#/$defs/history" },
+        "sourceContext": { "$ref": "#/$defs/sourceContext" }
       }
     }
   }

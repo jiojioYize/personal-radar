@@ -1,6 +1,6 @@
 # Personal Radar Product Strategy
 
-Last updated: 2026-07-09
+Last updated: 2026-07-16
 
 ## Purpose
 
@@ -11,7 +11,15 @@ explainable recommendations that can be delivered on schedule, reviewed later,
 and improved through feedback.
 
 The first vertical channel is `skill-radar`, focused on reusable AI-agent
-skills, rules, and instruction packs.
+capabilities: skills, rules, modes, focused instruction packs, and concrete
+skill-like artifacts distributed inside plugins or extensions.
+
+This scope follows an ecosystem change rather than a naming change. Agent
+platforms increasingly distribute reusable capabilities through plugins,
+extensions, and marketplaces, while the valuable unit for a reader is still a
+specific capability that can be understood, verified, and adopted. A plugin,
+extension, marketplace listing, repository, or MCP server is therefore a
+discovery container, not automatically a recommendation.
 
 ## Product Positioning
 
@@ -162,6 +170,18 @@ personalization.
 
 The content system separates discovery from verification.
 
+- Discovery uses a portfolio rather than treating several directories as
+  equivalent sources: usage-ranked registries reveal adoption, rotating
+  first-party catalogs reveal governed capabilities, community directories
+  reveal emerging work, and periodic rules/modes reviews preserve format
+  breadth.
+- The recommendable unit is an exact skill, rule, mode, or focused instruction
+  pack. Containers such as plugins and extensions must be inspected until that
+  exact artifact and its dependencies are identified.
+- Cross-platform usability matters more than native support for any single
+  agent. Each recommendation should distinguish directly portable guidance
+  from host-specific manifests, tools, hooks, authentication, or runtime
+  requirements.
 - GitHub repositories and official project documentation are primary evidence.
 - Web search and X can provide discovery signals.
 - Social engagement and creator recommendations do not count as quality

@@ -236,13 +236,11 @@ function buildPushMessage(report, origin, template) {
 
 function renderPushHtml(report, reportUrl) {
   const summary = escapeHtml(truncateText(report.summary.zh, 160));
-  const stats = `检查 ${report.stats.reviewedCount} 项 · 精选 ${report.items.length} 项 · 排除重复 ${report.stats.duplicateCount} 项`;
   if (report.status === "no_update") {
     return [
       '<div style="font-family:Arial,sans-serif;background:#f1f3ee;color:#172018;line-height:1.65;padding:12px">',
       '<section style="background:#ffffff;padding:12px;margin:0 0 12px;border-left:4px solid #0b6b59">',
       '<h2 style="margin:0 0 12px;color:#172018">今日无重要更新</h2>',
-      `<p style="color:#667064;margin:4px 0">${escapeHtml(stats)}</p>`,
       `<p style="margin:8px 0;color:#172018">${summary}</p>`,
       `<p style="margin:8px 0;color:#172018">${escapeHtml(truncateText(report.conclusion.zh, 220))}</p>`,
       "</section>",
@@ -273,7 +271,6 @@ function renderPushHtml(report, reportUrl) {
     '<div style="font-family:Arial,sans-serif;background:#f1f3ee;color:#172018;line-height:1.65;padding:12px">',
     '<section style="background:#ffffff;padding:12px;margin:0 0 12px;border-left:4px solid #0b6b59">',
     '<h2 style="margin:0 0 8px;color:#172018">Skill Radar 今日精选</h2>',
-    `<p style="color:#667064;margin:4px 0">${escapeHtml(stats)}</p>`,
     `<p style="margin:8px 0;color:#172018">${summary}</p>`,
     "</section>",
     cards,
@@ -285,8 +282,6 @@ function renderPushHtml(report, reportUrl) {
 function renderPushMarkdown(report, reportUrl) {
   const lines = [
     report.status === "no_update" ? "## 今日无重要更新" : `## 今日精选 ${report.items.length} 项`,
-    "",
-    `检查 ${report.stats.reviewedCount} 项 · 排除重复 ${report.stats.duplicateCount} 项`,
     "",
     truncateText(report.summary.zh, 160),
   ];
@@ -483,9 +478,6 @@ async function renderStoredReport(env, category, date, request) {
 function renderStructuredReport(report, language) {
   const labels = language === "en"
     ? {
-        reviewed: "Reviewed",
-        selected: "Selected",
-        duplicates: "Recent duplicates",
         bestFor: "Best for",
         caution: "Main caution",
         action: "How to use",
@@ -501,9 +493,6 @@ function renderStructuredReport(report, language) {
         conclusion: "Bottom line",
       }
     : {
-        reviewed: "检查候选",
-        selected: "精选",
-        duplicates: "近期重复",
         bestFor: "适合",
         caution: "主要风险",
         action: "怎么用",
@@ -522,11 +511,6 @@ function renderStructuredReport(report, language) {
   const overview = [
     '<section class="report-overview">',
     `<p class="report-summary">${escapeHtml(report.summary[language])}</p>`,
-    '<dl class="report-stats">',
-    `<div><dt>${labels.reviewed}</dt><dd>${Number(report.stats.reviewedCount)}</dd></div>`,
-    `<div><dt>${labels.selected}</dt><dd>${report.items.length}</dd></div>`,
-    `<div><dt>${labels.duplicates}</dt><dd>${Number(report.stats.duplicateCount)}</dd></div>`,
-    "</dl>",
     "</section>",
   ].join("");
 
@@ -637,10 +621,6 @@ function renderPage(title, body) {
     .structured-report { display: grid; gap: 28px; }
     .report-overview { border-bottom: 1px solid var(--line); padding-bottom: 24px; }
     .report-summary { font-size: 18px; margin: 0 0 18px; max-width: 72ch; }
-    .report-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
-    .report-stats div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
-    .report-stats dt { color: var(--muted); font-size: 12px; font-weight: 700; }
-    .report-stats dd { font-size: 22px; font-weight: 760; margin: 2px 0 0; }
     .recommendations { border-top: 1px solid var(--line); }
     .recommendation { border-bottom: 1px solid var(--line); padding: 26px 0; }
     .recommendation.featured { border-top: 3px solid var(--accent); padding-top: 22px; }
@@ -673,9 +653,6 @@ function renderPage(title, body) {
       .page-head h1 { font-size: 30px; }
       .report-list li { display: grid; }
       .report-summary { font-size: 16px; }
-      .report-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-      .report-stats div { padding: 10px; }
-      .report-stats dd { font-size: 18px; }
       .recommendation h2 { font-size: 22px; }
       .quick-facts div { grid-template-columns: 1fr; }
       .detail-grid { grid-template-columns: 1fr; }
