@@ -7,9 +7,71 @@ import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { curatedFixture } from "../test-support/curated-report.js";
+import { enrichCuratedReport } from "../src/curated-report.js";
 
 const execFileAsync = promisify(execFile);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+test("feedback replay reorders recommendations without changing the selected set", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "personal-radar-replay-"));
+  const report = curatedFixture();
+  report.decisions[1].decision = "recommend";
+  report.decisions[1].display = structuredClone(report.decisions[0].display);
+  const sidecar = enrichCuratedReport(report);
+  const reportPath = path.join(root, "source-report.json");
+  const scenarioPath = path.join(root, "scenario.json");
+  const outputPath = path.join(root, "experiment");
+  await fs.writeFile(reportPath, JSON.stringify(sidecar), "utf8");
+  await fs.writeFile(scenarioPath, JSON.stringify({
+    name: "coding-interest",
+    description: "An explicit interest should move a related item forward.",
+    signals: [{
+      id: "fb_example_interest",
+      rating: "interested",
+      title: "Earlier related workflow",
+      category: "coding workflow",
+    }],
+    matches: [{
+      artifactKey: sidecar.decisions[1].artifactKey,
+      effect: "boosted",
+      matchedFeedbackIds: ["fb_example_interest"],
+      rationale: "This item directly matches the earlier coding-workflow interest.",
+    }],
+  }), "utf8");
+
+  const run = await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "feedback-replay", "--report", reportPath, "--scenario", scenarioPath, "--output", outputPath,
+    ],
+    { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+  );
+  assert.match(run.stdout, /Completed feedback replay/);
+  const result = JSON.parse(await fs.readFile(path.join(outputPath, "result.json"), "utf8"));
+  assert.deepEqual(result.baselineOrder, ["Example Skill", "Defer One"]);
+  assert.deepEqual(result.personalizedOrder, ["Defer One", "Example Skill"]);
+  assert.equal(result.guardrails.selectedSetUnchanged, true);
+  assert.equal(result.guardrails.unrelatedItemsRemainNeutral, true);
+  assert.match(await fs.readFile(path.join(outputPath, "result.md"), "utf8"), /Order comparison/);
+
+  const invalidScenario = JSON.parse(await fs.readFile(scenarioPath, "utf8"));
+  invalidScenario.matches[0].matchedFeedbackIds = ["fb_invented"];
+  await fs.writeFile(scenarioPath, JSON.stringify(invalidScenario), "utf8");
+  await assert.rejects(
+    execFileAsync(
+      process.execPath,
+      [
+        path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+        "feedback-replay", "--report", reportPath, "--scenario", scenarioPath, "--output", outputPath,
+      ],
+      { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+    ),
+    /unknown feedback/,
+  );
+
+  await fs.rm(root, { recursive: true, force: true });
+});
 
 test("quality CLI finalizes a draft into a validated Sidecar and Markdown pair", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "personal-radar-quality-"));
@@ -98,6 +160,8 @@ test("quality CLI finalizes a draft into a validated Sidecar and Markdown pair",
   );
   assert.match(summaryText, /Candidate source mix:/);
   assert.match(summaryText, /X discovery:/);
+  assert.match(summaryText, /Preference effects:/);
+  assert.match(summaryText, /Feedback signals referenced by later decisions:/);
 
   const feedbackResult = await execFileAsync(
     process.execPath,
@@ -110,6 +174,8 @@ test("quality CLI finalizes a draft into a validated Sidecar and Markdown pair",
       "interested",
       "--category",
       "browser automation",
+      "--title",
+      "Stage Two First",
       "--note",
       "Track more items like this.",
     ],
@@ -124,6 +190,9 @@ test("quality CLI finalizes a draft into a validated Sidecar and Markdown pair",
     "utf8",
   ));
   assert.equal(feedback.entries[0].rating, "interested");
+  assert.equal(feedback.version, 2);
+  assert.equal(feedback.entries[0].title, "Stage Two First");
+  assert.equal(feedback.entries[0].artifactKey, "https://github.com/example/stage-two-test");
   assert.equal("outcome" in feedback.entries[0], false);
 
   await assert.rejects(
@@ -169,6 +238,15 @@ test("quality CLI finalizes a draft into a validated Sidecar and Markdown pair",
     },
   );
   assert.match(shadowPrepare.stdout, /Prepared shadow quality context/);
+  const shadowContext = JSON.parse(await fs.readFile(
+    path.join(root, "reports", "shadow", "state", "skill-radar-context.json"),
+    "utf8",
+  ));
+  assert.equal(shadowContext.preferenceSummary.policy, "positive-interest-primary");
+  assert.equal(shadowContext.preferenceSummary.interestedCount, 1);
+  assert.equal(shadowContext.preferenceSummary.notInterestedCount, 0);
+  assert.equal(shadowContext.preferenceSummary.unratedMeans, "unknown");
+  assert.equal(shadowContext.preferenceSummary.signals[0].title, "Stage Two First");
 
   const shadowFinalize = await execFileAsync(
     process.execPath,
@@ -555,6 +633,24 @@ test("source portfolio mode supports production while keeping shadow state isola
     process.execPath,
     [
       path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+      "feedback", "--url", draft.decisions[1].sourceUrl,
+      "--artifact-key", draft.decisions[1].sourceUrl,
+      "--title", draft.decisions[1].title,
+      "--category", draft.decisions[1].category,
+      "--rating", "interested", "--date", draft.reportDate,
+    ],
+    { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+  );
+  const productionFeedback = JSON.parse(await fs.readFile(
+    path.join(root, "reports", "feedback", "skill-radar.json"),
+    "utf8",
+  ));
+  const feedbackId = productionFeedback.entries[0].id;
+
+  await execFileAsync(
+    process.execPath,
+    [
+      path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
       "prepare", "--source-portfolio", "--date", draft.reportDate,
     ],
     { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
@@ -583,11 +679,41 @@ test("source portfolio mode supports production while keeping shadow state isola
   assert.equal(productionFiltered.sourceProfile, "portfolio-v1");
   assert.equal(productionFiltered.eligibleCandidates.length, 8);
 
+  const productionDraft = structuredClone(draft);
+  productionDraft.decisions[1].decision = "recommend";
+  productionDraft.decisions[1].display = structuredClone(productionDraft.decisions[0].display);
+  for (const decision of productionDraft.decisions) {
+    decision.preference = { effect: "neutral", matchedFeedbackIds: [], rationale: null };
+  }
+  productionDraft.decisions[1].preference = {
+    effect: "boosted",
+    matchedFeedbackIds: [feedbackId],
+    rationale: "Matches the explicit coding-workflow interest.",
+  };
+  const productionDraftPath = path.join(productionStateDir, "portfolio-draft.json");
+  await fs.writeFile(productionDraftPath, JSON.stringify(productionDraft), "utf8");
+  const invalidPreferenceDraft = structuredClone(productionDraft);
+  invalidPreferenceDraft.decisions[1].preference.matchedFeedbackIds = ["fb_invented"];
+  const invalidPreferenceDraftPath = path.join(productionStateDir, "portfolio-draft-invalid-preference.json");
+  await fs.writeFile(invalidPreferenceDraftPath, JSON.stringify(invalidPreferenceDraft), "utf8");
+  await assert.rejects(
+    execFileAsync(
+      process.execPath,
+      [
+        path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+        "finalize-curated", "--input", invalidPreferenceDraftPath,
+        "--candidates", productionFilteredPath,
+      ],
+      { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+    ),
+    /references unknown feedback/,
+  );
+
   await execFileAsync(
     process.execPath,
     [
       path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
-      "finalize-curated", "--input", path.join(shadowStateDir, "portfolio-draft.json"),
+      "finalize-curated", "--input", productionDraftPath,
       "--candidates", productionFilteredPath,
     ],
     { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
@@ -596,7 +722,10 @@ test("source portfolio mode supports production while keeping shadow state isola
     path.join(root, "reports", "outbox", `skill-radar-${draft.reportDate}.quality.json`),
     "utf8",
   ));
-  assert.equal(productionSidecar.items.length, 1);
+  assert.equal(productionSidecar.items.length, 2);
+  assert.deepEqual(productionSidecar.items.map((item) => item.title), ["Defer One", "Example Skill"]);
+  assert.equal(productionSidecar.decisions[1].preference.effect, "boosted");
+  assert.deepEqual(productionSidecar.decisions[1].preference.matchedFeedbackIds, [feedbackId]);
   assert.equal(productionSidecar.decisions[0].sourceContext.lane, "registryPulse");
   const productionRotation = JSON.parse(await fs.readFile(
     path.join(productionStateDir, "skill-radar-source-rotation.json"),

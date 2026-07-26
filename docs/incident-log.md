@@ -15,6 +15,25 @@ automatically classified as product defects.
 
 ## Incidents
 
+### 2026-07-18: Automation Interrupted During Unstable Travel Network
+
+- Codex Automation triggered and generated the production context and
+  authoritative `portfolio-v1` source plan at 08:16 Beijing time.
+- The run did not progress to a dated candidate pool, filtered candidates,
+  draft, or final outbox report. The source rotation therefore remained
+  `planned` rather than `completed`.
+- The Codex process continued for more than 40 minutes while the user's travel
+  network was intermittent, then appeared interrupted and was ended after no
+  additional production state had been written.
+- No `skill-radar-2026-07-18.md` or Sidecar was generated, so the public site
+  and PushPlus were not updated.
+- Resolution: no manual rerun and no backfill because the intended daily
+  delivery window had passed. The same source rotation may be reused by the
+  next valid production attempt according to the code-owned plan.
+- Classification: external runtime/network incident, not `no_update` and not
+  currently evidence of a source-portfolio, report-generation, or delivery
+  regression.
+
 ### 2026-07-09: Worker v2 Rejected Structured Report
 
 - Codex Automation successfully generated

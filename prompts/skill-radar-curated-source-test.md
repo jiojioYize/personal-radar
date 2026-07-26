@@ -15,6 +15,10 @@ node tools/quality/report-quality.mjs prepare --date YYYY-MM-DD --shadow
 The active history uses version 2 exact-artifact identity. Do not inspect or
 reinterpret the archived version 1 repository history.
 
+Read `reports/shadow/state/skill-radar-context.json` and use only its
+`preferenceSummary.signals` as preference evidence. Missing feedback means
+unknown, never negative.
+
 ## 2. Bounded Discovery
 
 Open and use all three sources:
@@ -113,6 +117,12 @@ evidence, native usability, portability, main trust caveat, and one concise
 decision reason. Use `no_update` only when every eligible candidate was
 verified and none was `recommend`. A network or research failure is a failed
 run, not `no_update`.
+
+Make quality decisions independently of preference. Then add internal
+`preference` to every decision: `boosted` may cite only matching `interested`
+signal IDs, `deprioritized` may cite only matching `not_interested` IDs, and a
+non-match must use `neutral` with no IDs and a null rationale. Preference may
+only change the ordering of qualified recommendations.
 
 ## 5. Write Curated Draft
 

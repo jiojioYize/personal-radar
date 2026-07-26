@@ -86,6 +86,15 @@
         "registryView": { "type": ["string", "null"], "enum": ["all_time", "trending", "hot", "official", null] }
       }
     },
+    "preference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["effect", "matchedFeedbackIds", "rationale"],
+      "properties": {
+        "effect": { "enum": ["boosted", "neutral", "deprioritized"] },
+        "matchedFeedbackIds": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/text" } },
+        "rationale": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
     "quality": {
       "type": "object", "additionalProperties": false, "required": ["sourceCheckedAt", "license", "history"],
       "properties": {
@@ -109,7 +118,7 @@
     },
     "decision": {
       "type": "object", "additionalProperties": true,
-      "required": ["id", "title", "category", "sourceUrl", "canonicalUrl", "artifactKey", "artifactScope", "artifactPath", "discovery", "decision", "reason", "officialSourceVerified", "sourceCheckedAt", "license", "history"],
+      "required": ["id", "title", "category", "sourceUrl", "canonicalUrl", "artifactKey", "artifactScope", "artifactPath", "discovery", "decision", "reason", "officialSourceVerified", "sourceCheckedAt", "license", "history", "preference"],
       "properties": {
         "id": { "type": "string" }, "title": { "$ref": "#/$defs/text" }, "category": { "$ref": "#/$defs/text" },
         "sourceUrl": { "$ref": "#/$defs/httpsUrl" }, "canonicalUrl": { "$ref": "#/$defs/httpsUrl" }, "artifactKey": { "$ref": "#/$defs/text" },
@@ -118,6 +127,7 @@
         "reason": { "$ref": "#/$defs/text" },
         "officialSourceVerified": { "const": true }, "sourceCheckedAt": { "type": "string", "format": "date-time" },
         "license": { "type": ["string", "null"] }, "history": { "$ref": "#/$defs/history" },
+        "preference": { "$ref": "#/$defs/preference" },
         "sourceContext": { "$ref": "#/$defs/sourceContext" }
       }
     }

@@ -246,8 +246,9 @@ history; OpenSSF and deps.dev may provide applicable security evidence. RadarAI,
 X, and curated lists remain discovery sources. Missing data is recorded as
 `unknown` or `null`, never guessed and never silently treated as failure.
 
-Interest feedback changes ordering by at most five points. It cannot promote a
-candidate that fails the base quality threshold or a hard safety gate.
+Interest feedback does not create a numeric score. It may only move an already
+qualified recommendation ahead of or behind other qualified recommendations;
+it cannot change a quality decision, history exclusion, or hard safety gate.
 
 ## Daily Outcome Rules
 
@@ -275,8 +276,17 @@ Stage 2 feedback is intentionally coarse. It supports only two explicit
 interest signals:
 
 - `interested`: this item is worth remembering or seeing more of.
-- `not_interested`: this item is not a good fit and similar items should be
-  ranked lower.
+- `not_interested`: an optional signal for a clear mismatch; similar items
+  should be ranked lower.
+
+The system follows a positive-interest-primary policy. Users are expected to
+provide mostly `interested` feedback; missing feedback is always unknown and
+must not be converted into a negative signal. Quality decisions remain
+independent of preference. After quality review, Automation may cite prepared
+feedback IDs as a direct semantic match, and deterministic code moves only
+qualified recommendations forward or backward. Every non-neutral effect is
+stored in the Sidecar decision data with validated feedback IDs and an internal
+rationale; none of this metadata is shown in public copy.
 
 The user can give feedback in natural language, such as "I am interested in
 skill-sniffer" or "SkillForge is not interesting to me." Codex can translate
@@ -287,6 +297,15 @@ daily Stage 2 feedback fields. Opening details and source links should become
 automatic website events in a later product stage. Installation, adaptation,
 and long-term usefulness are optional later evidence, not a daily validation
 burden.
+
+The preference mechanism can be validated offline instead of waiting for one
+new report per day. `feedback-replay` applies isolated synthetic signals to an
+existing published Sidecar, compares the original and personalized order, and
+writes only to ignored `reports/experiments/`. It cannot add or remove selected
+items, touch production feedback or history, or forward a report. This tests
+whether explicit interests change ranking in the intended direction; it does
+not claim that the current chat-based feedback capture is the final user
+experience.
 
 X is an auxiliary discovery source. The product rule is: dual-lane discovery,
 single quality ranking. GitHub and official documentation remain the primary
@@ -405,11 +424,25 @@ Record feedback:
 
 ```powershell
 node tools/quality/report-quality.mjs feedback `
-  --url "https://github.com/example/project" `
+  --url "https://github.com/example/project/tree/main/skills/browser-testing" `
+  --artifact-key "https://github.com/example/project#artifact=skills/browser-testing" `
+  --title "Browser Testing" `
   --rating interested `
   --category "browser automation" `
-  --note "I want to track more security-scanning skill packs."
+  --note "I want to track more browser-testing workflows."
 ```
+
+Replay an isolated interest scenario against an existing report:
+
+```powershell
+node tools/quality/report-quality.mjs feedback-replay `
+  --report reports/outbox/skill-radar-YYYY-MM-DD.quality.json `
+  --scenario reports/experiments/feedback-replay/scenarios/example.json
+```
+
+In normal use the user only needs to state the title and interest in a Codex
+conversation. Codex resolves the matching report item and records these exact
+fields. Direct JSON editing is not required.
 
 Add an X candidate:
 
@@ -449,7 +482,7 @@ npm run quality:summary
 | Milestone | Status |
 | --- | --- |
 | Product strategy and Stage 2 record | Implemented locally |
-| Schema, scoring, history, feedback, inbox, and Markdown renderer | Implemented locally |
+| Schema, qualitative review, history, feedback, inbox, and Markdown renderer | Implemented locally |
 | Stage 2.1 GitHub collector, SQLite snapshots, and candidate export | Implemented; authenticated Task Scheduler run succeeded on 2026-07-12 with 22 public repositories and 7,783 artifacts |
 | Stage 2 Automation prompt | Implemented locally |
 | Sidecar-aware forwarder | Implemented locally |
@@ -463,6 +496,7 @@ npm run quality:summary
 | Quality v2.1 calibration | Accepted after `no_update` and evidence-backed `published` shadow runs on 2026-07-12 |
 | Curated-source v3 simplification | Initial Automation shadow passed with 11 candidates, 5 verified decisions, and 3 recommendations; contract then expanded to verify every eligible candidate, persist 14/90-day review outcomes, and replace visible action labels with direct usage guidance before the first scheduled production run |
 | Source portfolio production | Promoted 2026-07-16 after two successful isolated runs; production now uses an independent code-owned plan and rotation under a three-day observation, while legacy fixed-source logic remains a short-term rollback reference |
+| Feedback ranking replay | Passed five isolated historical-report scenarios on 2026-07-26: four positive-interest cases and one combined positive/optional-negative case; selected sets stayed unchanged, unrelated items stayed neutral, and every non-neutral effect remained traceable |
 | 14-day observation | Restarts on the first successful scheduled v3 production day |
 | 30-day acceptance | Not started |
 
@@ -498,9 +532,11 @@ deployment.
 - At least 12 valid daily outcomes, including `published` or valid `no_update`.
 - Every outcome has a schema-valid Sidecar.
 - No unexplained repository-level repeat.
-- Every selected item has a base score of at least 70.
-- At least eight reports with recommendations receive two lightweight interest
-  feedback entries, recorded as `interested` or `not_interested`.
+- Every selected item passes the v3 qualitative primary-source and trust gates.
+- Naturally provided positive-interest feedback is preserved as traceable
+  signals; missing feedback is not counted as negative.
+- At least one later report contains a validated preference effect that changes
+  qualified-item ordering and can be reviewed as a concrete case.
 - Mobile push is scannable and website details remain complete.
 - No mojibake, structure mismatch, low-quality padding, or content injection.
 
@@ -509,9 +545,10 @@ deployment.
 - At least 26 valid daily outcomes.
 - Zero unexplained 30-day repository repeats.
 - All selected sources were reachable and verified at generation time.
-- At least 60% of rated items are marked `interested`.
-- History or feedback demonstrably changes later filtering or ranking.
-- X candidate volume, selection rate, and interest rate are measured.
+- Every claimed preference effect references a real prepared feedback signal;
+  invented IDs and incompatible positive/negative effects are rejected.
+- History or feedback demonstrably changes later filtering or ranking, and the
+  user judges the direction useful in at least one documented case.
 - `published`, `no_update`, and production incidents remain correctly
   distinguished.
 - Push supports discovery and judgment; the website supports evidence,

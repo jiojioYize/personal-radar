@@ -1,6 +1,8 @@
 import { artifactKeyFor, canonicalizeUrl, stableSourceId } from "./report-structure.js";
 
 const DECISIONS = new Set(["recommend", "defer", "reject"]);
+const PREFERENCE_EFFECTS = new Set(["boosted", "neutral", "deprioritized"]);
+const PREFERENCE_ORDER = { boosted: 0, neutral: 1, deprioritized: 2 };
 const COLLECTION_SCOPES = new Set(["general_skill_collection", "official_catalog", "mixed_toolkit"]);
 const DISPLAY_FIELDS = [
   "oneLiner", "whyNow", "bestFor", "action", "primaryCaution",
@@ -38,6 +40,7 @@ export function enrichCuratedReport(input, { recentSources = [] } = {}) {
       canonicalUrl,
       artifactKey,
       id: stableSourceId(artifactKey),
+      preference: normalizePreference(decision.preference),
       history: {
         exactDuplicate: Boolean(prior),
         previousDates: prior?.dates || [],
@@ -45,7 +48,14 @@ export function enrichCuratedReport(input, { recentSources = [] } = {}) {
     };
   });
 
-  const selected = enrichedDecisions.filter((decision) => decision.decision === "recommend");
+  const selected = enrichedDecisions
+    .filter((decision) => decision.decision === "recommend")
+    .map((decision, index) => ({ decision, index }))
+    .sort((left, right) =>
+      (PREFERENCE_ORDER[left.decision.preference.effect] ?? PREFERENCE_ORDER.neutral)
+      - (PREFERENCE_ORDER[right.decision.preference.effect] ?? PREFERENCE_ORDER.neutral)
+      || left.index - right.index)
+    .map(({ decision }) => decision);
   const items = selected.map((decision, index) => ({
     id: decision.id,
     rank: index + 1,
@@ -119,6 +129,7 @@ export function validateCuratedReport(report, { sourceProfile = null } = {}) {
   for (const [index, decision] of (report.decisions || []).entries()) {
     const label = `decisions[${index}]`;
     if (!DECISIONS.has(decision.decision)) errors.push(`${label}.decision is invalid`);
+    if (!validPreference(decision.preference)) errors.push(`${label}.preference is invalid`);
     if (!text(decision.title) || !text(decision.category) || !text(decision.reason)) errors.push(`${label} requires title, category, and reason`);
     if (!https(decision.sourceUrl) || !https(decision.discovery?.url)) errors.push(`${label} sources must use HTTPS`);
     if (decision.officialSourceVerified !== true || !dateTime(decision.sourceCheckedAt)) errors.push(`${label} requires verified primary-source evidence`);
@@ -137,6 +148,27 @@ export function validateCuratedReport(report, { sourceProfile = null } = {}) {
     }
   }
   return errors;
+}
+
+function normalizePreference(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { effect: "neutral", matchedFeedbackIds: [], rationale: null };
+  }
+  return {
+    effect: String(value.effect || "neutral"),
+    matchedFeedbackIds: Array.isArray(value.matchedFeedbackIds)
+      ? [...new Set(value.matchedFeedbackIds.map((id) => String(id || "").trim()).filter(Boolean))]
+      : [],
+    rationale: value.rationale == null ? null : String(value.rationale).trim() || null,
+  };
+}
+
+function validPreference(value) {
+  if (!PREFERENCE_EFFECTS.has(value?.effect) || !Array.isArray(value?.matchedFeedbackIds)) return false;
+  if (new Set(value.matchedFeedbackIds).size !== value.matchedFeedbackIds.length) return false;
+  if (value.matchedFeedbackIds.some((id) => !text(id))) return false;
+  if (value.effect === "neutral") return value.matchedFeedbackIds.length === 0 && value.rationale === null;
+  return value.matchedFeedbackIds.length > 0 && text(value.rationale);
 }
 
 function publicCopyFields(report) {

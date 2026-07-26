@@ -13,7 +13,32 @@ test("enriches all curated decisions without numeric scoring or action labels", 
   assert.equal("recommendation" in report.items[0], false);
   assert.match(report.items[0].artifactKey, /#artifact=skills\/example$/);
   assert.equal("baseScore" in report.items[0].quality, false);
+  assert.deepEqual(report.decisions[0].preference, {
+    effect: "neutral", matchedFeedbackIds: [], rationale: null,
+  });
   assert.deepEqual(validateCuratedReport(report), []);
+});
+
+test("orders qualified recommendations by validated preference effect", () => {
+  const fixture = curatedFixture();
+  fixture.decisions[1].decision = "recommend";
+  fixture.decisions[1].display = structuredClone(fixture.decisions[0].display);
+  fixture.decisions[1].preference = {
+    effect: "boosted",
+    matchedFeedbackIds: ["fb_interest"],
+    rationale: "Matches an explicit coding-workflow interest.",
+  };
+  const report = enrichCuratedReport(fixture);
+  assert.deepEqual(report.items.map((item) => item.title), ["Defer One", "Example Skill"]);
+  assert.deepEqual(validateCuratedReport(report), []);
+});
+
+test("rejects malformed preference claims", () => {
+  const fixture = curatedFixture();
+  fixture.decisions[0].preference = {
+    effect: "boosted", matchedFeedbackIds: [], rationale: null,
+  };
+  assert.match(validateCuratedReport(enrichCuratedReport(fixture)).join("\n"), /preference is invalid/);
 });
 
 test("rejects exact artifact repeats in curated reports", () => {

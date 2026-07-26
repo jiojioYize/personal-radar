@@ -16,6 +16,10 @@ node tools/quality/report-quality.mjs prepare --date YYYY-MM-DD --shadow --sourc
 Use only shadow history and review state. Do not inspect or modify production
 outbox, history, or review-state files.
 
+Read `reports/shadow/state/skill-radar-context.json` and use only its
+`preferenceSummary.signals` as preference evidence. Missing feedback means
+unknown, never negative.
+
 Read the code-generated plan before discovery:
 
 ```text
@@ -181,6 +185,12 @@ Do not use numeric scores or preserve lane quotas in final recommendations.
 Popularity and official ownership do not override artifact quality. Explicitly
 inspect scripts, hooks, authentication, secrets, network access, and external
 dependencies. A research or network failure is a failed test.
+
+Make quality decisions independently of preference. Then add internal
+`preference` to every decision: `boosted` may cite only matching `interested`
+signal IDs, `deprioritized` may cite only matching `not_interested` IDs, and a
+non-match must use `neutral` with no IDs and a null rationale. Preference may
+only change the ordering of qualified recommendations.
 
 ## 5. Draft and Finalize
 

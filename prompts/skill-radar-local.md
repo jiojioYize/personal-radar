@@ -29,6 +29,17 @@ The plan is authoritative. Use its exact `registryFocus`, `registryUrl`, and
 on the same date reuses the same plan; the next completed production date
 advances it.
 
+Also read:
+
+```text
+reports/state/skill-radar-context.json
+```
+
+Use only `preferenceSummary.signals` as preference evidence. The policy is
+positive-interest-primary: `interested` is the normal explicit signal,
+`not_interested` is optional, and an unrated item always means unknown. Do not
+infer disinterest from missing feedback.
+
 ## 2. Discover by Lane
 
 Collect 8-12 concrete candidates. Search all three daily lanes independently;
@@ -186,6 +197,13 @@ decision reason. Use `no_update` only when every eligible candidate was
 verified and none was `recommend`. A network or research failure is a failed
 run, not `no_update`.
 
+Make the quality decision before considering preference. Preference cannot
+turn a `defer` or `reject` into `recommend`, bypass trust boundaries, or change
+history eligibility. After the quality decision, identify only direct semantic
+matches between the candidate's task/category and the prepared feedback
+signals. Code uses these matches only to order otherwise qualified
+recommendations.
+
 ## 5. Write Curated Draft
 
 Write UTF-8 JSON:
@@ -230,10 +248,19 @@ Every decision requires:
   candidate identity fields exactly so the finalizer can match the artifact;
 - `decision`, `reason`, `officialSourceVerified: true`, `sourceCheckedAt`, and
   known license or `null`.
+- internal `preference` with `effect`, `matchedFeedbackIds`, and `rationale`:
+  - use `boosted` only with one or more matching `interested` signal IDs;
+  - use `deprioritized` only with one or more matching `not_interested` signal
+    IDs;
+  - otherwise use `{ "effect": "neutral", "matchedFeedbackIds": [],
+    "rationale": null }`;
+  - non-neutral rationale must briefly explain the direct task/category match;
+    never place this internal explanation in public display copy.
 
 The finalizer replaces title, source, artifact identity, and discovery fields
 with authoritative values from the filtered candidate file. It rejects drafts
-that omit an eligible artifact or select the same artifact more than once.
+that omit an eligible artifact, select the same artifact more than once, invent
+a feedback ID, or use positive and negative feedback with the wrong effect.
 
 For each `recommend` decision also provide bilingual `display.zh` and
 `display.en`. In each language include:

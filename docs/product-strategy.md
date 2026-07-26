@@ -118,8 +118,9 @@ Explicit preferences set the initial direction. Feedback continuously corrects
 the ranking.
 
 User-facing feedback should stay lightweight from the start. Stage 2 local
-validation now uses the same coarse mental model as the future product:
-interested or not interested. The product should not ask users to decide
+validation uses positive interest as the normal signal and keeps explicit
+disinterest optional. Missing feedback means unknown, never negative. The
+product should not ask users to decide
 whether a skill is already "useful", "installed", or "adapted" at first glance.
 Those outcomes are better treated as optional later-stage evidence, not the
 main feedback loop.
@@ -129,18 +130,19 @@ The practical hosted feedback model is:
 | Signal | Product treatment | Recommendation meaning |
 | --- | --- | --- |
 | Save | Primary explicit positive signal; add to a saved-skills area | Strong interest, worth remembering |
-| Not interested | Primary explicit negative signal; do not need a separate user-facing list | Reduce similar future recommendations |
+| Not interested | Optional explicit negative signal for a clear mismatch; no separate user-facing list | Reduce similar future recommendations |
 | Expand details | Weak interest signal, deduplicated per user and skill | User wanted more context |
 | Open source link | Weak interest signal, same weight as expand details | User wanted external verification |
 | Page dwell time | Product analytics only in early versions | Too noisy without skill-level focus |
 | Report page revisit | Product analytics only in early versions | Not specific enough to infer skill preference |
 
-Save and not-interested are the first personalization signals to build because
-they are explicit, easy to explain, and useful to the user immediately. Saved
-skills should become a personal collection that users can revisit.
+Save is the primary personalization signal because users naturally notice what
+they care about more often than they classify every irrelevant item. A saved
+skills area also creates immediate user value. Not-interested remains available
+for strong mismatches but is not required for every report.
 
 In the current single-user Stage 2 implementation, the equivalent local signals
-are recorded as `interested` and `not_interested`. They are gathered through
+are recorded as `interested` and optional `not_interested`. They are gathered through
 plain-language Codex feedback rather than website buttons because the public
 site has no identity layer yet, and feedback written to Worker KV would not
 automatically reach the local recommendation pipeline.

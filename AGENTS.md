@@ -166,6 +166,10 @@ Current Stage 2 production rules:
    preceding seven days unless a material change is evidenced.
 9. Version 3 public cards do not show `install` or `adapt` labels. They explain
    what the skill does, who it suits, how to start, and the main caution.
+10. Feedback is positive-interest-primary. Missing feedback means unknown.
+    Preference cannot change quality eligibility or decisions; validated
+    feedback IDs may only reorder otherwise qualified recommendations, with
+    the effect retained in internal Sidecar decision data.
 
 ## Operational Notes
 

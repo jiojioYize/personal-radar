@@ -20,6 +20,7 @@ const STATE_DIR = path.join(ROOT, "reports", "state");
 const FEEDBACK_DIR = path.join(ROOT, "reports", "feedback");
 const INBOX_DIR = path.join(ROOT, "reports", "inbox");
 const QUALITY_DIR = path.join(ROOT, "reports", "quality");
+const EXPERIMENTS_DIR = path.join(ROOT, "reports", "experiments");
 const SHADOW_DIR = path.join(ROOT, "reports", "shadow");
 const SHADOW_OUTBOX_DIR = path.join(SHADOW_DIR, "outbox");
 const SHADOW_STATE_DIR = path.join(SHADOW_DIR, "state");
@@ -68,6 +69,7 @@ try {
   else if (command === "finalize-curated") await finalizeCuratedReport(args);
   else if (command === "filter-candidates") await filterCandidates(args);
   else if (command === "feedback") await recordFeedback(args);
+  else if (command === "feedback-replay") await replayFeedback(args);
   else if (command === "social-add") await addSocialCandidate(args);
   else if (command === "summary") await writeQualitySummary(args);
   else printHelp();
@@ -495,6 +497,7 @@ async function finalizeCuratedReport(options) {
     sourceCounts,
   };
   const reportDate = normalizeDate(deterministicRaw.reportDate || beijingDate());
+  const preferenceSummary = await readPreparedPreferenceSummary(paths, reportDate);
   if (filtered.asOf !== reportDate) {
     throw new Error("curated draft reportDate must match filtered candidate date");
   }
@@ -527,6 +530,7 @@ async function finalizeCuratedReport(options) {
         type: discoveryLabel(candidate.discoveryType, candidate.sourceId),
         url: candidate.discoveryUrl,
       },
+      preference: bindDecisionPreference(decision.preference, preferenceSummary, candidate.title),
       ...(sourceProfile === "portfolio-v1" ? {
         sourceContext: {
           lane: candidate.discoveryType,
@@ -638,23 +642,174 @@ async function recordFeedback(options) {
 
   await ensureLocalFiles();
   const feedback = await readJson(FEEDBACK_PATH, { version: 1, entries: [] });
+  const sourceUrl = String(options.url).trim();
   const canonicalUrl = canonicalizeUrl(options.url);
+  const artifactKey = String(options["artifact-key"] || sourceUrl).trim();
+  const feedbackDate = normalizeDate(options.date || beijingDate());
   const entry = {
-    id: `${normalizeDate(options.date || beijingDate())}:${stableSourceId(canonicalUrl)}`,
-    reportDate: normalizeDate(options.date || beijingDate()),
+    id: stableSourceId(artifactKey).replace(/^src_/, "fb_"),
+    feedbackDate,
+    reportDate: feedbackDate,
+    artifactKey,
+    sourceUrl,
     canonicalUrl,
+    title: options.title ? String(options.title).trim() : null,
     category: String(options.category || "uncategorized"),
     rating: options.rating,
     note: options.note || null,
     recordedAt: new Date().toISOString(),
   };
 
+  feedback.version = 2;
   feedback.entries = [
     entry,
     ...feedback.entries.filter((existing) => existing.id !== entry.id),
   ];
   await writeJson(FEEDBACK_PATH, feedback);
   console.log(`Recorded feedback for ${canonicalUrl}`);
+}
+
+async function replayFeedback(options) {
+  const reportPath = resolveRequiredInput(options.report, "feedback-replay --report");
+  const scenarioPath = resolveRequiredInput(options.scenario, "feedback-replay --scenario");
+  const report = await readJsonRequired(reportPath);
+  const scenario = await readJsonRequired(scenarioPath);
+
+  if (report.schemaVersion !== 3 || report.status !== "published") {
+    throw new Error("feedback replay requires a published schema v3 report");
+  }
+  if (!textValue(scenario.name) || !Array.isArray(scenario.signals) || !Array.isArray(scenario.matches)) {
+    throw new Error("feedback replay scenario requires name, signals, and matches");
+  }
+
+  const recommended = report.decisions.filter((decision) => decision.decision === "recommend");
+  if (!recommended.length) throw new Error("feedback replay report has no recommended items");
+  const recommendedByArtifact = new Map(recommended.map((decision) => [decision.artifactKey, decision]));
+  const signalIds = new Set();
+  for (const signal of scenario.signals) {
+    if (!textValue(signal?.id) || !["interested", "not_interested"].includes(signal?.rating)) {
+      throw new Error("feedback replay signals require unique ids and valid ratings");
+    }
+    if (signalIds.has(signal.id)) throw new Error(`feedback replay signal id is duplicated: ${signal.id}`);
+    signalIds.add(signal.id);
+  }
+
+  const matchesByArtifact = new Map();
+  for (const match of scenario.matches) {
+    if (!textValue(match?.artifactKey) || !recommendedByArtifact.has(match.artifactKey)) {
+      throw new Error(`feedback replay match is not a recommended artifact: ${match?.artifactKey || "missing"}`);
+    }
+    if (matchesByArtifact.has(match.artifactKey)) {
+      throw new Error(`feedback replay artifact is matched more than once: ${match.artifactKey}`);
+    }
+    const preference = bindDecisionPreference(match, { signals: scenario.signals }, recommendedByArtifact.get(match.artifactKey).title);
+    if (preference.effect === "neutral") {
+      throw new Error(`feedback replay matches must be non-neutral: ${match.artifactKey}`);
+    }
+    matchesByArtifact.set(match.artifactKey, preference);
+  }
+
+  const baseline = recommended.map((decision, index) => ({
+    artifactKey: decision.artifactKey,
+    title: decision.title,
+    category: decision.category,
+    baselineRank: index + 1,
+    preference: matchesByArtifact.get(decision.artifactKey)
+      || { effect: "neutral", matchedFeedbackIds: [], rationale: null },
+  }));
+  const preferenceOrder = { boosted: 0, neutral: 1, deprioritized: 2 };
+  const personalized = [...baseline]
+    .sort((left, right) =>
+      preferenceOrder[left.preference.effect] - preferenceOrder[right.preference.effect]
+      || left.baselineRank - right.baselineRank)
+    .map((item, index) => ({ ...item, personalizedRank: index + 1 }));
+  const personalizedByArtifact = new Map(personalized.map((item) => [item.artifactKey, item]));
+  const changes = baseline.map((item) => {
+    const personalizedItem = personalizedByArtifact.get(item.artifactKey);
+    return {
+      artifactKey: item.artifactKey,
+      title: item.title,
+      category: item.category,
+      fromRank: item.baselineRank,
+      toRank: personalizedItem.personalizedRank,
+      effect: item.preference.effect,
+      matchedFeedbackIds: item.preference.matchedFeedbackIds,
+      rationale: item.preference.rationale,
+    };
+  });
+  const result = {
+    version: 1,
+    experiment: "feedback-replay",
+    scenario: {
+      name: scenario.name,
+      description: scenario.description || null,
+      sourceReportDate: report.reportDate,
+      signals: scenario.signals,
+    },
+    guardrails: {
+      selectedSetUnchanged: baseline.length === personalized.length
+        && baseline.every((item) => personalizedByArtifact.has(item.artifactKey)),
+      unrelatedItemsRemainNeutral: baseline
+        .filter((item) => !matchesByArtifact.has(item.artifactKey))
+        .every((item) => item.preference.effect === "neutral"),
+      allNonNeutralEffectsTraceable: changes
+        .filter((item) => item.effect !== "neutral")
+        .every((item) => item.matchedFeedbackIds.length > 0),
+    },
+    baselineOrder: baseline.map((item) => item.title),
+    personalizedOrder: personalized.map((item) => item.title),
+    changes,
+  };
+
+  if (Object.values(result.guardrails).some((passed) => !passed)) {
+    throw new Error("feedback replay violated an isolation guardrail");
+  }
+
+  const outputDir = options.output
+    ? resolveInput(options.output)
+    : path.join(EXPERIMENTS_DIR, "feedback-replay", safeFileName(scenario.name));
+  await fs.mkdir(outputDir, { recursive: true });
+  const jsonPath = path.join(outputDir, "result.json");
+  const markdownPath = path.join(outputDir, "result.md");
+  await writeJson(jsonPath, result);
+  await fs.writeFile(markdownPath, renderFeedbackReplay(result), "utf8");
+  console.log(`Completed feedback replay: ${relative(jsonPath)}`);
+}
+
+function renderFeedbackReplay(result) {
+  const lines = [
+    `# Feedback Replay: ${result.scenario.name}`,
+    "",
+    result.scenario.description || "Offline preference-ordering replay.",
+    "",
+    `- Source report: ${result.scenario.sourceReportDate}`,
+    `- Signals: ${result.scenario.signals.length}`,
+    `- Selected set unchanged: ${result.guardrails.selectedSetUnchanged ? "yes" : "no"}`,
+    `- Unrelated items remain neutral: ${result.guardrails.unrelatedItemsRemainNeutral ? "yes" : "no"}`,
+    "",
+    "## Order comparison",
+    "",
+    "| Before | After | Effect | Evidence |",
+    "| ---: | ---: | --- | --- |",
+  ];
+  for (const change of result.changes) {
+    lines.push(`| ${change.fromRank}. ${change.title} | ${change.toRank}. ${change.title} | ${change.effect} | ${change.matchedFeedbackIds.join(", ") || "-"} |`);
+  }
+  lines.push("", "## Explanations", "");
+  for (const change of result.changes.filter((item) => item.effect !== "neutral")) {
+    lines.push(`- **${change.title}:** ${change.rationale}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function safeFileName(value) {
+  const normalized = String(value).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  if (!normalized) throw new Error("feedback replay scenario name cannot form an output path");
+  return normalized;
+}
+
+function textValue(value) {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 async function addSocialCandidate(options) {
@@ -703,6 +858,11 @@ async function writeQualitySummary(options) {
   const items = selected.flatMap((report) => report.items || []);
   const interested = windowFeedback.filter((entry) => entry.rating === "interested").length;
   const notInterested = windowFeedback.filter((entry) => entry.rating === "not_interested").length;
+  const preferenceDecisions = selected.flatMap((report) => report.decisions || []);
+  const boostedDecisions = preferenceDecisions.filter((decision) => decision.preference?.effect === "boosted");
+  const deprioritizedDecisions = preferenceDecisions.filter((decision) => decision.preference?.effect === "deprioritized");
+  const referencedFeedbackIds = new Set(preferenceDecisions.flatMap((decision) =>
+    decision.preference?.matchedFeedbackIds || []));
   const selectedSourceCounts = countBy(items, (item) => item.discovery?.type || "unknown");
   const candidateSourceCounts = {};
   const xDiscoveryTotals = {
@@ -747,6 +907,8 @@ async function writeQualitySummary(options) {
     `- Selected items: ${items.length}`,
     `- Average base score: ${averageScore}`,
     `- Interest feedback: ${interested} interested, ${notInterested} not interested`,
+    `- Preference effects: ${boostedDecisions.length} boosted, ${deprioritizedDecisions.length} deprioritized`,
+    `- Feedback signals referenced by later decisions: ${referencedFeedbackIds.size}`,
     `- Candidate source mix: ${formatCounts(candidateSourceCounts)}`,
     `- Selected source mix: ${formatCounts(selectedSourceCounts)}`,
     `- X discovery: ${xDiscoveryTotals.searchedDays}/${selected.length} days searched, ${xCandidates} candidates, ${xItems.length} selected, ${xSelectionRate} selection rate`,
@@ -934,7 +1096,73 @@ function summarizePreferences(entries) {
     if (entry.rating === "interested") categories[category].interested += 1;
     if (entry.rating === "not_interested") categories[category].notInterested += 1;
   }
-  return { totalFeedback: entries.length, categories };
+  const signals = [...entries]
+    .sort((left, right) => String(right.recordedAt || "").localeCompare(String(left.recordedAt || "")))
+    .slice(0, 50)
+    .map((entry) => ({
+      id: String(entry.id),
+      rating: entry.rating,
+      title: entry.title || null,
+      category: entry.category || "uncategorized",
+      artifactKey: entry.artifactKey || entry.canonicalUrl,
+      canonicalUrl: entry.canonicalUrl,
+      note: entry.note || null,
+      recordedAt: entry.recordedAt || null,
+    }));
+  return {
+    version: 2,
+    policy: "positive-interest-primary",
+    totalFeedback: entries.length,
+    interestedCount: entries.filter((entry) => entry.rating === "interested").length,
+    notInterestedCount: entries.filter((entry) => entry.rating === "not_interested").length,
+    unratedMeans: "unknown",
+    categories,
+    signals,
+  };
+}
+
+async function readPreparedPreferenceSummary(paths, reportDate) {
+  const context = await readJson(paths.contextPath, null);
+  if (!context || context.asOf !== reportDate) return summarizePreferences([]);
+  return context.preferenceSummary || summarizePreferences([]);
+}
+
+function bindDecisionPreference(value, summary, title) {
+  const signals = Array.isArray(summary?.signals) ? summary.signals : [];
+  const knownSignals = new Map(signals.map((signal) => [signal.id, signal]));
+  if (!signals.length && value == null) {
+    return { effect: "neutral", matchedFeedbackIds: [], rationale: null };
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`curated decision preference is required when feedback exists: ${title}`);
+  }
+  const effect = String(value.effect || "neutral");
+  if (!new Set(["boosted", "neutral", "deprioritized"]).has(effect)) {
+    throw new Error(`curated decision preference effect is invalid: ${title}`);
+  }
+  const matchedFeedbackIds = Array.isArray(value.matchedFeedbackIds)
+    ? [...new Set(value.matchedFeedbackIds.map((id) => String(id || "").trim()).filter(Boolean))]
+    : [];
+  const rationale = value.rationale == null ? null : String(value.rationale).trim() || null;
+  const matchedSignals = matchedFeedbackIds.map((id) => {
+    const signal = knownSignals.get(id);
+    if (!signal) throw new Error(`curated decision references unknown feedback ${id}: ${title}`);
+    return signal;
+  });
+  if (effect === "neutral") {
+    if (matchedFeedbackIds.length || rationale !== null) {
+      throw new Error(`neutral preference cannot claim feedback evidence: ${title}`);
+    }
+  } else {
+    if (!matchedFeedbackIds.length || !rationale) {
+      throw new Error(`non-neutral preference requires feedback evidence and rationale: ${title}`);
+    }
+    const expectedRating = effect === "boosted" ? "interested" : "not_interested";
+    if (matchedSignals.some((signal) => signal.rating !== expectedRating)) {
+      throw new Error(`${effect} preference uses incompatible feedback: ${title}`);
+    }
+  }
+  return { effect, matchedFeedbackIds, rationale };
 }
 
 function addHistorySource(sourceMap, entry) {
@@ -1138,7 +1366,8 @@ Commands:
   finalize --input reports/state/skill-radar-draft.json [--shadow]
   finalize-curated --input FILE --candidates FILTERED_FILE [--shadow]
   filter-candidates --input FILE [--output FILE] [--date YYYY-MM-DD] [--shadow] [--source-portfolio]
-  feedback --url URL --rating interested|not_interested [--date YYYY-MM-DD] [--category NAME] [--note TEXT]
+  feedback --url URL --rating interested|not_interested [--date YYYY-MM-DD] [--title NAME] [--artifact-key KEY] [--category NAME] [--note TEXT]
+  feedback-replay --report SIDECAR --scenario FILE [--output DIR]
   social-add --url https://x.com/... [--note TEXT]
   summary [--days 30] [--date YYYY-MM-DD]`);
 }
