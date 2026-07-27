@@ -34,7 +34,16 @@ automatically classified as product defects.
   Automation must search the same canonical repository, correct the candidate
   path, and rerun filtering. Deterministic validation now rejects a decision
   that claims primary-source verification while its reason describes an
-  unresolved 404 or unverifiable source.
+  unresolved 404 or unverifiable source. A targeted shadow replay then passed
+  with the corrected `.curated` path, primary-source verification, and the
+  related positive-interest signal moving the qualified Skill to rank 1. A
+  separate fresh-context blind agent, given only the stale URL and the updated
+  recovery rule, independently followed the repository README to `.curated`,
+  matched the exact slug, and confirmed the recovered `SKILL.md`.
+- The incorrect production `reject` had also been persisted in local review
+  state with a 90-day exclusion. That invalid derived entry was removed after
+  the incident audit; the published report and delivery record were left
+  unchanged.
 - Delivery policy: no historical report edit or PushPlus backfill. The
   correction applies to future runs.
 - Classification: content-quality false negative and recovery-contract defect,

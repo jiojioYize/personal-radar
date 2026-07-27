@@ -180,5 +180,10 @@ Current Stage 2 production rules:
 - Use Codex Automation for richer analysis, synthesis, and adaptation ideas.
 - Use the forwarder for dependable local network delivery from outbox report files to the Worker.
 - Use the Worker for dependable ingest, storage, website rendering, and PushPlus delivery.
+- After confirming a production classification or identity error, audit every
+  derived local state file that could preserve it, including review state,
+  history, candidate state, and source rotation. Remove or correct only the
+  invalid derived entries before the next run. Do not edit or republish the
+  already delivered report unless explicitly requested.
 - When testing delivery, avoid creating duplicate PushPlus messages unless intentionally checking push behavior.
 - After changing Worker code or `wrangler.toml`, deploy with Wrangler and verify `/health`.

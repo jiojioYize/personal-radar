@@ -268,6 +268,10 @@ it cannot change a quality decision, history exclusion, or hard safety gate.
 - Network, research, validation, or scheduling failure produces no report and
   must not be represented as `no_update`.
 - Late or missed reports follow the existing no-backfill incident policy.
+- A confirmed false classification does not trigger historical republishing,
+  but it does trigger a derived-state audit. Invalid review-state, history,
+  candidate-state, or rotation entries must be removed or corrected before the
+  next production run so the defect does not silently affect future selection.
 
 ## History, Interest Feedback, And Social Inbox
 
@@ -522,6 +526,7 @@ PushPlus was switched to the HTML card format.
 
 | Date | Result | Items | Validation | Production impact | Notes |
 | --- | --- | ---: | --- | --- | --- |
+| 2026-07-27 blind source recovery and targeted preference | `published` | 6 | A fresh-context agent received only the stale URL and independently recovered `skills/.curated/figma-implement-design` from the same repository README, exact directory, and `SKILL.md`; a separate isolated replay then reused the 11 production candidates and passed code filtering plus the v3 finalizer | None | The first-party Skill became `recommend`, referenced the real `Frontend Design` interest signal `fb_f7c1a3b7`, and ranked first; the other five recommendations retained their original relative order; production report, feedback, and forwarder hashes remained unchanged |
 | 2026-07-16 source portfolio v1 | `published` | 4 | 10 candidates covered registry, official, and community lanes 4/3/3; code retained 5 eligible artifacts; all received decisions; planned Trending view and two-source official minimum passed | None | Decisions were 4 `recommend`, 1 `defer`, and 0 `reject`; the official lane used Gemini and NVIDIA from the assigned set, while the bounded recovery path was not needed because exactly five candidates remained eligible |
 | 2026-07-15 source portfolio v1 | `published` | 7 | All 9 eligible artifacts received decisions; three daily lanes were covered 3/3/3; exact artifact paths, source context, dependencies, Schema v3, and shadow-only output passed | None | Decisions were 7 `recommend`, 2 `defer`, and 0 `reject`; six selected artifacts came from the new registry/official lanes, all seven selected artifacts differed from the same-day production report, and the two community candidates with substantial runtime or permission boundaries were deferred |
 | 2026-07-14 curated lifecycle v3 | `published` | 6 | All 10 eligible artifacts received unique decisions; Schema v3, UTF-8, deterministic Markdown, and 14-day defer-state writes passed | None | Decisions were 6 `recommend`, 4 `defer`, and 0 `reject`; all public items contained bilingual usage guidance and no legacy `install`/`adapt` label; production outbox was unchanged |
