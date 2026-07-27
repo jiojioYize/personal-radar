@@ -41,6 +41,13 @@ test("rejects malformed preference claims", () => {
   assert.match(validateCuratedReport(enrichCuratedReport(fixture)).join("\n"), /preference is invalid/);
 });
 
+test("rejects decisions that claim verification while describing an unresolved source", () => {
+  const fixture = curatedFixture();
+  fixture.decisions[3].reason = "The linked repository path returns 404 and no accessible canonical primary source exists.";
+  const errors = validateCuratedReport(enrichCuratedReport(fixture)).join("\n");
+  assert.match(errors, /reason contradicts officialSourceVerified/);
+});
+
 test("rejects exact artifact repeats in curated reports", () => {
   const report = enrichCuratedReport(curatedFixture(), {
     recentSources: [{

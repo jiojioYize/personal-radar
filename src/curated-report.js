@@ -15,6 +15,13 @@ const INTERNAL_PUBLIC_COPY_PATTERNS = [
   /(?:其余|剩余).{0,24}(?:暂缓|拒绝)|(?:remaining|other) items?.{0,24}(?:defer|reject)/i,
   /`(?:recommend|defer|reject)`/i,
 ];
+const UNRESOLVED_PRIMARY_SOURCE_PATTERNS = [
+  /\b(?:returns?|returned)\s+(?:an?\s+)?404\b/i,
+  /\bno\s+accessible\s+(?:canonical\s+)?primary\s+source\b/i,
+  /\bprimary\s+source\s+(?:is|was|remains?)\s+(?:inaccessible|unavailable|unverifiable)\b/i,
+  /\b(?:cannot|could not|can't)\s+be\s+verified\b/i,
+  /(?:官方|一手|主)来源.{0,12}(?:无法访问|无法验证|不可验证|不存在)/,
+];
 
 export function enrichCuratedReport(input, { recentSources = [] } = {}) {
   const draft = structuredClone(input || {});
@@ -133,6 +140,9 @@ export function validateCuratedReport(report, { sourceProfile = null } = {}) {
     if (!text(decision.title) || !text(decision.category) || !text(decision.reason)) errors.push(`${label} requires title, category, and reason`);
     if (!https(decision.sourceUrl) || !https(decision.discovery?.url)) errors.push(`${label} sources must use HTTPS`);
     if (decision.officialSourceVerified !== true || !dateTime(decision.sourceCheckedAt)) errors.push(`${label} requires verified primary-source evidence`);
+    if (decision.officialSourceVerified === true && unresolvedPrimarySourceClaim(decision.reason)) {
+      errors.push(`${label}.reason contradicts officialSourceVerified`);
+    }
     if (sourceProfile === "portfolio-v1" && !validSourceContext(decision.sourceContext)) {
       errors.push(`${label}.sourceContext is incomplete`);
     }
@@ -148,6 +158,10 @@ export function validateCuratedReport(report, { sourceProfile = null } = {}) {
     }
   }
   return errors;
+}
+
+function unresolvedPrimarySourceClaim(value) {
+  return UNRESOLVED_PRIMARY_SOURCE_PATTERNS.some((pattern) => pattern.test(String(value || "")));
 }
 
 function normalizePreference(value) {

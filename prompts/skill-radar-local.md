@@ -158,6 +158,15 @@ to normal replenishment passes:
 - replace history-blocked or duplicate artifacts from the same planned lane;
 - retry an inaccessible discovery page, then use an equivalent canonical page
   from the same assigned source;
+- if an exact artifact URL returns 404 or points to a missing file, treat it as
+  a correctable locator failure rather than evidence that the artifact does not
+  exist. Search the same canonical repository for the exact skill slug, name,
+  `SKILL.md`, install metadata, and alternate maintained directories such as
+  hidden or curated folders. Do not search a different repository merely to
+  preserve the candidate;
+- when the artifact is found at a different maintained path, update
+  `sourceUrl` and `artifactPath` in the candidate file from that primary
+  evidence and rerun `filter-candidates` before making a decision;
 - remove an unverifiable candidate and replace it from the same planned lane.
 
 Never edit the plan, history, review state, artifact identity, or a
@@ -188,8 +197,16 @@ documentation for every eligible candidate. Classify each as:
   reasonable portability, and no unresolved major trust concern;
 - `defer`: useful but maintenance, portability, documentation, license,
   permissions, or evidence remains uncertain and should be reviewed later;
-- `reject`: not truly skill-like, inaccessible, deprecated, misleading, or
-  unsafe without disproportionate review.
+- `reject`: not truly skill-like, confirmed removed or deprecated by primary
+  evidence, misleading, or unsafe without disproportionate review.
+
+A single 404, stale registry deep link, or failed page load is not evidence for
+`reject`. First apply the locator recovery above. If the corrected artifact is
+found, rerun filtering so the Sidecar receives the corrected identity. If it
+cannot be located after the bounded attempts, replace it from the same lane and
+rerun filtering; if that is impossible, fail the run. Never finalize a decision
+whose reason says the primary source is inaccessible or unverifiable while
+also setting `officialSourceVerified: true`.
 
 Do not assign numeric scores. For every decision record what it solves, primary
 evidence, native usability, portability, main trust caveat, and one concise

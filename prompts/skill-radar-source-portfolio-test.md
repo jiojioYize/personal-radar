@@ -155,6 +155,13 @@ passes.
   equivalent canonical page from the same source, such as its official
   repository, catalog, exact directory, or raw `SKILL.md`. Do not substitute a
   different unassigned source.
+- If an exact artifact URL returns 404 or points to a missing file, search the
+  same canonical repository for the exact slug, name, `SKILL.md`, install
+  metadata, and alternate maintained directories such as hidden or curated
+  folders. Treat this as a locator failure, not evidence that the artifact does
+  not exist.
+- If the artifact is found at a corrected path, update `sourceUrl` and
+  `artifactPath` from primary evidence and rerun filtering before deciding.
 - If a candidate remains unverifiable, remove it and replace it from the same
   planned lane. Inaccessibility is not evidence for `reject` and must not be
   represented as `no_update`.
@@ -178,8 +185,13 @@ of:
   portable, and without an unresolved major trust concern;
 - `defer`: promising but evidence, maintenance, portability, licensing,
   permissions, or dependencies remain uncertain;
-- `reject`: not a true reusable artifact, inaccessible, deprecated,
-  misleading, or unsafe without disproportionate review.
+- `reject`: not a true reusable artifact, confirmed removed or deprecated by
+  primary evidence, misleading, or unsafe without disproportionate review.
+
+Never finalize `officialSourceVerified: true` when the reason says the primary
+source is inaccessible, returned 404, or could not be verified. An unresolved
+locator failure requires candidate correction or replacement and another
+filter pass, not a decision.
 
 Do not use numeric scores or preserve lane quotas in final recommendations.
 Popularity and official ownership do not override artifact quality. Explicitly

@@ -147,6 +147,15 @@ The production task now follows the curated-source v3 flow below. Quality v2.1
 and the deterministic GitHub collector remain documented as completed
 experiments but are no longer part of the daily production path.
 
+Primary-source verification distinguishes artifact identity from artifact
+availability. A stale registry deep link or a single 404 is a locator failure,
+not evidence that a Skill was removed. Automation must search the same
+canonical repository for the exact slug, `SKILL.md`, install metadata, and
+maintained alternate directories, then correct the candidate and rerun
+filtering. Only primary evidence of removal or deprecation can support that
+form of rejection. A decision cannot simultaneously claim
+`officialSourceVerified: true` and describe its source as unresolved.
+
 ```text
 Three curated skill directories
   -> Codex Automation builds an initial 8-12 candidate pool

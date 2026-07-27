@@ -15,6 +15,31 @@ automatically classified as product defects.
 
 ## Incidents
 
+### 2026-07-27: Valid Skill Rejected After Stale Deep Link Returned 404
+
+- The production run discovered `Figma Implement Design` through
+  OpenAgentSkill and evaluated the guessed path
+  `openai/skills/skills/figma-implement-design`.
+- That path returned 404, so Automation rejected the candidate as lacking an
+  accessible primary source while also writing
+  `officialSourceVerified: true`.
+- Manual verification found the maintained first-party artifact at
+  `skills/.curated/figma-implement-design`. The Skill existed; the locator was
+  wrong.
+- Root cause: recovery covered discovery-page and filter failures but did not
+  explicitly require same-repository artifact relocation after an exact deep
+  link failed during final verification. Production wording also incorrectly
+  allowed `inaccessible` as direct rejection evidence.
+- Resolution: a 404 deep link is now treated as a correctable locator failure.
+  Automation must search the same canonical repository, correct the candidate
+  path, and rerun filtering. Deterministic validation now rejects a decision
+  that claims primary-source verification while its reason describes an
+  unresolved 404 or unverifiable source.
+- Delivery policy: no historical report edit or PushPlus backfill. The
+  correction applies to future runs.
+- Classification: content-quality false negative and recovery-contract defect,
+  not a network incident.
+
 ### 2026-07-18: Automation Interrupted During Unstable Travel Network
 
 - Codex Automation triggered and generated the production context and

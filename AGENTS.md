@@ -170,6 +170,10 @@ Current Stage 2 production rules:
     Preference cannot change quality eligibility or decisions; validated
     feedback IDs may only reorder otherwise qualified recommendations, with
     the effect retained in internal Sidecar decision data.
+11. A stale or 404 artifact deep link is a locator failure, not automatic
+    rejection evidence. Search the same canonical repository for the exact
+    artifact, correct its path, and rerun filtering. Never finalize an
+    inaccessible source as `officialSourceVerified: true`.
 
 ## Operational Notes
 

@@ -105,18 +105,30 @@ data, design, GitHub, productivity, or context management.
 Open the canonical GitHub repository, exact skill directory, or official
 documentation for every eligible candidate. Classify each as:
 
+If an exact artifact URL returns 404 or points to a missing file, do not reject
+it immediately. Search the same canonical repository for the exact slug, name,
+`SKILL.md`, install metadata, and alternate maintained directories such as
+hidden or curated folders. If found, correct `sourceUrl` and `artifactPath` in
+the candidate input and rerun filtering before deciding. If it remains
+unverifiable after bounded attempts, replace it from the same source lane or
+fail the run. A single 404 is not primary evidence that an artifact was removed
+or deprecated.
+
 - `recommend`: real reusable instructions, clear use case, usable native path,
   reasonable portability, and no unresolved major trust concern;
 - `defer`: useful but maintenance, portability, documentation, license,
   permissions, or evidence remains uncertain and should be reviewed later;
-- `reject`: not truly skill-like, inaccessible, deprecated, misleading, or
-  unsafe without disproportionate review.
+- `reject`: not truly skill-like, confirmed removed or deprecated by primary
+  evidence, misleading, or unsafe without disproportionate review.
 
 Do not assign numeric scores. For every decision record what it solves, primary
 evidence, native usability, portability, main trust caveat, and one concise
 decision reason. Use `no_update` only when every eligible candidate was
 verified and none was `recommend`. A network or research failure is a failed
 run, not `no_update`.
+
+Never finalize `officialSourceVerified: true` when the reason says the primary
+source is inaccessible, returned 404, or could not be verified.
 
 Make quality decisions independently of preference. Then add internal
 `preference` to every decision: `boosted` may cite only matching `interested`
