@@ -272,8 +272,15 @@ it cannot change a quality decision, history exclusion, or hard safety gate.
   but it does trigger a derived-state audit. Invalid review-state, history,
   candidate-state, or rotation entries must be removed or corrected before the
   next production run so the defect does not silently affect future selection.
+- The corrected artifact then enters a local one-time recheck queue. Each
+  production run appends every pending recheck to the normal 8-12 candidates,
+  up to four and within the existing 20-candidate limit.
+- A recheck does not satisfy source-lane coverage or receive favorable quality
+  treatment. Code rejects a pool that omits or alters it, and marks it
+  `completed` only after successful finalization records a `recommend`,
+  `defer`, or `reject` outcome. Failed runs leave it pending.
 
-## History, Interest Feedback, And Social Inbox
+## History, Interest Feedback, And Candidate Inboxes
 
 Local-only state:
 
@@ -282,6 +289,7 @@ reports/state/skill-radar-history.json
 reports/state/skill-radar-context.json
 reports/feedback/skill-radar.json
 reports/inbox/social-candidates.json
+reports/inbox/recheck-candidates.json
 reports/quality/skill-radar-summary.md
 ```
 
@@ -463,6 +471,20 @@ Add an X candidate:
 node tools/quality/report-quality.mjs social-add `
   --url "https://x.com/example/status/123"
 ```
+
+Queue a corrected artifact after confirming a false classification:
+
+```powershell
+node tools/quality/report-quality.mjs recheck-add `
+  --title "Exact skill title" `
+  --source-url "https://github.com/owner/repo/tree/main/correct/path" `
+  --artifact-scope general_skill_collection `
+  --artifact-path "correct/path" `
+  --reason "Why the earlier classification was invalid"
+```
+
+The queue is local-only. The next production run must include the prepared
+candidate, and successful finalization records its new outcome automatically.
 
 Validate a report pair without sending:
 

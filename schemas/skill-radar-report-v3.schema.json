@@ -55,7 +55,7 @@
             "awesome-claude-skills", "agent-plugins", "open-agent-skill", "skills-sh",
             "anthropic-skills", "openai-plugins", "github-awesome-copilot", "cursor-marketplace",
             "gemini-extensions", "nvidia-skills", "hugging-face-skills", "microsoft-agent-skills",
-            "roo-modes"
+            "roo-modes", "confirmed-recheck"
           ]
         },
         "url": { "$ref": "#/$defs/httpsUrl" }
@@ -72,7 +72,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["lane", "sourceId", "containerType", "containerUrl", "artifactType", "provenance", "discoverySignals", "dependencies", "registryView"],
       "properties": {
-        "lane": { "enum": ["registryPulse", "officialRotation", "communityTrend", "rulesModes"] },
+        "lane": { "enum": ["registryPulse", "officialRotation", "communityTrend", "rulesModes", "recheck"] },
         "sourceId": { "type": "string", "minLength": 1 },
         "containerType": { "enum": ["registry_entry", "repository", "plugin", "extension", "marketplace_entry"] },
         "containerUrl": { "$ref": "#/$defs/httpsUrl" },

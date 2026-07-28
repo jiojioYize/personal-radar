@@ -741,3 +741,120 @@ test("source portfolio mode supports production while keeping shadow state isola
 
   await fs.rm(root, { recursive: true, force: true });
 });
+
+test("confirmed recheck candidates are mandatory and leave the queue after finalization", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "personal-radar-recheck-"));
+  await fs.mkdir(path.join(root, "schemas"), { recursive: true });
+  await fs.copyFile(
+    path.join(projectRoot, "schemas", "skill-radar-report-v3.schema.json"),
+    path.join(root, "schemas", "skill-radar-report-v3.schema.json"),
+  );
+  const date = "2099-04-01";
+  const env = { ...process.env, PERSONAL_RADAR_ROOT: root };
+  const tool = path.join(projectRoot, "tools", "quality", "report-quality.mjs");
+
+  await execFileAsync(process.execPath, [
+    tool, "recheck-add",
+    "--title", "Figma Implement Design",
+    "--source-url", "https://github.com/openai/skills/tree/main/skills/.curated/figma-implement-design",
+    "--artifact-scope", "general_skill_collection",
+    "--artifact-path", "skills/.curated/figma-implement-design",
+    "--discovery-url", "https://www.openagentskill.com/skills/figma-implement-design",
+    "--container-url", "https://github.com/openai/skills",
+    "--reason", "Corrected after a stale discovery deep link caused a false rejection.",
+  ], { cwd: projectRoot, env });
+  await execFileAsync(process.execPath, [
+    tool, "prepare", "--source-portfolio", "--date", date,
+  ], { cwd: projectRoot, env });
+
+  const stateDir = path.join(root, "reports", "state");
+  const context = JSON.parse(await fs.readFile(
+    path.join(stateDir, "skill-radar-context.json"),
+    "utf8",
+  ));
+  assert.equal(context.pendingRecheckCandidates.length, 1);
+  assert.equal(context.pendingRecheckCandidates[0].discoveryType, "recheck");
+
+  const draft = curatedFixture();
+  draft.reportDate = date;
+  delete draft.candidateCount;
+  delete draft.duplicateCount;
+  delete draft.sourceCounts;
+  const lanes = [
+    ["registryPulse", "skillsSh"],
+    ["officialRotation", "anthropicSkills"],
+    ["communityTrend", "awesomeClaudeSkills"],
+    ["registryPulse", "skillsSh"],
+    ["officialRotation", "openAiPlugins"],
+    ["communityTrend", "openAgentSkill"],
+    ["registryPulse", "skillsSh"],
+    ["officialRotation", "githubAwesomeCopilot"],
+  ];
+  const regularCandidates = draft.decisions.map((decision, index) => ({
+    title: decision.title,
+    sourceUrl: decision.sourceUrl,
+    artifactScope: decision.artifactScope,
+    artifactPath: decision.artifactPath,
+    discoveryType: lanes[index][0],
+    sourceId: lanes[index][1],
+    discoveryUrl: `https://example.com/discovery/${index}`,
+    containerType: "repository",
+    containerUrl: decision.sourceUrl,
+    artifactType: "skill",
+    provenance: "independent",
+    discoverySignals: ["catalog-listing"],
+    dependencies: ["none"],
+    registryView: lanes[index][0] === "registryPulse" ? "all_time" : null,
+  }));
+  const missingPath = path.join(stateDir, "missing-recheck.json");
+  await fs.writeFile(missingPath, JSON.stringify({ asOf: date, candidates: regularCandidates }), "utf8");
+  await assert.rejects(
+    execFileAsync(process.execPath, [
+      tool, "filter-candidates", "--source-portfolio", "--date", date, "--input", missingPath,
+    ], { cwd: projectRoot, env }),
+    /candidate pool must include pending recheck/,
+  );
+
+  const recheckCandidate = context.pendingRecheckCandidates[0];
+  const candidatesPath = path.join(stateDir, "with-recheck.json");
+  await fs.writeFile(candidatesPath, JSON.stringify({
+    asOf: date,
+    candidates: [...regularCandidates, recheckCandidate],
+  }), "utf8");
+  await execFileAsync(process.execPath, [
+    tool, "filter-candidates", "--source-portfolio", "--date", date, "--input", candidatesPath,
+  ], { cwd: projectRoot, env });
+  const filteredPath = path.join(stateDir, "skill-radar-candidates-filtered.json");
+  const filtered = JSON.parse(await fs.readFile(filteredPath, "utf8"));
+  assert.equal(filtered.eligibleCandidates.length, 9);
+  assert.equal(filtered.eligibleCandidates.at(-1).discoveryType, "recheck");
+
+  draft.decisions.push({
+    title: recheckCandidate.title,
+    category: "frontend-design",
+    sourceUrl: recheckCandidate.sourceUrl,
+    artifactScope: recheckCandidate.artifactScope,
+    artifactPath: recheckCandidate.artifactPath,
+    decision: "defer",
+    reason: "The corrected first-party artifact is real, but this fixture defers it for lifecycle testing.",
+    officialSourceVerified: true,
+    sourceCheckedAt: "2099-04-01T01:00:00.000Z",
+    license: "MIT",
+    preference: { effect: "neutral", matchedFeedbackIds: [], rationale: null },
+  });
+  const draftPath = path.join(stateDir, "recheck-draft.json");
+  await fs.writeFile(draftPath, JSON.stringify(draft), "utf8");
+  await execFileAsync(process.execPath, [
+    tool, "finalize-curated", "--input", draftPath, "--candidates", filteredPath,
+  ], { cwd: projectRoot, env });
+
+  const queue = JSON.parse(await fs.readFile(
+    path.join(root, "reports", "inbox", "recheck-candidates.json"),
+    "utf8",
+  ));
+  assert.equal(queue.candidates[0].status, "completed");
+  assert.equal(queue.candidates[0].outcome, "defer");
+  assert.equal(queue.candidates[0].completedAt, date);
+
+  await fs.rm(root, { recursive: true, force: true });
+});

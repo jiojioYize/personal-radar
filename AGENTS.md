@@ -27,7 +27,8 @@ Current recommended production flow:
 
 ```text
 Code-generated registry/official/community source plan -> Local Codex Automation
--> code-owned artifact and review-state filter -> verify every eligible source
+-> mandatory confirmed-recheck queue -> code-owned artifact and review-state
+filter -> verify every eligible source
 -> reports/outbox -> local forwarder -> Worker /ingest-report
 -> KV + public site + PushPlus
 ```
@@ -174,6 +175,11 @@ Current Stage 2 production rules:
     rejection evidence. Search the same canonical repository for the exact
     artifact, correct its path, and rerun filtering. Never finalize an
     inaccessible source as `officialSourceVerified: true`.
+12. A confirmed false classification must place the corrected artifact in the
+    local recheck queue. The next production candidate pool must include every
+    pending recheck in addition to the normal three discovery lanes. Rechecks
+    remain quality-neutral and leave the pending queue only after a successful
+    finalized decision.
 
 ## Operational Notes
 
@@ -184,6 +190,8 @@ Current Stage 2 production rules:
   derived local state file that could preserve it, including review state,
   history, candidate state, and source rotation. Remove or correct only the
   invalid derived entries before the next run. Do not edit or republish the
-  already delivered report unless explicitly requested.
+  already delivered report unless explicitly requested. Queue the corrected
+  artifact for one mandatory future review when the false classification
+  prevented a valid primary-source evaluation.
 - When testing delivery, avoid creating duplicate PushPlus messages unless intentionally checking push behavior.
 - After changing Worker code or `wrangler.toml`, deploy with Wrangler and verify `/health`.

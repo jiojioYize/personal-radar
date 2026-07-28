@@ -24,17 +24,19 @@ const EXPERIMENTS_DIR = path.join(ROOT, "reports", "experiments");
 const SHADOW_DIR = path.join(ROOT, "reports", "shadow");
 const SHADOW_OUTBOX_DIR = path.join(SHADOW_DIR, "outbox");
 const SHADOW_STATE_DIR = path.join(SHADOW_DIR, "state");
+const SHADOW_INBOX_DIR = path.join(SHADOW_DIR, "inbox");
 const HISTORY_PATH = path.join(STATE_DIR, "skill-radar-history.json");
 const HISTORY_V1_ARCHIVE_PATH = path.join(STATE_DIR, "skill-radar-history-v1-archive.json");
 const CONTEXT_PATH = path.join(STATE_DIR, "skill-radar-context.json");
 const FEEDBACK_PATH = path.join(FEEDBACK_DIR, "skill-radar.json");
 const SOCIAL_PATH = path.join(INBOX_DIR, "social-candidates.json");
+const RECHECK_PATH = path.join(INBOX_DIR, "recheck-candidates.json");
 const GITHUB_CANDIDATES_PATH = path.join(INBOX_DIR, "github-candidates.json");
 const SUMMARY_PATH = path.join(QUALITY_DIR, "skill-radar-summary.md");
 const SCHEMA_PATH = path.join(ROOT, "schemas", "skill-radar-report.schema.json");
 const CURATED_SCHEMA_PATH = path.join(ROOT, "schemas", "skill-radar-report-v3.schema.json");
 const LEGACY_DISCOVERY_TYPES = new Set(["awesomeClaudeSkills", "agentPlugins", "openAgentSkill"]);
-const PORTFOLIO_DISCOVERY_TYPES = new Set(["registryPulse", "officialRotation", "communityTrend", "rulesModes"]);
+const PORTFOLIO_DISCOVERY_TYPES = new Set(["registryPulse", "officialRotation", "communityTrend", "rulesModes", "recheck"]);
 const PORTFOLIO_SOURCES = {
   registryPulse: new Set(["skillsSh"]),
   officialRotation: new Set([
@@ -43,6 +45,7 @@ const PORTFOLIO_SOURCES = {
   ]),
   communityTrend: new Set(["awesomeClaudeSkills", "openAgentSkill"]),
   rulesModes: new Set(["githubAwesomeCopilot", "rooModes"]),
+  recheck: new Set(["confirmedCorrection"]),
 };
 const CONTAINER_TYPES = new Set(["registry_entry", "repository", "plugin", "extension", "marketplace_entry"]);
 const ARTIFACT_TYPES = new Set(["skill", "rule", "mode", "instruction_pack"]);
@@ -71,6 +74,7 @@ try {
   else if (command === "feedback") await recordFeedback(args);
   else if (command === "feedback-replay") await replayFeedback(args);
   else if (command === "social-add") await addSocialCandidate(args);
+  else if (command === "recheck-add") await addRecheckCandidate(args);
   else if (command === "summary") await writeQualitySummary(args);
   else printHelp();
 } catch (error) {
@@ -89,6 +93,7 @@ async function prepareContext(options) {
   const feedback = await readJson(FEEDBACK_PATH, { version: 1, entries: [] });
   const inbox = await expireDeferredCandidates(await readJson(SOCIAL_PATH, emptyInbox()), asOf);
   const githubDiscovery = await readJson(GITHUB_CANDIDATES_PATH, null);
+  const recheckQueue = await readJson(paths.recheckPath, emptyRecheckQueue());
   if (!paths.shadow) await writeJson(SOCIAL_PATH, inbox);
 
   const context = {
@@ -102,6 +107,9 @@ async function prepareContext(options) {
       ["pending", "verified", "deferred"].includes(candidate.status),
     ),
     githubDiscovery: summarizeGithubDiscovery(githubDiscovery),
+    pendingRecheckCandidates: recheckQueue.candidates
+      .filter((entry) => entry.status === "pending")
+      .map((entry) => ({ ...entry.candidate, recheckReason: entry.reason, queuedAt: entry.queuedAt })),
   };
 
   await writeJson(paths.historyPath, history);
@@ -109,6 +117,7 @@ async function prepareContext(options) {
   console.log(`Prepared${paths.shadow ? " shadow" : ""} quality context: ${relative(paths.contextPath)}`);
   console.log(`Recent sources: ${history.sources.length}; pending social candidates: ${context.pendingSocialCandidates.length}`);
   console.log(`GitHub discovery candidates: ${context.githubDiscovery?.candidates?.length || 0}`);
+  console.log(`Pending recheck candidates: ${context.pendingRecheckCandidates.length}`);
 }
 
 async function filterCandidates(options) {
@@ -131,6 +140,12 @@ async function filterCandidates(options) {
   const recentByArtifact = new Map(history.sources.map((entry) => [entry.artifactKey, entry]));
   const reviewState = await readJson(paths.reviewStatePath, { version: 1, channel: "skill-radar", entries: [] });
   const reviewByArtifact = new Map((reviewState.entries || []).map((entry) => [entry.artifactKey, entry]));
+  const recheckQueue = await readJson(paths.recheckPath, emptyRecheckQueue());
+  const pendingRechecks = recheckQueue.candidates.filter((entry) => entry.status === "pending");
+  const pendingRechecksByArtifact = new Map(pendingRechecks.map((entry) => [
+    artifactKeyForCandidate(entry.candidate),
+    entry,
+  ]));
   const sevenDayCutoff = addDays(asOf, -7);
   const seenCandidateArtifacts = new Set();
 
@@ -167,6 +182,18 @@ async function filterCandidates(options) {
     };
     const canonicalUrl = canonicalizeUrl(sourceUrl);
     const artifactKey = artifactKeyFor(item);
+    const queuedRecheck = pendingRechecksByArtifact.get(artifactKey);
+    if (sourcePortfolio && discoveryType === "recheck") {
+      if (!queuedRecheck) {
+        throw new Error(`candidates[${index}] is not present in the pending recheck queue`);
+      }
+      if (JSON.stringify(recheckCandidateShape(candidate))
+        !== JSON.stringify(recheckCandidateShape(queuedRecheck.candidate))) {
+        throw new Error(`candidates[${index}] must match the prepared recheck candidate exactly`);
+      }
+    } else if (sourcePortfolio && queuedRecheck) {
+      throw new Error(`candidates[${index}] duplicates a pending recheck; use the prepared recheck entry`);
+    }
     const duplicateInCandidatePool = seenCandidateArtifacts.has(artifactKey);
     seenCandidateArtifacts.add(artifactKey);
     const prior = recentByArtifact.get(artifactKey);
@@ -182,7 +209,9 @@ async function filterCandidates(options) {
     const reviewBlocked = ["defer", "reject"].includes(priorReview?.outcome)
       && String(priorReview.reviewAfter || "") > asOf;
     const eligible = !duplicateInCandidatePool
-      && (materialChange || (!exactDuplicate && repositoryAppearances7d < 2 && !reviewBlocked));
+      && (discoveryType === "recheck"
+        || materialChange
+        || (!exactDuplicate && repositoryAppearances7d < 2 && !reviewBlocked));
     const exclusionReason = eligible
       ? null
       : duplicateInCandidatePool
@@ -216,6 +245,14 @@ async function filterCandidates(options) {
     };
   });
 
+  if (sourcePortfolio) {
+    const candidateArtifacts = new Set(candidates.map((candidate) => candidate.artifactKey));
+    const missingRecheck = pendingRechecks.find((entry) =>
+      !candidateArtifacts.has(artifactKeyForCandidate(entry.candidate)));
+    if (missingRecheck) {
+      throw new Error(`candidate pool must include pending recheck: ${missingRecheck.candidate.title}`);
+    }
+  }
   if (sourcePortfolio) validatePortfolioCoverage(candidates, sourcePlan);
 
   const output = {
@@ -275,6 +312,9 @@ function validatePortfolioCandidate(candidate, index, discoveryType, artifactPat
   if (discoveryType === "officialRotation"
     && !sourcePlan.officialSources.some((source) => source.id === sourceId)) {
     throw new Error(`candidates[${index}].sourceId is not assigned in today's official rotation`);
+  }
+  if (discoveryType === "recheck" && candidate.registryView != null) {
+    throw new Error(`candidates[${index}].registryView must be null for recheck`);
   }
 }
 
@@ -575,6 +615,7 @@ async function finalizeCuratedReport(options) {
   await writeJson(sidecarPath, enriched);
   await fs.writeFile(markdownPath, renderMarkdown(enriched), "utf8");
   await updateCuratedReviewState(paths.reviewStatePath, enriched.decisions, reportDate);
+  await completeRecheckCandidates(paths.recheckPath, enriched.decisions, reportDate);
   if (sourceProfile === "portfolio-v1") await completeSourcePortfolioPlan(paths, enriched);
   await writeJson(paths.historyPath, await buildHistory(reportDate, null, { includeShadow: paths.shadow }));
   console.log(`Finalized${paths.shadow ? " shadow" : ""} curated report: ${relative(sidecarPath)}`);
@@ -596,6 +637,7 @@ function discoveryLabel(discoveryType, sourceId) {
       awesomeClaudeSkills: "awesome-claude-skills",
       openAgentSkill: "open-agent-skill",
       rooModes: "roo-modes",
+      confirmedCorrection: "confirmed-recheck",
     }[sourceId];
   }
   return {
@@ -630,6 +672,25 @@ async function updateCuratedReviewState(reviewStatePath, decisions, reportDate) 
     updatedAt: reportDate,
     entries: [...entries.values()].sort((a, b) => a.artifactKey.localeCompare(b.artifactKey)),
   });
+}
+
+async function completeRecheckCandidates(recheckPath, decisions, reportDate) {
+  const queue = await readJson(recheckPath, emptyRecheckQueue());
+  const decisionsByArtifact = new Map(decisions.map((decision) => [decision.artifactKey, decision]));
+  let changed = false;
+  const candidates = queue.candidates.map((entry) => {
+    if (entry.status !== "pending") return entry;
+    const decision = decisionsByArtifact.get(artifactKeyForCandidate(entry.candidate));
+    if (!decision) return entry;
+    changed = true;
+    return {
+      ...entry,
+      status: "completed",
+      completedAt: reportDate,
+      outcome: decision.decision,
+    };
+  });
+  if (changed) await writeJson(recheckPath, { version: 1, candidates });
 }
 
 async function recordFeedback(options) {
@@ -842,6 +903,75 @@ async function addSocialCandidate(options) {
   });
   await writeJson(SOCIAL_PATH, inbox);
   console.log(`Added social candidate: ${postUrl}`);
+}
+
+async function addRecheckCandidate(options) {
+  const required = ["title", "source-url", "artifact-scope", "reason"];
+  const missing = required.find((name) => !String(options[name] || "").trim());
+  if (missing) throw new Error(`recheck-add requires --${missing}`);
+
+  const paths = runtimePaths(options);
+  await ensureLocalFiles(paths);
+  const sourceUrl = String(options["source-url"]).trim();
+  if (!isHttpsUrl(sourceUrl)) throw new Error("recheck-add --source-url must use HTTPS");
+  const artifactScope = String(options["artifact-scope"]).trim();
+  const artifactPath = options["artifact-path"] == null ? null : String(options["artifact-path"]).trim() || null;
+  if (["general_skill_collection", "official_catalog", "mixed_toolkit"].includes(artifactScope) && !artifactPath) {
+    throw new Error(`recheck-add requires --artifact-path for ${artifactScope}`);
+  }
+  const containerUrl = String(options["container-url"] || canonicalizeUrl(sourceUrl)).trim();
+  const discoveryUrl = String(options["discovery-url"] || sourceUrl).trim();
+  if (!isHttpsUrl(containerUrl) || !isHttpsUrl(discoveryUrl)) {
+    throw new Error("recheck-add container and discovery URLs must use HTTPS");
+  }
+  const dependencies = String(options.dependencies || "none").split(",").map((value) => value.trim()).filter(Boolean);
+  if (dependencies.some((dependency) => !DEPENDENCY_TYPES.has(dependency))
+    || (dependencies.includes("none") && dependencies.length !== 1)) {
+    throw new Error("recheck-add --dependencies is invalid");
+  }
+  const candidate = {
+    title: String(options.title).trim(),
+    sourceUrl,
+    artifactScope,
+    artifactPath,
+    discoveryType: "recheck",
+    sourceId: "confirmedCorrection",
+    discoveryUrl,
+    containerType: String(options["container-type"] || "repository"),
+    containerUrl,
+    artifactType: String(options["artifact-type"] || "skill"),
+    provenance: String(options.provenance || "first_party"),
+    discoverySignals: ["confirmed-correction"],
+    dependencies,
+    registryView: null,
+  };
+  validatePortfolioCandidate(candidate, 0, "recheck", artifactPath, {
+    registryFocus: null,
+    officialSources: [],
+  });
+
+  const queue = await readJson(paths.recheckPath, emptyRecheckQueue());
+  const artifactKey = artifactKeyForCandidate(candidate);
+  const existing = queue.candidates.find((entry) =>
+    artifactKeyForCandidate(entry.candidate) === artifactKey && entry.status === "pending");
+  if (existing) {
+    console.log(`Recheck candidate already pending: ${candidate.title}`);
+    return;
+  }
+  if (queue.candidates.filter((entry) => entry.status === "pending").length >= 4) {
+    throw new Error("recheck queue already has four pending candidates");
+  }
+  queue.candidates.push({
+    id: stableSourceId(`recheck:${artifactKey}`),
+    status: "pending",
+    reason: String(options.reason).trim(),
+    queuedAt: new Date().toISOString(),
+    completedAt: null,
+    outcome: null,
+    candidate,
+  });
+  await writeJson(paths.recheckPath, queue);
+  console.log(`Added recheck candidate: ${candidate.title}`);
 }
 
 async function writeQualitySummary(options) {
@@ -1226,12 +1356,17 @@ async function ensureLocalFiles(paths = runtimePaths({})) {
   ]);
   if (!(await exists(FEEDBACK_PATH))) await writeJson(FEEDBACK_PATH, { version: 1, entries: [] });
   if (!(await exists(SOCIAL_PATH))) await writeJson(SOCIAL_PATH, emptyInbox());
+  if (!(await exists(paths.recheckPath))) await writeJson(paths.recheckPath, emptyRecheckQueue());
   if (!(await exists(paths.reviewStatePath))) {
     await writeJson(paths.reviewStatePath, { version: 1, channel: "skill-radar", entries: [] });
   }
 }
 
 function emptyInbox() {
+  return { version: 1, candidates: [] };
+}
+
+function emptyRecheckQueue() {
   return { version: 1, candidates: [] };
 }
 
@@ -1245,8 +1380,42 @@ function runtimePaths(options) {
     historyPath: path.join(stateDir, "skill-radar-history.json"),
     contextPath: path.join(stateDir, "skill-radar-context.json"),
     reviewStatePath: path.join(stateDir, "skill-radar-review-state.json"),
+    recheckPath: shadow
+      ? path.join(SHADOW_INBOX_DIR, "recheck-candidates.json")
+      : RECHECK_PATH,
     sourcePlanPath: path.join(stateDir, "skill-radar-source-plan.json"),
     sourceRotationPath: path.join(stateDir, "skill-radar-source-rotation.json"),
+  };
+}
+
+function artifactKeyForCandidate(candidate) {
+  return artifactKeyFor({
+    sourceUrl: String(candidate.sourceUrl || ""),
+    quality: {
+      evidence: {
+        artifactScope: String(candidate.artifactScope || "individual_skill"),
+        artifactPath: candidate.artifactPath == null ? null : String(candidate.artifactPath),
+      },
+    },
+  });
+}
+
+function recheckCandidateShape(candidate) {
+  return {
+    title: String(candidate.title || ""),
+    sourceUrl: String(candidate.sourceUrl || ""),
+    artifactScope: String(candidate.artifactScope || ""),
+    artifactPath: candidate.artifactPath == null ? null : String(candidate.artifactPath),
+    discoveryType: String(candidate.discoveryType || ""),
+    sourceId: String(candidate.sourceId || ""),
+    discoveryUrl: String(candidate.discoveryUrl || ""),
+    containerType: String(candidate.containerType || ""),
+    containerUrl: String(candidate.containerUrl || ""),
+    artifactType: String(candidate.artifactType || ""),
+    provenance: String(candidate.provenance || ""),
+    discoverySignals: Array.isArray(candidate.discoverySignals) ? candidate.discoverySignals.map(String) : [],
+    dependencies: Array.isArray(candidate.dependencies) ? candidate.dependencies.map(String) : [],
+    registryView: candidate.registryView ?? null,
   };
 }
 
@@ -1369,5 +1538,6 @@ Commands:
   feedback --url URL --rating interested|not_interested [--date YYYY-MM-DD] [--title NAME] [--artifact-key KEY] [--category NAME] [--note TEXT]
   feedback-replay --report SIDECAR --scenario FILE [--output DIR]
   social-add --url https://x.com/... [--note TEXT]
+  recheck-add --title NAME --source-url URL --artifact-scope SCOPE --reason TEXT [--artifact-path PATH] [--discovery-url URL] [--container-url URL] [--dependencies LIST] [--shadow]
   summary [--days 30] [--date YYYY-MM-DD]`);
 }

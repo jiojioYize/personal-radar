@@ -40,10 +40,20 @@ positive-interest-primary: `interested` is the normal explicit signal,
 `not_interested` is optional, and an unrated item always means unknown. Do not
 infer disinterest from missing feedback.
 
+Also read `pendingRecheckCandidates`. These are corrected artifacts from a
+confirmed earlier false classification. Copy every pending entry into today's
+candidate file exactly as prepared. They are mandatory one-time reviews, not
+preselected recommendations, and they do not satisfy any normal discovery-lane
+minimum.
+
 ## 2. Discover by Lane
 
-Collect 8-12 concrete candidates. Search all three daily lanes independently;
-do not stop because one lane already provides enough candidates.
+Collect 8-12 normal concrete candidates. Search all three daily lanes
+independently; do not stop because one lane already provides enough
+candidates. Append every prepared pending recheck candidate after normal
+discovery. There can be at most four, so the combined pool remains within the
+20-candidate limit. If normal discovery independently finds the same artifact,
+keep only the exact prepared `recheck` entry.
 
 ### Registry pulse: 3-4
 
@@ -114,8 +124,8 @@ its repository-relative `artifactPath`. Do not guess a path.
 
 Allowed portfolio values and boundaries:
 
-- `discoveryType`: `registryPulse`, `officialRotation`, `communityTrend`, or
-  optional `rulesModes`;
+- `discoveryType`: `registryPulse`, `officialRotation`, `communityTrend`,
+  optional `rulesModes`, or code-prepared `recheck`;
 - `sourceId`: `skillsSh` for the registry; one of the plan's assigned IDs for
   official rotation; `awesomeClaudeSkills` or `openAgentSkill` for community;
 - `containerType`: `registry_entry`, `repository`, `plugin`, `extension`, or
@@ -127,6 +137,11 @@ Allowed portfolio values and boundaries:
   `authentication`, `runtime`, `platform`, or only `none`;
 - `registryView`: copy the plan's exact focus for registry candidates and use
   `null` otherwise.
+
+Never invent a `recheck` candidate. A recheck must be copied from
+`pendingRecheckCandidates` with `sourceId: confirmedCorrection`. The code
+rejects a missing pending recheck and any unqueued candidate claiming that
+lane.
 
 Plugin, extension, marketplace, and multi-artifact containers require an
 evidence-backed repository-relative `artifactPath`. Do not guess identity,
@@ -169,6 +184,11 @@ to normal replenishment passes:
   evidence and rerun `filter-candidates` before making a decision;
 - remove an unverifiable candidate and replace it from the same planned lane.
 
+Do not silently replace or omit a pending recheck candidate. If its corrected
+primary source becomes inaccessible, apply the same bounded locator recovery.
+If it still cannot be verified, fail the run so the queue remains pending for
+explicit repair.
+
 Never edit the plan, history, review state, artifact identity, or a
 material-change claim to force acceptance. Stop when correction limits are
 exhausted, fewer than two assigned official sources can be used, or broad
@@ -189,6 +209,10 @@ Open and verify every entry in `eligibleCandidates`. Do not perform another
 prompt-only shortlist. Order the decisions by apparent task usefulness,
 maintenance, adoption, and relevance to coding, documents, browser automation,
 data, design, GitHub, productivity, or context management.
+
+A pending recheck receives the same independent `recommend`, `defer`, or
+`reject` decision as any other eligible candidate. It is removed from the
+pending queue only after finalization succeeds.
 
 Open the canonical GitHub repository, exact skill directory, or official
 documentation for every eligible candidate. Classify each as:

@@ -44,6 +44,11 @@ automatically classified as product defects.
   state with a 90-day exclusion. That invalid derived entry was removed after
   the incident audit; the published report and delivery record were left
   unchanged.
+- Removing the exclusion restored eligibility but did not guarantee
+  rediscovery in the bounded daily candidate pool. A one-time recheck queue was
+  therefore added: corrected false classifications must be included in the
+  next production candidate pool and remain pending until finalization records
+  a new evidence-based decision.
 - Delivery policy: no historical report edit or PushPlus backfill. The
   correction applies to future runs.
 - Classification: content-quality false negative and recovery-contract defect,
