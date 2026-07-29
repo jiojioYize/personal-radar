@@ -272,13 +272,16 @@ it cannot change a quality decision, history exclusion, or hard safety gate.
   but it does trigger a derived-state audit. Invalid review-state, history,
   candidate-state, or rotation entries must be removed or corrected before the
   next production run so the defect does not silently affect future selection.
-- The corrected artifact then enters a local one-time recheck queue. Each
-  production run appends every pending recheck to the normal 8-12 candidates,
-  up to four and within the existing 20-candidate limit.
-- A recheck does not satisfy source-lane coverage or receive favorable quality
-  treatment. Code rejects a pool that omits or alters it, and marks it
-  `completed` only after successful finalization records a `recommend`,
-  `defer`, or `reject` outcome. Failed runs leave it pending.
+- The original recovery design used a local one-time recheck queue. During the
+  multi-agent verifier transition this queue is intentionally empty and
+  dormant; its code remains only as temporary rollback support.
+- New confirmed errors still trigger a derived-state audit, but must not create
+  new legacy recheck entries while the replacement verifier flow is being
+  integrated and shadow-tested.
+- The replacement shadow flow separates source facts from recommendation
+  judgment. A fresh-context verifier checks every eligible artifact, a second
+  verifier handles migration and identity-change risks, and code requires every
+  draft decision to reference the reconciled evidence before finalization.
 
 ## History, Interest Feedback, And Candidate Inboxes
 
@@ -472,19 +475,9 @@ node tools/quality/report-quality.mjs social-add `
   --url "https://x.com/example/status/123"
 ```
 
-Queue a corrected artifact after confirming a false classification:
-
-```powershell
-node tools/quality/report-quality.mjs recheck-add `
-  --title "Exact skill title" `
-  --source-url "https://github.com/owner/repo/tree/main/correct/path" `
-  --artifact-scope general_skill_collection `
-  --artifact-path "correct/path" `
-  --reason "Why the earlier classification was invalid"
-```
-
-The queue is local-only. The next production run must include the prepared
-candidate, and successful finalization records its new outcome automatically.
+The former `recheck-add` workflow is dormant and should not be used for new
+incidents. Corrected source identity is now handled inside the multi-agent
+verification stage; confirmed errors still require a local derived-state audit.
 
 Validate a report pair without sending:
 
@@ -532,6 +525,7 @@ npm run quality:summary
 | Curated-source v3 simplification | Initial Automation shadow passed with 11 candidates, 5 verified decisions, and 3 recommendations; contract then expanded to verify every eligible candidate, persist 14/90-day review outcomes, and replace visible action labels with direct usage guidance before the first scheduled production run |
 | Source portfolio production | Promoted 2026-07-16 after two successful isolated runs; production now uses an independent code-owned plan and rotation under a three-day observation, while legacy fixed-source logic remains a short-term rollback reference |
 | Feedback ranking replay | Passed five isolated historical-report scenarios on 2026-07-26: four positive-interest cases and one combined positive/optional-negative case; selected sets stayed unchanged, unrelated items stayed neutral, and every non-neutral effect remained traceable |
+| Multi-agent source verification | Promoted into `prompts/skill-radar-local.md` on 2026-07-29 after the fixed adversarial suite covered current, migrated, invalid, missing, and ambiguous sources, and the corrected production-format shadow passed candidate/evidence/draft identity validation. The formal Automation entry prompt remains unchanged |
 | 14-day observation | Restarts on the first successful scheduled v3 production day |
 | 30-day acceptance | Not started |
 
@@ -548,6 +542,9 @@ PushPlus was switched to the HTML card format.
 
 | Date | Result | Items | Validation | Production impact | Notes |
 | --- | --- | ---: | --- | --- | --- |
+| 2026-07-29 multi-agent production promotion | Accepted | N/A | Fixed adversarial cases and the corrected real-candidate shadow both passed; production prompt now requires primary verification for every eligible artifact, specialist review for material identity risks, and code validation before quality decisions | Applies from the next formal Automation run | Legacy recheck intake is disabled; Worker, forwarder, public schema, and Automation entry prompt are unchanged |
+| 2026-07-29 multi-agent production-format shadow | `published` | 3 | 9 candidates, 8 eligible artifacts, 8 complete primary evidence records, 8 linked decisions, v3 finalization, UTF-8, and candidate/evidence/draft identity validation passed; no migration risk occurred, so specialist verification was correctly not triggered | None | Decisions were 3 `recommend`, 4 `defer`, and 1 `reject`. Public summary and conclusion described only the three visible recommendations. `Docs Canvas` was correctly rejected because its current primary source explicitly identifies it as an unfinished placeholder |
+| 2026-07-28 multi-agent production-format shadow | `published` with content-QA failure | 4 | 10 candidates, 8 eligible artifacts, 8 complete primary evidence records, 8 linked decisions, v3 finalization, and candidate/evidence/draft identity validation passed; no migration risk occurred, so specialist verification was correctly not triggered | None | Decisions were 4 `recommend` and 4 `defer`. Public summary incorrectly mentioned Azure cost operations even though Azure Cost Management was deferred and absent from reader-visible cards. Prompts now require summary and conclusion to describe only final recommendations; another shadow run is required before production promotion |
 | 2026-07-27 blind source recovery and targeted preference | `published` | 6 | A fresh-context agent received only the stale URL and independently recovered `skills/.curated/figma-implement-design` from the same repository README, exact directory, and `SKILL.md`; a separate isolated replay then reused the 11 production candidates and passed code filtering plus the v3 finalizer | None | The first-party Skill became `recommend`, referenced the real `Frontend Design` interest signal `fb_f7c1a3b7`, and ranked first; the other five recommendations retained their original relative order; production report, feedback, and forwarder hashes remained unchanged |
 | 2026-07-16 source portfolio v1 | `published` | 4 | 10 candidates covered registry, official, and community lanes 4/3/3; code retained 5 eligible artifacts; all received decisions; planned Trending view and two-source official minimum passed | None | Decisions were 4 `recommend`, 1 `defer`, and 0 `reject`; the official lane used Gemini and NVIDIA from the assigned set, while the bounded recovery path was not needed because exactly five candidates remained eligible |
 | 2026-07-15 source portfolio v1 | `published` | 7 | All 9 eligible artifacts received decisions; three daily lanes were covered 3/3/3; exact artifact paths, source context, dependencies, Schema v3, and shadow-only output passed | None | Decisions were 7 `recommend`, 2 `defer`, and 0 `reject`; six selected artifacts came from the new registry/official lanes, all seven selected artifacts differed from the same-day production report, and the two community candidates with substantial runtime or permission boundaries were deferred |

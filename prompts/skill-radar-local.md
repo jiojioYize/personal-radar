@@ -40,20 +40,14 @@ positive-interest-primary: `interested` is the normal explicit signal,
 `not_interested` is optional, and an unrated item always means unknown. Do not
 infer disinterest from missing feedback.
 
-Also read `pendingRecheckCandidates`. These are corrected artifacts from a
-confirmed earlier false classification. Copy every pending entry into today's
-candidate file exactly as prepared. They are mandatory one-time reviews, not
-preselected recommendations, and they do not satisfy any normal discovery-lane
-minimum.
+The legacy confirmed-recheck queue is dormant. Do not create or add recheck
+candidates. Confirmed errors still require a derived-state audit, but source
+identity correction now belongs to the multi-agent verification stage.
 
 ## 2. Discover by Lane
 
-Collect 8-12 normal concrete candidates. Search all three daily lanes
-independently; do not stop because one lane already provides enough
-candidates. Append every prepared pending recheck candidate after normal
-discovery. There can be at most four, so the combined pool remains within the
-20-candidate limit. If normal discovery independently finds the same artifact,
-keep only the exact prepared `recheck` entry.
+Collect 8-12 concrete candidates. Search all three daily lanes independently;
+do not stop because one lane already provides enough candidates.
 
 ### Registry pulse: 3-4
 
@@ -124,8 +118,8 @@ its repository-relative `artifactPath`. Do not guess a path.
 
 Allowed portfolio values and boundaries:
 
-- `discoveryType`: `registryPulse`, `officialRotation`, `communityTrend`,
-  optional `rulesModes`, or code-prepared `recheck`;
+- `discoveryType`: `registryPulse`, `officialRotation`, `communityTrend`, or
+  optional `rulesModes`;
 - `sourceId`: `skillsSh` for the registry; one of the plan's assigned IDs for
   official rotation; `awesomeClaudeSkills` or `openAgentSkill` for community;
 - `containerType`: `registry_entry`, `repository`, `plugin`, `extension`, or
@@ -138,10 +132,7 @@ Allowed portfolio values and boundaries:
 - `registryView`: copy the plan's exact focus for registry candidates and use
   `null` otherwise.
 
-Never invent a `recheck` candidate. A recheck must be copied from
-`pendingRecheckCandidates` with `sourceId: confirmedCorrection`. The code
-rejects a missing pending recheck and any unqueued candidate claiming that
-lane.
+Do not use the legacy `recheck` lane during the multi-agent verifier rollout.
 
 Plugin, extension, marketplace, and multi-artifact containers require an
 evidence-backed repository-relative `artifactPath`. Do not guess identity,
@@ -184,11 +175,6 @@ to normal replenishment passes:
   evidence and rerun `filter-candidates` before making a decision;
 - remove an unverifiable candidate and replace it from the same planned lane.
 
-Do not silently replace or omit a pending recheck candidate. If its corrected
-primary source becomes inaccessible, apply the same bounded locator recovery.
-If it still cannot be verified, fail the run so the queue remains pending for
-explicit repair.
-
 Never edit the plan, history, review state, artifact identity, or a
 material-change claim to force acceptance. Stop when correction limits are
 exhausted, fewer than two assigned official sources can be used, or broad
@@ -203,49 +189,109 @@ If fewer than five candidates remain eligible after those bounded attempts,
 end the run as a candidate-shortage failure. Do not write a curated draft, do
 not generate `no_update`, and do not weaken or override the history filter.
 
-## 4. Verify Every Eligible Primary Source
+## 4. Multi-Agent Source Verification
 
-Open and verify every entry in `eligibleCandidates`. Do not perform another
-prompt-only shortlist. Order the decisions by apparent task usefulness,
-maintenance, adoption, and relevance to coding, documents, browser automation,
-data, design, GitHub, productivity, or context management.
+Create one fresh-context primary verifier subagent and give it every final
+`eligibleCandidates` entry. Do not give it recommendation instructions or
+preference signals.
 
-A pending recheck receives the same independent `recommend`, `defer`, or
-`reject` decision as any other eligible candidate. It is removed from the
-pending queue only after finalization succeeds.
+For every candidate it must return the fields in `$defs.evidence` from:
 
-Open the canonical GitHub repository, exact skill directory, or official
-documentation for every eligible candidate. Classify each as:
+```text
+schemas/skill-radar-verification-v1.schema.json
+```
 
-- `recommend`: real reusable instructions, clear use case, usable native path,
-  reasonable portability, and no unresolved major trust concern;
-- `defer`: useful but maintenance, portability, documentation, license,
-  permissions, or evidence remains uncertain and should be reviewed later;
-- `reject`: not truly skill-like, confirmed removed or deprecated by primary
-  evidence, misleading, or unsafe without disproportionate review.
+It must use first-party evidence to verify exact artifact identity, current
+source, the exact `SKILL.md` or equivalent instruction file, repository status,
+license, capability, native usability, portability, maintenance, dependencies,
+and the main trust caveat. File existence alone does not establish current
+maintenance.
 
-A single 404, stale registry deep link, or failed page load is not evidence for
-`reject`. First apply the locator recovery above. If the corrected artifact is
-found, rerun filtering so the Sidecar receives the corrected identity. If it
-cannot be located after the bounded attempts, replace it from the same lane and
-rerun filtering; if that is impossible, fail the run. Never finalize a decision
-whose reason says the primary source is inaccessible or unverifiable while
-also setting `officialSourceVerified: true`.
+`repositoryStatus` describes the repository hosting `currentUrl` when one is
+selected; otherwise it describes the original candidate repository. If
+required fields are missing or use unsupported enum values, send one bounded
+contract-repair message to the same subagent. The parent must not fill missing
+evidence itself.
 
-Do not assign numeric scores. For every decision record what it solves, primary
-evidence, native usability, portability, main trust caveat, and one concise
-decision reason. Use `no_update` only when every eligible candidate was
-verified and none was `recommend`. A network or research failure is a failed
-run, not `no_update`.
+Specialist verification is mandatory when the primary result:
+
+- is `migrated`;
+- records `identityChanged: true`; or
+- reports a repository status other than `current`.
+
+Create one second fresh-context subagent for all such candidates. Give it the
+original candidate records and verification goals, not the primary conclusions.
+Allow one bounded contract repair.
+
+Normalize URLs by removing trailing slashes and artifact paths by removing
+leading/trailing slashes and trailing `/SKILL.md`. Cosmetic title differences
+are not identity conflicts. Verdict, normalized URL, normalized artifact path,
+repository status, and identity-change fields are material identity fields.
+
+- If both verifiers agree on material identity, use the agreed evidence.
+- If they disagree, remove the candidate.
+- Remove `ambiguous`, `invalid`, and `inconclusive` candidates.
+- For `recovered_current` or agreed `migrated`, update title, `sourceUrl`, and
+  `artifactPath` to the current artifact.
+
+Replace removed candidates from the same planned lane and rerun the code-owned
+filter. Every corrected identity must also rerun through the filter. Use the
+existing maximum of three filter passes and twenty total candidates. Verify
+newly eligible replacements through the same process. Stop with failure if
+fewer than five fully verified candidates remain.
+
+Write:
+
+```text
+reports/state/skill-radar-verification-evidence.json
+```
+
+using `schemas/skill-radar-verification-v1.schema.json`. Include exactly one
+result for every final eligible candidate. `artifactKey` and `candidateId` must
+match the final filtered candidate.
+
+Run:
+
+```text
+node tools/quality/validate-verification-evidence.mjs --evidence reports/state/skill-radar-verification-evidence.json --candidates reports/state/skill-radar-candidates-filtered.json
+```
+
+Do not proceed unless validation passes.
+
+## 5. Main-Model Quality Decisions
+
+The parent now acts as the quality editor. Do not browse sources again. Use
+only the validated evidence artifact, the final filtered candidate file, and
+prepared preference signals.
+
+Order decisions by apparent task usefulness, maintenance, adoption, and
+relevance to coding, documents, browser automation, data, design, GitHub,
+productivity, or context management. Classify every verified candidate as:
+
+- `recommend`: concrete reusable instructions, clear value, practical native
+  use or adaptation, and no unresolved major trust concern;
+- `defer`: the source is valid but product value, portability, maintenance,
+  license, permissions, or dependencies remain uncertain;
+- `reject`: the source is valid but the artifact is not sufficiently
+  skill-like, is misleading, or has disproportionate trust cost.
+
+Source identity ambiguity is not a `defer` or `reject`; it must already have
+been removed before this stage. Do not assign numeric scores. Use `no_update`
+only when every verified candidate received a decision and none was
+`recommend`. A network, verification, or validation failure is a failed run.
 
 Make the quality decision before considering preference. Preference cannot
 turn a `defer` or `reject` into `recommend`, bypass trust boundaries, or change
 history eligibility. After the quality decision, identify only direct semantic
-matches between the candidate's task/category and the prepared feedback
-signals. Code uses these matches only to order otherwise qualified
-recommendations.
+matches between the candidate's task/category and prepared feedback signals.
+Code uses these matches only to order otherwise qualified recommendations.
 
-## 5. Write Curated Draft
+Complete all decisions before writing public copy. `summary` and `conclusion`
+may describe only capabilities, themes, and cautions represented by final
+`recommend` decisions. Never preview or imply an item that appears only in
+`defer` or `reject`, because readers cannot see those internal decisions.
+
+## 6. Write Curated Draft
 
 Write UTF-8 JSON:
 
@@ -297,6 +343,15 @@ Every decision requires:
     "rationale": null }`;
   - non-neutral rationale must briefly explain the direct task/category match;
     never place this internal explanation in public display copy.
+- internal `verification` copied from matching reconciled evidence:
+
+```json
+{
+  "candidateId": "src_00000000",
+  "verdict": "verified_current",
+  "currentUrl": "https://..."
+}
+```
 
 The finalizer replaces title, source, artifact identity, and discovery fields
 with authoritative values from the filtered candidate file. It rejects drafts
@@ -314,7 +369,15 @@ HTML. `defer` and `reject` decisions do not need display content. The finalizer
 stores `defer` for a 14-day cooldown and `reject` for a 90-day cooldown; do not
 calculate or write those dates yourself.
 
-## 6. Finalize
+Before finalization, validate the evidence-to-decision link:
+
+```text
+node tools/quality/validate-verification-evidence.mjs --evidence reports/state/skill-radar-verification-evidence.json --candidates reports/state/skill-radar-candidates-filtered.json --draft reports/state/skill-radar-curated-draft.json
+```
+
+Do not finalize unless it passes.
+
+## 7. Finalize
 
 Run:
 
@@ -332,7 +395,7 @@ reports/outbox/skill-radar-YYYY-MM-DD.quality.json
 reports/outbox/skill-radar-YYYY-MM-DD.md
 ```
 
-## 7. Boundaries
+## 8. Boundaries
 
 - Do not read, print, or reveal ingest keys.
 - Do not invoke the forwarder or call `/ingest-report`.
@@ -340,6 +403,8 @@ reports/outbox/skill-radar-YYYY-MM-DD.md
 - Only write local runtime files under `reports/outbox` or `reports/state`.
 - Do not add generated reports, history, drafts, or candidates to Git.
 
-After success report the date, candidate count, code-excluded count, decision
-counts, output paths, repository files changed (`no`), and forwarding
+After success report the date, candidate count, code-excluded count, primary
+verification count, specialist verification count and trigger reason, bounded
+contract-repair count, decision counts, verification evidence path, output
+paths, repository files changed (`no`), and forwarding
 (`handled by the local forwarder`).

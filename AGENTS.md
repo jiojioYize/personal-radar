@@ -27,11 +27,17 @@ Current recommended production flow:
 
 ```text
 Code-generated registry/official/community source plan -> Local Codex Automation
--> mandatory confirmed-recheck queue -> code-owned artifact and review-state
-filter -> verify every eligible source
+-> code-owned artifact and review-state filter
+-> fresh-context primary verifier for every eligible artifact
+-> risk-triggered specialist verifier -> evidence validation
+-> main-model quality editor
 -> reports/outbox -> local forwarder -> Worker /ingest-report
 -> KV + public site + PushPlus
 ```
+
+The manual confirmed-recheck queue is dormant. Its local queue is empty; keep
+the implementation only as temporary rollback support while the promoted
+multi-agent production flow is observed.
 
 Local Codex Automation can read/write project files and run on schedule, but its shell network access may fail. Treat the local forwarder as the production delivery bridge.
 
@@ -72,6 +78,20 @@ Source-portfolio shadow runs should read and execute:
 ```text
 prompts/skill-radar-source-portfolio-test.md
 ```
+
+Multi-agent production-format shadow runs should read and execute:
+
+```text
+prompts/skill-radar-multi-agent-production-shadow.md
+```
+
+This shadow flow mirrors the promoted production verifier. It writes a separate
+verification evidence artifact, requires
+fresh-context primary verification for every eligible candidate, escalates
+migration or identity-change risks to a specialist verifier, and links every
+main-model decision back to validated evidence. Use it only for isolated
+regression testing; the formal Automation continues to read
+`prompts/skill-radar-local.md`.
 
 Source-portfolio runs must include `--shadow --source-portfolio`. They use
 separate shadow history and cannot write or forward a production report.
@@ -175,11 +195,15 @@ Current Stage 2 production rules:
     rejection evidence. Search the same canonical repository for the exact
     artifact, correct its path, and rerun filtering. Never finalize an
     inaccessible source as `officialSourceVerified: true`.
-12. A confirmed false classification must place the corrected artifact in the
-    local recheck queue. The next production candidate pool must include every
-    pending recheck in addition to the normal three discovery lanes. Rechecks
-    remain quality-neutral and leave the pending queue only after a successful
-    finalized decision.
+12. The legacy confirmed-recheck queue remains supported by code but is
+    dormant and must not receive new entries. Confirmed errors still require a
+    derived-state audit.
+13. Production source verification is separated from recommendation judgment.
+    A fresh-context primary verifier checks every eligible artifact; migration,
+    identity-change, or repository-status risks require a second specialist.
+    Code validates reconciled evidence and its link to every draft decision
+    before finalization. The main model makes quality decisions from this
+    evidence and does not repeat source browsing.
 
 ## Operational Notes
 

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar.dailyingest.cn/schemas/skill-radar-verification-v1.schema.json",
+  "title": "Skill Radar multi-agent source verification evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "reportDate", "profile", "primaryVerifier", "specialistVerifier", "results"],
+  "properties": {
+    "version": { "const": 1 },
+    "reportDate": { "type": "string", "format": "date" },
+    "profile": { "const": "multi-agent-verifier-v1" },
+    "primaryVerifier": { "$ref": "#/$defs/run" },
+    "specialistVerifier": { "$ref": "#/$defs/run" },
+    "results": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/result" }
+    }
+  },
+  "$defs": {
+    "httpsUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempted", "available", "completed", "freshContextRequested", "retryCount", "notes"],
+      "properties": {
+        "attempted": { "type": "boolean" },
+        "available": { "type": "boolean" },
+        "completed": { "type": "boolean" },
+        "freshContextRequested": { "type": "boolean" },
+        "retryCount": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "notes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verdict", "originalUrlStatus", "currentTitle", "currentUrl",
+        "artifactPath", "skillMdVerified", "repositoryStatus",
+        "identityChanged", "license", "capability", "usability",
+        "portability", "maintenance", "trustCaveat", "evidence"
+      ],
+      "properties": {
+        "verdict": {
+          "enum": ["verified_current", "recovered_current", "migrated", "ambiguous", "invalid", "inconclusive"]
+        },
+        "originalUrlStatus": {
+          "oneOf": [
+            { "type": "integer", "minimum": 100, "maximum": 599 },
+            { "enum": ["unavailable", "unknown"] }
+          ]
+        },
+        "currentTitle": { "type": ["string", "null"] },
+        "currentUrl": { "oneOf": [{ "$ref": "#/$defs/httpsUrl" }, { "type": "null" }] },
+        "artifactPath": { "type": ["string", "null"] },
+        "skillMdVerified": { "type": "boolean" },
+        "repositoryStatus": { "enum": ["current", "deprecated", "archived", "missing", "unknown"] },
+        "identityChanged": { "type": "boolean" },
+        "license": { "type": ["string", "null"] },
+        "capability": { "type": "string", "minLength": 8 },
+        "usability": { "type": "string", "minLength": 8 },
+        "portability": { "type": "string", "minLength": 8 },
+        "maintenance": { "type": "string", "minLength": 8 },
+        "trustCaveat": { "type": "string", "minLength": 8 },
+        "evidence": {
+          "type": "array",
+          "minItems": 3,
+          "items": { "type": "string", "minLength": 12 }
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId", "artifactKey", "originalSourceUrl", "primary",
+        "specialistRequired", "specialist", "reconciled"
+      ],
+      "properties": {
+        "candidateId": { "type": "string", "pattern": "^src_[a-f0-9]{8}$" },
+        "artifactKey": { "type": "string", "minLength": 1 },
+        "originalSourceUrl": { "$ref": "#/$defs/httpsUrl" },
+        "primary": { "$ref": "#/$defs/evidence" },
+        "specialistRequired": { "type": "boolean" },
+        "specialist": { "oneOf": [{ "$ref": "#/$defs/evidence" }, { "type": "null" }] },
+        "reconciled": { "$ref": "#/$defs/evidence" }
+      }
+    }
+  }
+}

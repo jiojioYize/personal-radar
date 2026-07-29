@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar.dailyingest.cn/schemas/multi-agent-verifier-test-v1.schema.json",
+  "title": "Personal Radar multi-agent verifier shadow test",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "testDate",
+    "testType",
+    "primaryVerifier",
+    "specialistVerifier",
+    "cases",
+    "safety"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "testDate": { "type": "string", "format": "date" },
+    "testType": { "const": "multi-agent-adversarial-verification" },
+    "primaryVerifier": { "$ref": "#/$defs/verifierRun" },
+    "specialistVerifier": { "$ref": "#/$defs/verifierRun" },
+    "cases": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": { "$ref": "#/$defs/caseResult" }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "productionFilesChanged",
+        "trackedFilesChangedByTest",
+        "workerCalled",
+        "forwarderCalled"
+      ],
+      "properties": {
+        "productionFilesChanged": { "const": false },
+        "trackedFilesChangedByTest": { "const": false },
+        "workerCalled": { "const": false },
+        "forwarderCalled": { "const": false }
+      }
+    }
+  },
+  "$defs": {
+    "verifierRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempted",
+        "available",
+        "completed",
+        "freshContextRequested",
+        "retryCount",
+        "notes"
+      ],
+      "properties": {
+        "attempted": { "type": "boolean" },
+        "available": { "type": "boolean" },
+        "completed": { "type": "boolean" },
+        "freshContextRequested": { "type": "boolean" },
+        "retryCount": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "evidenceResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verdict",
+        "originalUrlStatus",
+        "currentTitle",
+        "currentUrl",
+        "artifactPath",
+        "skillMdVerified",
+        "repositoryStatus",
+        "identityChanged",
+        "evidence"
+      ],
+      "properties": {
+        "verdict": {
+          "enum": [
+            "verified_current",
+            "recovered_current",
+            "migrated",
+            "ambiguous",
+            "invalid",
+            "inconclusive"
+          ]
+        },
+        "originalUrlStatus": {
+          "oneOf": [
+            { "type": "integer", "minimum": 100, "maximum": 599 },
+            { "enum": ["unavailable", "unknown"] }
+          ]
+        },
+        "currentTitle": { "type": ["string", "null"] },
+        "currentUrl": {
+          "oneOf": [
+            { "type": "string", "format": "uri", "pattern": "^https://" },
+            { "type": "null" }
+          ]
+        },
+        "artifactPath": { "type": ["string", "null"] },
+        "skillMdVerified": { "type": "boolean" },
+        "repositoryStatus": {
+          "enum": ["current", "deprecated", "archived", "missing", "unknown"]
+        },
+        "identityChanged": { "type": "boolean" },
+        "disagreement": { "type": "boolean" },
+        "evidence": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string", "minLength": 8 }
+        }
+      }
+    },
+    "caseResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "primary", "specialist", "reconciled", "parent"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "primary": { "$ref": "#/$defs/evidenceResult" },
+        "specialist": {
+          "oneOf": [
+            { "$ref": "#/$defs/evidenceResult" },
+            { "type": "null" }
+          ]
+        },
+        "reconciled": {
+          "allOf": [
+            { "$ref": "#/$defs/evidenceResult" },
+            {
+              "type": "object",
+              "required": ["disagreement"],
+              "properties": {
+                "disagreement": { "type": "boolean" }
+              }
+            }
+          ]
+        },
+        "parent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["disposition", "decisionSourceUrl", "reason"],
+          "properties": {
+            "disposition": {
+              "enum": ["evaluate_current", "defer_ambiguous", "reject_invalid"]
+            },
+            "decisionSourceUrl": {
+              "oneOf": [
+                { "type": "string", "format": "uri", "pattern": "^https://" },
+                { "type": "null" }
+              ]
+            },
+            "reason": { "type": "string", "minLength": 8 }
+          }
+        }
+      }
+    }
+  }
+}

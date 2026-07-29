@@ -11,7 +11,9 @@
     "discovery:github": "node tools/discovery/collect-github.mjs",
     "discovery:export": "node tools/discovery/collect-github.mjs --export-only",
     "quality:prepare": "node tools/quality/report-quality.mjs prepare",
-    "quality:summary": "node tools/quality/report-quality.mjs summary"
+    "quality:summary": "node tools/quality/report-quality.mjs summary",
+    "quality:validate-multi-agent-shadow": "node tools/quality/validate-multi-agent-shadow.mjs",
+    "quality:validate-verification": "node tools/quality/validate-verification-evidence.mjs"
   },
   "devDependencies": {
     "ajv": "^8.20.0",

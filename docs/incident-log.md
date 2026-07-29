@@ -15,7 +15,7 @@ automatically classified as product defects.
 
 ## Incidents
 
-### 2026-07-27: Valid Skill Rejected After Stale Deep Link Returned 404
+### 2026-07-27: Stale Deep Link Masked a Deprecated Source Migration
 
 - The production run discovered `Figma Implement Design` through
   OpenAgentSkill and evaluated the guessed path
@@ -23,9 +23,13 @@ automatically classified as product defects.
 - That path returned 404, so Automation rejected the candidate as lacking an
   accessible primary source while also writing
   `officialSourceVerified: true`.
-- Manual verification found the maintained first-party artifact at
-  `skills/.curated/figma-implement-design`. The Skill existed; the locator was
-  wrong.
+- Manual verification found the first-party artifact at
+  `skills/.curated/figma-implement-design`. The Skill existed and the locator
+  was wrong, but the repository README also marked `openai/skills` as
+  deprecated and directed users to `openai/plugins`. The current plugin
+  repository contains the related `figma-design-to-code` Skill, so recovering
+  an old path is not enough to establish current maintenance or recommendation
+  eligibility.
 - Root cause: recovery covered discovery-page and filter failures but did not
   explicitly require same-repository artifact relocation after an exact deep
   link failed during final verification. Production wording also incorrectly
@@ -39,16 +43,23 @@ automatically classified as product defects.
   related positive-interest signal moving the qualified Skill to rank 1. A
   separate fresh-context blind agent, given only the stale URL and the updated
   recovery rule, independently followed the repository README to `.curated`,
-  matched the exact slug, and confirmed the recovered `SKILL.md`.
+  matched the exact slug, confirmed the recovered `SKILL.md`, and surfaced the
+  repository deprecation. A later Automation capability test confirmed that a
+  parent run can invoke a fresh-context subagent, wait for its result, and use
+  that result without changing production files.
 - The incorrect production `reject` had also been persisted in local review
   state with a 90-day exclusion. That invalid derived entry was removed after
   the incident audit; the published report and delivery record were left
   unchanged.
 - Removing the exclusion restored eligibility but did not guarantee
   rediscovery in the bounded daily candidate pool. A one-time recheck queue was
-  therefore added: corrected false classifications must be included in the
-  next production candidate pool and remain pending until finalization records
-  a new evidence-based decision.
+  therefore added. After the deprecation evidence was confirmed, the pending
+  recheck was corrected to evaluate the current `openai/plugins`
+  `figma-design-to-code` artifact rather than forcing the deprecated artifact
+  back into production. After the multi-agent adversarial verifier passed all
+  migration, ambiguity, invalid-source, and routing checks on 2026-07-28, the
+  pending item was removed and the legacy queue was left empty during the
+  production-transition period.
 - Delivery policy: no historical report edit or PushPlus backfill. The
   correction applies to future runs.
 - Classification: content-quality false negative and recovery-contract defect,

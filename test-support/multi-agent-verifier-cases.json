@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "current-valid",
+      "title": "Frontend Design",
+      "candidateUrl": "https://github.com/anthropics/skills/tree/main/skills/frontend-design",
+      "canonicalRepository": "https://github.com/anthropics/skills",
+      "verificationGoal": "Verify the exact current artifact, its SKILL.md, repository status, and first-party provenance.",
+      "expectedVerdict": "verified_current",
+      "expectedRepositoryStatus": "current",
+      "requiresSpecialist": false,
+      "expectedCurrentUrlPrefix": "https://github.com/anthropics/skills/"
+    },
+    {
+      "id": "same-repository-relocation",
+      "title": "Figma Design to Code",
+      "candidateUrl": "https://github.com/openai/plugins/tree/main/plugins/figma/skills/figma-design-to-code-v1",
+      "canonicalRepository": "https://github.com/openai/plugins",
+      "verificationGoal": "Treat the missing deep link as a locator failure. Search the same current repository for the exact or renamed artifact and verify its SKILL.md.",
+      "expectedVerdict": "recovered_current",
+      "expectedRepositoryStatus": "current",
+      "requiresSpecialist": false,
+      "expectedCurrentUrlPrefix": "https://github.com/openai/plugins/tree/main/plugins/figma/skills/figma-design-to-code"
+    },
+    {
+      "id": "deprecated-source-migration",
+      "title": "Figma Implement Design",
+      "candidateUrl": "https://github.com/openai/skills/tree/main/skills/figma-implement-design",
+      "canonicalRepository": "https://github.com/openai/skills",
+      "verificationGoal": "Determine whether the old artifact was relocated, deprecated, renamed, or replaced. Follow first-party migration guidance, identify the current successor if supported, and compare its scope instead of treating file existence as current maintenance.",
+      "expectedVerdict": "migrated",
+      "expectedRepositoryStatus": "current",
+      "requiresSpecialist": true,
+      "expectedCurrentUrlPrefix": "https://github.com/openai/plugins/tree/main/plugins/figma/skills/figma-design-to-code"
+    },
+    {
+      "id": "deprecated-no-successor",
+      "title": "Retired Phantom Skill",
+      "candidateUrl": "https://github.com/openai/skills/tree/main/skills/retired-phantom-skill",
+      "canonicalRepository": "https://github.com/openai/skills",
+      "verificationGoal": "Verify that no exact artifact exists and do not invent a successor merely because the repository points to a newer ecosystem repository.",
+      "expectedVerdict": "invalid",
+      "expectedRepositoryStatus": "deprecated",
+      "requiresSpecialist": false,
+      "expectedCurrentUrlPrefix": null
+    },
+    {
+      "id": "ambiguous-successor",
+      "title": "Figma Workflow",
+      "candidateUrl": "https://github.com/openai/skills/tree/main/skills/figma-workflow",
+      "canonicalRepository": "https://github.com/openai/skills",
+      "verificationGoal": "Check whether one exact current successor can be proven. Multiple related Figma skills without artifact-level identity evidence must remain ambiguous.",
+      "expectedVerdict": "ambiguous",
+      "expectedRepositoryStatus": "deprecated",
+      "requiresSpecialist": true,
+      "expectedCurrentUrlPrefix": null
+    },
+    {
+      "id": "directory-without-skill",
+      "title": "Figma Plugin Root",
+      "candidateUrl": "https://github.com/openai/plugins/tree/main/plugins/figma",
+      "canonicalRepository": "https://github.com/openai/plugins",
+      "verificationGoal": "Determine whether this exact directory is itself a portable skill. A plugin container with several child skills must not be verified as one skill unless an exact SKILL.md supports that identity.",
+      "expectedVerdict": "invalid",
+      "expectedRepositoryStatus": "current",
+      "requiresSpecialist": false,
+      "expectedCurrentUrlPrefix": null
+    }
+  ]
+}

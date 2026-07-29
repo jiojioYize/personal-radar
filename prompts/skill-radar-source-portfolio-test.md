@@ -204,6 +204,11 @@ signal IDs, `deprioritized` may cite only matching `not_interested` IDs, and a
 non-match must use `neutral` with no IDs and a null rationale. Preference may
 only change the ordering of qualified recommendations.
 
+Complete all decisions before writing public copy. `summary` and `conclusion`
+may describe only capabilities, themes, and cautions represented by final
+`recommend` decisions. Do not mention or imply a capability that belongs only
+to a deferred or rejected candidate.
+
 ## 5. Draft and Finalize
 
 Write the same curated v3 draft shape documented in
