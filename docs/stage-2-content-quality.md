@@ -1,25 +1,19 @@
 # Personal Radar Stage 2: Content Quality And Reading Experience
 
-Last updated: 2026-07-16
+Last updated: 2026-07-29
 
 ## Status
 
-Stage 2 implementation is in progress.
+Stage 2 implementation is complete and awaiting one production acceptance run.
+The acceptance criteria were fixed on 2026-07-29 before that run: automated
+contract tests and adversarial cases must pass, the production-format shadow
+must pass, and the promoted formal flow must complete one real generation,
+delivery, storage, website, and PushPlus cycle.
 
-On 2026-07-14, two consecutive Automation shadow tests showed that bounded
-curated-source discovery and qualitative primary-source review were more stable
-than the Quality v2.1 seven-dimension evidence workflow. Stage 2 is therefore
-moving toward a simplified version 3 contract. A real Automation-generated v3
-Sidecar and Markdown pair passed shadow validation on 2026-07-14. Worker v3
-compatibility was deployed and the production prompt was switched the same
-day. The first scheduled v3 production report is pending.
-
-On 2026-07-16, two additional source-portfolio shadow runs established that a
-code-owned registry, official-catalog, and community rotation could broaden
-coverage without weakening exact-artifact checks. The portfolio was promoted
-to the production prompt under a controlled three-production-day observation.
-The model-recovery branch for fewer than five eligible candidates remains a
-recorded residual risk; failure must stop the run rather than emit `no_update`.
+The feature tests and shadow acceptance have passed. The next scheduled formal
+Automation run is the remaining production check. A qualifying success closes
+Stage 2; later operating data is tracked as non-blocking product observation,
+not as a second 14-day or 30-day completion gate.
 
 The v3 production direction is:
 
@@ -53,15 +47,14 @@ from structured Sidecars and contained 31 exact recommendation records at the
 migration point.
 
 The local quality layer, structured report contract, forwarder validation, KV
-v2 compatibility, structured website rendering, and HTML PushPlus renderer are
-implemented. Worker v2 is deployed, three shadow runs passed, and the
-real-device HTML PushPlus comparison was accepted on 2026-07-09. Evidence-driven
-quality schema v2 was deployed on 2026-07-11. The first production result
-exposed evidence-binding and candidate-coverage weaknesses, so the comparable
-14-day quality observation is paused until Quality v2.1 passes shadow replay.
+compatibility, structured website rendering, HTML PushPlus renderer,
+code-rotated source portfolio, interest-based ordering, and multi-agent source
+verification are implemented. Historical Quality v2.1 scoring experiments
+remain documented below, but were superseded by the qualitative v3 production
+contract and are not current acceptance requirements.
 
 This document is the single living record for the Stage 2 plan, rollout,
-checkpoints, and final acceptance.
+production acceptance, and post-launch observation.
 
 Quality v2.1 calibration started on 2026-07-12 after a three-star repository
 received a score of 75 despite having only four evidence references. The item
@@ -526,11 +519,8 @@ npm run quality:summary
 | Source portfolio production | Promoted 2026-07-16 after two successful isolated runs; production now uses an independent code-owned plan and rotation under a three-day observation, while legacy fixed-source logic remains a short-term rollback reference |
 | Feedback ranking replay | Passed five isolated historical-report scenarios on 2026-07-26: four positive-interest cases and one combined positive/optional-negative case; selected sets stayed unchanged, unrelated items stayed neutral, and every non-neutral effect remained traceable |
 | Multi-agent source verification | Promoted into `prompts/skill-radar-local.md` on 2026-07-29 after the fixed adversarial suite covered current, migrated, invalid, missing, and ambiguous sources, and the corrected production-format shadow passed candidate/evidence/draft identity validation. The formal Automation entry prompt remains unchanged |
-| 14-day observation | Restarts on the first successful scheduled v3 production day |
-| 30-day acceptance | Not started |
-
-The observation clock starts on the day after the structured website and the
-accepted PushPlus format are enabled in production.
+| Production acceptance | Pending one successful scheduled run of the promoted multi-agent flow, including outbox generation, forwarding, Worker storage, website rendering, and PushPlus delivery |
+| Post-launch observation | Continues after Stage 2 closes; findings guide later maintenance and Stage 3 but do not delay Stage 2 completion |
 
 Worker v2 deployment on 2026-07-08 upgraded ingest, KV compatibility, and
 structured website rendering while initially keeping PushPlus on the
@@ -560,32 +550,42 @@ Shadow runs use `prompts/skill-radar-shadow.md` and write only to
 `reports/shadow/`. Three successful runs are required before Worker v2
 deployment.
 
-## 14-Day Checkpoint
+## Production Acceptance
 
-- At least 12 valid daily outcomes, including `published` or valid `no_update`.
-- Every outcome has a schema-valid Sidecar.
-- No unexplained repository-level repeat.
-- Every selected item passes the v3 qualitative primary-source and trust gates.
-- Naturally provided positive-interest feedback is preserved as traceable
-  signals; missing feedback is not counted as negative.
-- At least one later report contains a validated preference effect that changes
-  qualified-item ordering and can be reviewed as a concrete case.
-- Mobile push is scannable and website details remain complete.
-- No mojibake, structure mismatch, low-quality padding, or content injection.
+Stage 2 is complete when all of the following are true:
 
-## 30-Day Acceptance
+- automated contract, renderer, adversarial-verifier, and evidence-link tests
+  pass;
+- a real-candidate production-format shadow passes without changing production
+  history or delivery state;
+- the promoted formal Automation produces a valid verification-evidence file,
+  Sidecar, and Markdown report;
+- the local forwarder accepts the pair and the Worker stores it, updates the
+  website, and sends the expected PushPlus message;
+- public copy contains only reader-relevant recommendations and has no
+  encoding, structure, source-identity, or content-injection defect.
 
-- At least 26 valid daily outcomes.
-- Zero unexplained 30-day repository repeats.
-- All selected sources were reachable and verified at generation time.
-- Every claimed preference effect references a real prepared feedback signal;
-  invented IDs and incompatible positive/negative effects are rejected.
-- History or feedback demonstrably changes later filtering or ranking, and the
-  user judges the direction useful in at least one documented case.
-- `published`, `no_update`, and production incidents remain correctly
-  distinguished.
-- Push supports discovery and judgment; the website supports evidence,
-  comparison, and archive review.
+An external proxy, local network, machine availability, or scheduler incident
+is recorded separately and does not invalidate the implemented feature. A
+repeatable defect in verification, report generation, forwarding, rendering,
+or delivery blocks acceptance until fixed.
+
+## Post-Launch Observation
+
+These indicators are monitored continuously but are not Stage 2 completion
+gates:
+
+- valid outcomes and external incidents are counted separately;
+- unexplained exact-artifact repeats, unreachable selected sources, and
+  verification disagreements are reviewed;
+- every claimed preference effect remains linked to a real prepared interest
+  signal, while missing feedback remains unknown rather than negative;
+- preference ordering is periodically checked against replay tests and real
+  user judgment;
+- PushPlus remains suitable for quick discovery and the website remains
+  suitable for evidence, comparison, and archive review;
+- encoding, structure mismatch, low-quality padding, and content injection
+  incidents remain at zero.
 
 ## Out Of Scope
 

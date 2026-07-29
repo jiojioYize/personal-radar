@@ -13,7 +13,7 @@ The site publishes public AI-agent skill and rule radar reports. Pages default t
 ## Project Notes
 
 - [MVP Stage 1 Record](docs/mvp-stage-1.md): current production flow, completed scope, operational checklist, and next-stage candidates.
-- [Stage 2 Content Quality](docs/stage-2-content-quality.md): structured reports, quality rules, rollout status, and 14/30-day acceptance.
+- [Stage 2 Content Quality](docs/stage-2-content-quality.md): structured reports, quality rules, production acceptance, and post-launch observation.
 - [Skill Source Audit](docs/skill-source-audit.md): source landscape, artifact boundaries, and the production source-portfolio decision.
 - [Stage 2 Shadow Prompt](prompts/skill-radar-shadow.md): safely test structured generation without publishing or replacing a production report.
 - [Product Strategy](docs/product-strategy.md): long-term product positioning, user model, hosted and self-hosted paths, website evolution, and storage roadmap.
