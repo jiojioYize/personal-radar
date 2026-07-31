@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar.dailyingest.cn/schemas/harness-adjudication-test-v1.schema.json",
+  "title": "Personal Radar targeted harness adjudication test",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "testDate", "testType", "adjudicator", "case", "safety"],
+  "properties": {
+    "version": { "const": 1 },
+    "testDate": { "type": "string", "format": "date" },
+    "testType": { "const": "targeted-harness-adjudication" },
+    "adjudicator": { "$ref": "#/$defs/run" },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "adjudication", "parent"],
+      "properties": {
+        "id": { "const": "remotion-repository-migration-path" },
+        "title": { "const": "Remotion Best Practices" },
+        "adjudication": { "$ref": "#/$defs/adjudication" },
+        "parent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["disposition", "decisionSourceUrl", "reason"],
+          "properties": {
+            "disposition": { "enum": ["evaluate_current", "remove_unresolved"] },
+            "decisionSourceUrl": {
+              "oneOf": [
+                { "type": "string", "format": "uri", "pattern": "^https://" },
+                { "type": "null" }
+              ]
+            },
+            "reason": { "type": "string", "minLength": 12 }
+          }
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["productionFilesChanged", "workerCalled", "forwarderCalled"],
+      "properties": {
+        "productionFilesChanged": { "const": false },
+        "workerCalled": { "const": false },
+        "forwarderCalled": { "const": false }
+      }
+    }
+  },
+  "$defs": {
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempted", "available", "completed", "freshContextRequested", "retryCount", "notes"],
+      "properties": {
+        "attempted": { "const": true },
+        "available": { "const": true },
+        "completed": { "const": true },
+        "freshContextRequested": { "const": true },
+        "retryCount": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "notes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "adjudication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verdict", "currentUrl", "artifactPath", "repositoryStatus",
+        "sourceRepositoryChanged", "identityChanged", "skillMdVerified",
+        "evidence"
+      ],
+      "properties": {
+        "verdict": {
+          "enum": ["verified_current", "recovered_current", "migrated", "ambiguous", "invalid", "inconclusive"]
+        },
+        "currentUrl": {
+          "oneOf": [
+            { "type": "string", "format": "uri", "pattern": "^https://" },
+            { "type": "null" }
+          ]
+        },
+        "artifactPath": { "type": ["string", "null"] },
+        "repositoryStatus": { "enum": ["current", "deprecated", "archived", "missing", "unknown"] },
+        "sourceRepositoryChanged": { "type": "boolean" },
+        "identityChanged": { "type": "boolean" },
+        "skillMdVerified": { "type": "boolean" },
+        "evidence": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string", "minLength": 12 }
+        }
+      }
+    }
+  }
+}

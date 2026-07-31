@@ -42,6 +42,84 @@ test("requires complete evidence and links it to every draft decision", async ()
   await fs.rm(temp, { recursive: true, force: true });
 });
 
+test("treats GitHub blob and raw URLs for the same artifact as equivalent", async () => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), "radar-verification-github-"));
+  const candidatePath = path.join(temp, "candidates.json");
+  const evidencePath = path.join(temp, "evidence.json");
+  const candidates = candidateFixture();
+  candidates.eligibleCandidates[0].sourceUrl =
+    "https://github.com/example/repo0/blob/main/skills/skill-0/SKILL.md";
+  const evidence = evidenceFixture(candidates.eligibleCandidates);
+  evidence.results[0].primary.currentUrl =
+    "https://raw.githubusercontent.com/example/repo0/main/skills/skill-0/SKILL.md";
+  evidence.results[0].reconciled.currentUrl =
+    "https://raw.githubusercontent.com/example/repo0/main/skills/skill-0/SKILL.md";
+
+  await Promise.all([
+    fs.writeFile(candidatePath, JSON.stringify(candidates), "utf8"),
+    fs.writeFile(evidencePath, JSON.stringify(evidence), "utf8"),
+  ]);
+
+  const accepted = await execFileAsync(process.execPath, [
+    validator, "--evidence", evidencePath, "--candidates", candidatePath,
+  ], { cwd: root });
+  assert.match(accepted.stdout, /Valid multi-agent verification evidence/);
+
+  evidence.results[0].primary.currentUrl =
+    "https://raw.githubusercontent.com/other/repo0/main/skills/skill-0/SKILL.md";
+  evidence.results[0].reconciled.currentUrl =
+    "https://raw.githubusercontent.com/other/repo0/main/skills/skill-0/SKILL.md";
+  await fs.writeFile(evidencePath, JSON.stringify(evidence), "utf8");
+  await assert.rejects(
+    execFileAsync(process.execPath, [
+      validator, "--evidence", evidencePath, "--candidates", candidatePath,
+    ], { cwd: root }),
+    /verified current URL does not match filtered candidate/
+  );
+
+  await fs.rm(temp, { recursive: true, force: true });
+});
+
+test("requires specialist disagreement removals to remain auditable", async () => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), "radar-verification-removal-"));
+  const candidatePath = path.join(temp, "candidates.json");
+  const evidencePath = path.join(temp, "evidence.json");
+  const candidates = candidateFixture();
+  const evidence = evidenceFixture(candidates.eligibleCandidates);
+  evidence.removals.push({
+    candidateId: "src_deadbeef",
+    title: "Removed Skill",
+    originalSourceUrl: "https://github.com/example/removed/tree/main/skills/removed",
+    originalArtifactPath: "skills/removed",
+    stage: "specialist_reconciliation",
+    reason: "specialist_disagreement",
+    primaryVerdict: "migrated",
+    specialistVerdict: "recovered_current",
+    disagreementFields: ["verdict", "identityChanged"],
+    requiresFollowup: true,
+  });
+
+  await Promise.all([
+    fs.writeFile(candidatePath, JSON.stringify(candidates), "utf8"),
+    fs.writeFile(evidencePath, JSON.stringify(evidence), "utf8"),
+  ]);
+  const accepted = await execFileAsync(process.execPath, [
+    validator, "--evidence", evidencePath, "--candidates", candidatePath,
+  ], { cwd: root });
+  assert.match(accepted.stdout, /Valid multi-agent verification evidence/);
+
+  evidence.removals[0].requiresFollowup = false;
+  await fs.writeFile(evidencePath, JSON.stringify(evidence), "utf8");
+  await assert.rejects(
+    execFileAsync(process.execPath, [
+      validator, "--evidence", evidencePath, "--candidates", candidatePath,
+    ], { cwd: root }),
+    /specialist disagreement must be auditable and require follow-up/
+  );
+
+  await fs.rm(temp, { recursive: true, force: true });
+});
+
 function candidateFixture() {
   const eligibleCandidates = Array.from({ length: 5 }, (_, index) => ({
     id: `src_0000000${index}`,
@@ -67,6 +145,7 @@ function evidenceFixture(candidates) {
       attempted: false, available: false, completed: false,
       freshContextRequested: false, retryCount: 0, notes: [],
     },
+    removals: [],
     results: candidates.map((candidate) => {
       const verified = {
         verdict: "verified_current",

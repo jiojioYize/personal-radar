@@ -1,30 +1,39 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://radar.dailyingest.cn/schemas/skill-radar-verification-v1.schema.json",
-  "title": "Skill Radar multi-agent source verification evidence",
+  "$id": "https://radar.dailyingest.cn/schemas/skill-radar-verification-v2.schema.json",
+  "title": "Skill Radar adjudicated multi-agent source verification evidence",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "reportDate", "profile", "primaryVerifier", "specialistVerifier", "results", "removals"],
+  "required": ["version", "reportDate", "profile", "runs", "results"],
   "properties": {
-    "version": { "const": 1 },
+    "version": { "const": 2 },
     "reportDate": { "type": "string", "format": "date" },
-    "profile": { "const": "multi-agent-verifier-v1" },
-    "primaryVerifier": { "$ref": "#/$defs/run" },
-    "specialistVerifier": { "$ref": "#/$defs/run" },
+    "profile": { "const": "multi-agent-harness-v2" },
+    "runs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "specialist", "adjudicator"],
+      "properties": {
+        "primary": { "$ref": "#/$defs/run" },
+        "specialist": { "$ref": "#/$defs/run" },
+        "adjudicator": { "$ref": "#/$defs/run" }
+      }
+    },
     "results": {
       "type": "array",
       "minItems": 5,
       "maxItems": 20,
       "items": { "$ref": "#/$defs/result" }
-    },
-    "removals": {
-      "type": "array",
-      "maxItems": 20,
-      "items": { "$ref": "#/$defs/removal" }
     }
   },
   "$defs": {
     "httpsUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+    "materialField": {
+      "enum": [
+        "verdict", "currentUrl", "artifactPath", "repositoryStatus",
+        "sourceRepositoryChanged", "identityChanged"
+      ]
+    },
     "run": {
       "type": "object",
       "additionalProperties": false,
@@ -44,7 +53,7 @@
       "required": [
         "verdict", "originalUrlStatus", "currentTitle", "currentUrl",
         "artifactPath", "skillMdVerified", "repositoryStatus",
-        "identityChanged", "license", "capability", "usability",
+        "sourceRepositoryChanged", "identityChanged", "license", "capability", "usability",
         "portability", "maintenance", "trustCaveat", "evidence"
       ],
       "properties": {
@@ -62,6 +71,7 @@
         "artifactPath": { "type": ["string", "null"] },
         "skillMdVerified": { "type": "boolean" },
         "repositoryStatus": { "enum": ["current", "deprecated", "archived", "missing", "unknown"] },
+        "sourceRepositoryChanged": { "type": "boolean" },
         "identityChanged": { "type": "boolean" },
         "license": { "type": ["string", "null"] },
         "capability": { "type": "string", "minLength": 8 },
@@ -76,58 +86,75 @@
         }
       }
     },
+    "disputeQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "question"],
+      "properties": {
+        "field": { "$ref": "#/$defs/materialField" },
+        "question": { "type": "string", "minLength": 12 }
+      }
+    },
+    "dispute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fields", "questions", "evidencePolicy", "maxAdjudicationAttempts"],
+      "properties": {
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/materialField" }
+        },
+        "questions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/disputeQuestion" }
+        },
+        "evidencePolicy": { "const": "first_party_only" },
+        "maxAdjudicationAttempts": { "const": 1 }
+      }
+    },
     "result": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "candidateId", "artifactKey", "originalSourceUrl", "primary",
-        "specialistRequired", "specialist", "reconciled"
+        "candidateId", "artifactKey", "title", "originalSourceUrl",
+        "originalArtifactPath", "primary", "specialistRequired", "specialist",
+        "disagreementFields", "dispute", "adjudicationRequired",
+        "adjudication", "reconciled", "disposition", "removalReason",
+        "requiresFollowup"
       ],
       "properties": {
         "candidateId": { "type": "string", "pattern": "^src_[a-f0-9]{8}$" },
         "artifactKey": { "type": "string", "minLength": 1 },
-        "originalSourceUrl": { "$ref": "#/$defs/httpsUrl" },
-        "primary": { "$ref": "#/$defs/evidence" },
-        "specialistRequired": { "type": "boolean" },
-        "specialist": { "oneOf": [{ "$ref": "#/$defs/evidence" }, { "type": "null" }] },
-        "reconciled": { "$ref": "#/$defs/evidence" }
-      }
-    },
-    "removal": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "candidateId", "title", "originalSourceUrl", "originalArtifactPath",
-        "stage", "reason", "primaryVerdict", "specialistVerdict",
-        "disagreementFields", "requiresFollowup"
-      ],
-      "properties": {
-        "candidateId": { "type": "string", "pattern": "^src_[a-f0-9]{8}$" },
         "title": { "type": "string", "minLength": 1 },
         "originalSourceUrl": { "$ref": "#/$defs/httpsUrl" },
         "originalArtifactPath": { "type": ["string", "null"] },
-        "stage": { "enum": ["primary_verification", "specialist_reconciliation"] },
-        "reason": {
-          "enum": [
-            "ambiguous", "invalid", "inconclusive",
-            "specialist_disagreement", "verification_contract_failure"
-          ]
-        },
-        "primaryVerdict": {
-          "enum": ["verified_current", "recovered_current", "migrated", "ambiguous", "invalid", "inconclusive"]
-        },
-        "specialistVerdict": {
-          "oneOf": [
-            { "enum": ["verified_current", "recovered_current", "migrated", "ambiguous", "invalid", "inconclusive"] },
-            { "type": "null" }
-          ]
-        },
+        "primary": { "$ref": "#/$defs/evidence" },
+        "specialistRequired": { "type": "boolean" },
+        "specialist": { "oneOf": [{ "$ref": "#/$defs/evidence" }, { "type": "null" }] },
         "disagreementFields": {
           "type": "array",
           "uniqueItems": true,
-          "items": {
-            "enum": ["verdict", "currentUrl", "artifactPath", "repositoryStatus", "identityChanged"]
-          }
+          "items": { "$ref": "#/$defs/materialField" }
+        },
+        "dispute": { "oneOf": [{ "$ref": "#/$defs/dispute" }, { "type": "null" }] },
+        "adjudicationRequired": { "type": "boolean" },
+        "adjudication": { "oneOf": [{ "$ref": "#/$defs/evidence" }, { "type": "null" }] },
+        "reconciled": { "$ref": "#/$defs/evidence" },
+        "disposition": { "enum": ["retained", "removed"] },
+        "removalReason": {
+          "oneOf": [
+            {
+              "enum": [
+                "primary_unresolved", "adjudication_unresolved",
+                "invalid_artifact", "verification_contract_failure"
+              ]
+            },
+            { "type": "null" }
+          ]
         },
         "requiresFollowup": { "type": "boolean" }
       }

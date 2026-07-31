@@ -1,19 +1,27 @@
 # Personal Radar Stage 2: Content Quality And Reading Experience
 
-Last updated: 2026-07-29
+Last updated: 2026-07-31
 
 ## Status
 
-Stage 2 implementation is complete and awaiting one production acceptance run.
-The acceptance criteria were fixed on 2026-07-29 before that run: automated
-contract tests and adversarial cases must pass, the production-format shadow
-must pass, and the promoted formal flow must complete one real generation,
-delivery, storage, website, and PushPlus cycle.
+Stage 2 is complete. Production acceptance passed on 2026-07-31 after the
+promoted formal multi-agent flow completed one real generation, delivery,
+storage, website, and PushPlus cycle.
 
-The feature tests and shadow acceptance have passed. The next scheduled formal
-Automation run is the remaining production check. A qualifying success closes
-Stage 2; later operating data is tracked as non-blocking product observation,
-not as a second 14-day or 30-day completion gate.
+The run collected 11 candidates, used code-owned filtering and replenishment,
+verified every final eligible artifact, and triggered specialist verification
+for a recovered artifact identity. Because the two verifiers disagreed on a
+material identity field, that candidate was removed before recommendation.
+The replenished pool then produced five fully verified recommendations.
+Evidence validation, Sidecar and Markdown generation, UTF-8 checks, forwarding,
+Worker storage, public rendering, and PushPlus delivery all succeeded.
+
+The preceding 2026-07-30 production failure exposed an overly literal
+GitHub blob-versus-raw URL comparison. Equivalent file URLs are now
+canonicalized without accepting a different repository or artifact path.
+The retained incident replay and all 51 automated tests passed before the
+successful production run. Later operating data is tracked as non-blocking
+product observation, not as a second 14-day or 30-day completion gate.
 
 The v3 production direction is:
 
@@ -510,7 +518,7 @@ npm run quality:summary
 | Worker KV v2 and structured website | Implemented locally |
 | HTML and concise Markdown PushPlus renderers | Implemented locally |
 | Automated tests and Worker bundle dry run | Passed |
-| Desktop and 390px visual verification | Pending local preview access |
+| Desktop and 390px visual verification | Passed against the live structured report during rollout; the 2026-07-31 production page was rechecked on desktop |
 | Three successful shadow reports | 3 of 3 passed |
 | Worker production deployment | Full eligible-candidate lifecycle and user-focused v3 cards deployed 2026-07-14 as Worker version `4acc0df2-7eca-4c09-95d7-4ae0fadfa714`; `/health` and `/` returned 200 |
 | Real-device HTML comparison | Accepted 2026-07-09 |
@@ -519,8 +527,8 @@ npm run quality:summary
 | Source portfolio production | Promoted 2026-07-16 after two successful isolated runs; production now uses an independent code-owned plan and rotation under a three-day observation, while legacy fixed-source logic remains a short-term rollback reference |
 | Feedback ranking replay | Passed five isolated historical-report scenarios on 2026-07-26: four positive-interest cases and one combined positive/optional-negative case; selected sets stayed unchanged, unrelated items stayed neutral, and every non-neutral effect remained traceable |
 | Multi-agent source verification | Promoted into `prompts/skill-radar-local.md` on 2026-07-29 after the fixed adversarial suite covered current, migrated, invalid, missing, and ambiguous sources, and the corrected production-format shadow passed candidate/evidence/draft identity validation. The formal Automation entry prompt remains unchanged |
-| Production acceptance | Pending one successful scheduled run of the promoted multi-agent flow, including outbox generation, forwarding, Worker storage, website rendering, and PushPlus delivery |
-| Post-launch observation | Continues after Stage 2 closes; findings guide later maintenance and Stage 3 but do not delay Stage 2 completion |
+| Production acceptance | Passed 2026-07-31: specialist routing, evidence validation, outbox generation, forwarding, Worker storage, website rendering, and PushPlus delivery all completed |
+| Post-launch observation | Continues after Stage 2 closes; the 2026-07-31 Grill With Docs near miss led to Harness v2 with explicit identity continuity, complete verification trajectories, conditional adjudication, and separate repository-migration evidence without changing the completed Stage 2 delivery acceptance |
 
 Worker v2 deployment on 2026-07-08 upgraded ingest, KV compatibility, and
 structured website rendering while initially keeping PushPlus on the
@@ -565,6 +573,11 @@ Stage 2 is complete when all of the following are true:
 - public copy contains only reader-relevant recommendations and has no
   encoding, structure, source-identity, or content-injection defect.
 
+Acceptance result: passed on 2026-07-31. The formal report contained five
+reader-visible recommendations, the Worker returned
+`stored=true pushed=true duplicate=false`, and the live bilingual report page
+rendered without encoding, truncation, or internal-pipeline copy.
+
 An external proxy, local network, machine availability, or scheduler incident
 is recorded separately and does not invalidate the implemented feature. A
 repeatable defect in verification, report generation, forwarding, rendering,
@@ -578,6 +591,12 @@ gates:
 - valid outcomes and external incidents are counted separately;
 - unexplained exact-artifact repeats, unreachable selected sources, and
   verification disagreements are reviewed;
+- every candidate removed during source verification retains its complete
+  internal verification trajectory; specialist disagreements list the material
+  fields involved, trigger one bounded adjudication, and require follow-up when
+  they remain unresolved even if the report succeeds;
+- same-repository path corrections are checked against first-party artifact
+  history so locator recovery is not misclassified as migration;
 - every claimed preference effect remains linked to a real prepared interest
   signal, while missing feedback remains unknown rather than negative;
 - preference ordering is periodically checked against replay tests and real

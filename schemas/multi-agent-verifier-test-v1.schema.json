@@ -21,8 +21,8 @@
     "specialistVerifier": { "$ref": "#/$defs/verifierRun" },
     "cases": {
       "type": "array",
-      "minItems": 6,
-      "maxItems": 6,
+      "minItems": 1,
+      "maxItems": 20,
       "items": { "$ref": "#/$defs/caseResult" }
     },
     "safety": {

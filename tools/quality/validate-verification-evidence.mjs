@@ -37,6 +37,26 @@ function validateEvidence(evidence, candidates, draft) {
     results.set(result.candidateId, result);
   }
   if (results.size !== expected.size) fail("evidence must cover every eligible candidate exactly once");
+  const removals = new Set();
+  for (const removal of evidence.removals) {
+    if (removals.has(removal.candidateId)) {
+      fail(`duplicate removal candidateId: ${removal.candidateId}`);
+    }
+    removals.add(removal.candidateId);
+    if (results.has(removal.candidateId)) {
+      fail(`${removal.candidateId}: candidate cannot be both retained and removed`);
+    }
+    if (removal.reason === "specialist_disagreement") {
+      if (removal.stage !== "specialist_reconciliation"
+        || removal.specialistVerdict === null
+        || removal.disagreementFields.length === 0
+        || !removal.requiresFollowup) {
+        fail(`${removal.candidateId}: specialist disagreement must be auditable and require follow-up`);
+      }
+    } else if (removal.disagreementFields.length > 0) {
+      fail(`${removal.candidateId}: disagreementFields require specialist_disagreement`);
+    }
+  }
 
   for (const [id, candidate] of expected) {
     const result = results.get(id);
@@ -46,7 +66,7 @@ function validateEvidence(evidence, candidates, draft) {
     if (!["verified_current", "recovered_current", "migrated"].includes(final.verdict)) {
       fail(`${id}: unresolved source verdict cannot enter main-model evaluation`);
     }
-    if (normalizeUrl(final.currentUrl) !== normalizeUrl(candidate.sourceUrl)) {
+    if (!sameSourceArtifact(final.currentUrl, candidate.sourceUrl, candidate.artifactPath)) {
       fail(`${id}: verified current URL does not match filtered candidate`);
     }
     if (normalizeArtifactPath(final.artifactPath) !== normalizeArtifactPath(candidate.artifactPath)) {
@@ -79,7 +99,7 @@ function validateEvidence(evidence, candidates, draft) {
   const seen = new Set();
   for (const decision of decisions) {
     const candidate = eligible.find((entry) =>
-      normalizeUrl(entry.sourceUrl) === normalizeUrl(decision.sourceUrl)
+      sameSourceArtifact(entry.sourceUrl, decision.sourceUrl, entry.artifactPath)
       && normalizeArtifactPath(entry.artifactPath) === normalizeArtifactPath(decision.artifactPath));
     if (!candidate) fail(`draft decision has no matching verified candidate: ${decision.title || "unknown"}`);
     if (seen.has(candidate.id)) fail(`draft repeats verified candidate: ${candidate.id}`);
@@ -87,7 +107,11 @@ function validateEvidence(evidence, candidates, draft) {
     const result = results.get(candidate.id);
     if (decision.verification?.candidateId !== candidate.id
       || decision.verification?.verdict !== result.reconciled.verdict
-      || normalizeUrl(decision.verification?.currentUrl) !== normalizeUrl(candidate.sourceUrl)) {
+      || !sameSourceArtifact(
+        decision.verification?.currentUrl,
+        candidate.sourceUrl,
+        candidate.artifactPath
+      )) {
       fail(`${candidate.id}: draft verification reference is missing or inconsistent`);
     }
   }
@@ -102,11 +126,74 @@ function requireCompletedRun(run, label) {
 function materialIdentity(value) {
   return JSON.stringify([
     value.verdict,
-    normalizeUrl(value.currentUrl),
+    sourceArtifactIdentity(value.currentUrl, value.artifactPath),
     normalizeArtifactPath(value.artifactPath),
     value.repositoryStatus,
     value.identityChanged,
   ]);
+}
+
+function sameSourceArtifact(left, right, artifactPath) {
+  return sourceArtifactIdentity(left, artifactPath) === sourceArtifactIdentity(right, artifactPath);
+}
+
+function sourceArtifactIdentity(value, artifactPath) {
+  const normalizedUrl = normalizeUrl(value);
+  if (normalizedUrl == null) return null;
+  return githubFileIdentity(normalizedUrl, artifactPath) ?? normalizedUrl;
+}
+
+function githubFileIdentity(value, artifactPath) {
+  const normalizedArtifactPath = normalizeArtifactPath(artifactPath);
+  if (!normalizedArtifactPath) return null;
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return null;
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  const parts = parsed.pathname.split("/").filter(Boolean).map(decodePathSegment);
+  const artifactParts = normalizedArtifactPath.split("/").filter(Boolean);
+  const artifactFileParts = [...artifactParts, "SKILL.md"];
+  let owner;
+  let repository;
+  let refAndFileParts;
+
+  if (host === "github.com" && parts[2] === "blob") {
+    [owner, repository] = parts;
+    refAndFileParts = parts.slice(3);
+  } else if (host === "raw.githubusercontent.com") {
+    [owner, repository] = parts;
+    refAndFileParts = parts.slice(2);
+  } else {
+    return null;
+  }
+
+  if (!owner || !repository || !endsWithSegments(refAndFileParts, artifactFileParts)) {
+    return null;
+  }
+
+  // The artifact key and artifact-path checks separately protect repository
+  // and path identity. This canonical form only treats GitHub's human-readable
+  // blob page and raw-content endpoint as equivalent views of that same file.
+  return `github-file:${owner.toLowerCase()}/${repository.toLowerCase()}#artifact=${normalizedArtifactPath}`;
+}
+
+function endsWithSegments(value, suffix) {
+  if (value.length <= suffix.length) return false;
+  const offset = value.length - suffix.length;
+  return suffix.every((segment, index) => value[offset + index] === segment);
+}
+
+function decodePathSegment(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function normalizeUrl(value) {

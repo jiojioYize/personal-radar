@@ -9,6 +9,7 @@
       "verificationGoal": "Verify the exact current artifact, its SKILL.md, repository status, and first-party provenance.",
       "expectedVerdict": "verified_current",
       "expectedRepositoryStatus": "current",
+      "expectedIdentityChanged": false,
       "requiresSpecialist": false,
       "expectedCurrentUrlPrefix": "https://github.com/anthropics/skills/"
     },
@@ -20,8 +21,21 @@
       "verificationGoal": "Treat the missing deep link as a locator failure. Search the same current repository for the exact or renamed artifact and verify its SKILL.md.",
       "expectedVerdict": "recovered_current",
       "expectedRepositoryStatus": "current",
+      "expectedIdentityChanged": false,
       "requiresSpecialist": false,
       "expectedCurrentUrlPrefix": "https://github.com/openai/plugins/tree/main/plugins/figma/skills/figma-design-to-code"
+    },
+    {
+      "id": "same-repository-path-continuity",
+      "title": "Grill With Docs",
+      "candidateUrl": "https://github.com/mattpocock/skills/tree/main/skills/productivity/grill-with-docs",
+      "canonicalRepository": "https://github.com/mattpocock/skills",
+      "verificationGoal": "Treat the guessed missing directory as a locator failure. Verify the same slug and purpose in the current first-party repository, use path history to establish continuity, and do not label a category-path correction as migration or identity change.",
+      "expectedVerdict": "recovered_current",
+      "expectedRepositoryStatus": "current",
+      "expectedIdentityChanged": false,
+      "requiresSpecialist": false,
+      "expectedCurrentUrlPrefix": "https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs"
     },
     {
       "id": "deprecated-source-migration",
@@ -31,6 +45,7 @@
       "verificationGoal": "Determine whether the old artifact was relocated, deprecated, renamed, or replaced. Follow first-party migration guidance, identify the current successor if supported, and compare its scope instead of treating file existence as current maintenance.",
       "expectedVerdict": "migrated",
       "expectedRepositoryStatus": "current",
+      "expectedIdentityChanged": true,
       "requiresSpecialist": true,
       "expectedCurrentUrlPrefix": "https://github.com/openai/plugins/tree/main/plugins/figma/skills/figma-design-to-code"
     },
@@ -42,6 +57,7 @@
       "verificationGoal": "Verify that no exact artifact exists and do not invent a successor merely because the repository points to a newer ecosystem repository.",
       "expectedVerdict": "invalid",
       "expectedRepositoryStatus": "deprecated",
+      "expectedIdentityChanged": false,
       "requiresSpecialist": false,
       "expectedCurrentUrlPrefix": null
     },
@@ -53,6 +69,7 @@
       "verificationGoal": "Check whether one exact current successor can be proven. Multiple related Figma skills without artifact-level identity evidence must remain ambiguous.",
       "expectedVerdict": "ambiguous",
       "expectedRepositoryStatus": "deprecated",
+      "expectedIdentityChanged": false,
       "requiresSpecialist": true,
       "expectedCurrentUrlPrefix": null
     },
@@ -64,6 +81,7 @@
       "verificationGoal": "Determine whether this exact directory is itself a portable skill. A plugin container with several child skills must not be verified as one skill unless an exact SKILL.md supports that identity.",
       "expectedVerdict": "invalid",
       "expectedRepositoryStatus": "current",
+      "expectedIdentityChanged": false,
       "requiresSpecialist": false,
       "expectedCurrentUrlPrefix": null
     }

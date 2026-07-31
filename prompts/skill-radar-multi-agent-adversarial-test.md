@@ -32,9 +32,9 @@ tools/quality/validate-multi-agent-shadow.mjs
 
 ### Primary verifier subagent
 
-Inspect the callable tools and create one fresh-context subagent. Give it all
-six fixture cases, including their URLs and verification goals, but do not give
-it the expected verdict fields.
+Inspect the callable tools and create one fresh-context subagent. Give it every
+fixture case, including its URL and verification goal, but do not give it the
+expected verdict fields.
 
 The primary verifier must:
 
@@ -57,6 +57,16 @@ The primary verifier must:
   successor repository.
 
 The primary verifier does not choose `recommend`, `defer`, or `reject`.
+
+Artifact continuity has a strict meaning:
+
+- use `recovered_current` with `identityChanged: false` when the canonical
+  repository, slug or name, and material purpose remain the same and
+  first-party path history supports continuity;
+- a category-folder, directory, deep-link, or `SKILL.md` locator correction is
+  not a migration;
+- use `identityChanged: true` only for an evidenced successor, replacement, or
+  material identity/scope change. A 404 or guessed path alone is insufficient.
 
 If its response is missing a case or required field, send one bounded repair
 message to the same subagent listing only the contract errors. Do not research
@@ -178,7 +188,7 @@ Finish by reporting only:
 
 - whether both subagents were available and completed;
 - whether either required a repair attempt;
-- the reconciled verdict for all six cases;
+- the reconciled verdict for every fixture case;
 - whether the validator passed;
 - the output file path;
 - whether any protected or tracked file changed.

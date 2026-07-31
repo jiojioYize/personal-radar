@@ -29,7 +29,8 @@ Current recommended production flow:
 Code-generated registry/official/community source plan -> Local Codex Automation
 -> code-owned artifact and review-state filter
 -> fresh-context primary verifier for every eligible artifact
--> risk-triggered specialist verifier -> evidence validation
+-> risk-triggered specialist verifier
+-> disagreement-triggered adjudicator -> evidence validation
 -> main-model quality editor
 -> reports/outbox -> local forwarder -> Worker /ingest-report
 -> KV + public site + PushPlus
@@ -85,13 +86,27 @@ Multi-agent production-format shadow runs should read and execute:
 prompts/skill-radar-multi-agent-production-shadow.md
 ```
 
-This shadow flow mirrors the promoted production verifier. It writes a separate
-verification evidence artifact, requires
-fresh-context primary verification for every eligible candidate, escalates
-migration or identity-change risks to a specialist verifier, and links every
+This shadow flow experiments with the next verifier harness while preserving
+the production report format. It writes a separate Harness v2 verification
+evidence artifact, requires fresh-context primary
+verification for every eligible candidate, escalates migration or
+identity-change risks to a specialist verifier, and conditionally invokes an
+independent adjudicator for material verifier disagreements. It preserves the
+complete retained and removed verification trajectories and links every
 main-model decision back to validated evidence. Use it only for isolated
 regression testing; the formal Automation continues to read
 `prompts/skill-radar-local.md`.
+
+Targeted Remotion adjudicator regression runs should read and execute:
+
+```text
+prompts/skill-radar-harness-remotion-test.md
+```
+
+This test supplies a fixed anonymized disagreement packet to one fresh-context
+adjudicator and writes only under `reports/shadow/`. It verifies repository
+migration separately from artifact identity continuity and never creates a
+report or invokes delivery.
 
 Source-portfolio runs must include `--shadow --source-portfolio`. They use
 separate shadow history and cannot write or forward a production report.
@@ -164,6 +179,9 @@ decisions are maintained in `docs/product-strategy.md`.
 Stage 2 implementation and acceptance are maintained in
 `docs/stage-2-content-quality.md`.
 
+Multi-agent orchestration, disagreement handling, and Harness v2 promotion
+criteria are maintained in `docs/agent-harness.md`.
+
 Current Stage 2 production rules:
 
 1. The quality Sidecar is the source of truth; Markdown is generated from it.
@@ -201,9 +219,18 @@ Current Stage 2 production rules:
 13. Production source verification is separated from recommendation judgment.
     A fresh-context primary verifier checks every eligible artifact; migration,
     identity-change, or repository-status risks require a second specialist.
-    Code validates reconciled evidence and its link to every draft decision
+    Material specialist disagreements require one fresh-context adjudicator
+    working from an anonymized, field-specific dispute packet. Code validates
+    the complete reconciled trajectory and its link to every draft decision
     before finalization. The main model makes quality decisions from this
     evidence and does not repeat source browsing.
+14. Same-repository path correction is locator recovery, not migration, when
+    the artifact name or slug and material purpose remain continuous in
+    first-party history. Repository migration and artifact identity change are
+    separate evidence fields. Every candidate removed during verification must
+    retain its complete internal trajectory. Unresolved adjudication requires
+    explicit disagreement fields and follow-up even when the daily report
+    otherwise succeeds.
 
 ## Operational Notes
 

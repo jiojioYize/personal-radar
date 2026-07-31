@@ -75,11 +75,20 @@ test("accepts a complete adversarial verifier result and rejects unsafe routing"
   );
 
   result = validResult();
+  result.cases.find((item) => item.id === "same-repository-path-continuity").primary.identityChanged = true;
+  result.cases.find((item) => item.id === "same-repository-path-continuity").reconciled.identityChanged = true;
+  await fs.writeFile(resultPath, JSON.stringify(result), "utf8");
+  await assert.rejects(
+    execFileAsync(process.execPath, [validator, "--result", resultPath], { cwd: root }),
+    /same-repository-path-continuity: expected identityChanged false, received true/
+  );
+
+  result = validResult();
   result.cases.pop();
   await fs.writeFile(resultPath, JSON.stringify(result), "utf8");
   await assert.rejects(
     execFileAsync(process.execPath, [validator, "--result", resultPath], { cwd: root }),
-    /must NOT have fewer than 6 items/
+    /Expected 7 cases, received 6/
   );
 
   await fs.rm(temp, { recursive: true, force: true });
@@ -166,6 +175,31 @@ function validResult() {
         disagreement: false
       },
       parent: route("evaluate_current", "https://github.com/openai/plugins/tree/main/plugins/figma/skills/figma-design-to-code")
+    },
+    {
+      id: "same-repository-path-continuity",
+      title: "Grill With Docs",
+      primary: evidence({
+        verdict: "recovered_current",
+        originalUrlStatus: 404,
+        currentTitle: "Grill With Docs",
+        currentUrl: "https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs",
+        artifactPath: "skills/engineering/grill-with-docs",
+        identityChanged: false
+      }),
+      specialist: null,
+      reconciled: {
+        ...evidence({
+          verdict: "recovered_current",
+          originalUrlStatus: 404,
+          currentTitle: "Grill With Docs",
+          currentUrl: "https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs",
+          artifactPath: "skills/engineering/grill-with-docs",
+          identityChanged: false
+        }),
+        disagreement: false
+      },
+      parent: route("evaluate_current", "https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs")
     },
     {
       id: "deprecated-no-successor",

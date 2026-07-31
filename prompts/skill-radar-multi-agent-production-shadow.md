@@ -38,7 +38,7 @@ For every candidate it must use first-party evidence to return the fields in
 `$defs.evidence` from:
 
 ```text
-schemas/skill-radar-verification-v1.schema.json
+schemas/skill-radar-verification-v2.schema.json
 ```
 
 It must verify exact artifact identity, current source, exact `SKILL.md` or
@@ -53,7 +53,7 @@ If required fields are missing or use unsupported enum values, send one
 bounded contract-repair message to the same subagent. Do not fill evidence in
 the parent context.
 
-## 3. Specialist Verification And Candidate Repair
+## 3. Specialist Verification, Adjudication, And Candidate Repair
 
 Specialist verification is mandatory when the primary result:
 
@@ -68,13 +68,55 @@ conclusions. Allow one bounded contract repair.
 Normalize URLs by removing trailing slashes and artifact paths by removing
 leading/trailing slashes and trailing `/SKILL.md`. Cosmetic title differences
 are not identity conflicts. Verdict, normalized URL, normalized artifact path,
-repository status, and identity-change fields are material identity fields.
+repository status, source-repository-change, and identity-change fields are
+material identity fields.
 
+- Use `recovered_current` with `identityChanged: false` when the canonical
+  repository, artifact slug or name, and material purpose remain the same and
+  first-party path history supports continuity. A corrected category folder,
+  directory, deep link, or `SKILL.md` locator is not a migration.
+- Set `sourceRepositoryChanged: true` and use `migrated` when the maintained
+  artifact moved to a different canonical repository. Repository migration
+  does not by itself mean that the Skill identity changed.
+- Use `identityChanged: true` only when the selected current artifact changes
+  artifact identity or material capability/scope, such as an evidenced
+  successor or replacement. A 404, guessed path, or repository move alone
+  never proves identity change.
+- `migrated` requires `sourceRepositoryChanged: true`;
+  `verified_current` and `recovered_current` require it to be `false`.
 - If both verifiers agree on material identity, use the agreed evidence.
-- If they disagree, mark the candidate unresolved and remove it.
+- If they disagree, do not remove the candidate yet. Record exactly which
+  material fields disagree and create the structured dispute packet below.
 - `ambiguous`, `invalid`, and `inconclusive` candidates must also be removed.
 - For `recovered_current` or agreed `migrated`, update title, `sourceUrl`, and
   `artifactPath` to the current artifact.
+
+For every material disagreement, create `dispute` with:
+
+- `fields` in this fixed order when present: `verdict`, `currentUrl`,
+  `artifactPath`, `repositoryStatus`, `sourceRepositoryChanged`,
+  `identityChanged`;
+- exactly one focused question per field;
+- `evidencePolicy: "first_party_only"`;
+- `maxAdjudicationAttempts: 1`.
+
+Create one third fresh-context adjudicator subagent only when at least one
+dispute exists. Give it the original candidate, anonymized evidence A and B,
+the disagreement fields, and field-specific questions. Do not identify which
+evidence came from the primary or specialist, do not include recommendation
+instructions or preference signals, and do not ask which verifier is more
+convincing. Ask it to independently verify only the disputed identity facts
+from first-party sources and return one complete `$defs.evidence` object.
+Allow one bounded contract repair for malformed output.
+
+- The adjudicator evidence becomes `reconciled`.
+- A reconciled `verified_current`, `recovered_current`, or `migrated` artifact
+  may continue only after its corrected identity reruns through the code-owned
+  filter.
+- A reconciled `ambiguous`, `invalid`, or `inconclusive` result is removed and
+  must retain the complete primary, specialist, dispute, adjudication, and
+  removal trajectory with `requiresFollowup: true`.
+- Do not run open-ended debate or a second substantive adjudication attempt.
 
 Replace removed candidates from the same planned lane and rerun the code-owned
 filter. Any corrected identity must also be rerun through the filter. Use the
@@ -90,15 +132,22 @@ Write:
 reports/shadow/state/skill-radar-verification-evidence.json
 ```
 
-using `schemas/skill-radar-verification-v1.schema.json`. Include exactly one
-result for every final eligible candidate. `originalSourceUrl` records the URL
-first given to the verifier; `artifactKey` and `candidateId` must match the
-final filtered candidate. Set `specialistRequired` from the rules above.
+using `schemas/skill-radar-verification-v2.schema.json`. Include one `retained`
+result for every final eligible candidate and preserve every verification-stage
+removal as a `removed` result. The evidence artifact is the complete trajectory,
+not only the successful final set.
+
+For a retained result, `artifactKey` and `candidateId` must match the final
+filtered candidate. `originalSourceUrl` and `originalArtifactPath` retain the
+identity first given to the primary verifier. Set all specialist, dispute,
+adjudication, disposition, removal, and follow-up fields from the protocol
+above. Mark unused specialist or adjudicator run metadata as entirely
+unattempted.
 
 Run:
 
 ```text
-node tools/quality/validate-verification-evidence.mjs --evidence reports/shadow/state/skill-radar-verification-evidence.json --candidates reports/shadow/state/skill-radar-candidates-filtered.json
+node tools/quality/validate-verification-harness-v2.mjs --evidence reports/shadow/state/skill-radar-verification-evidence.json --candidates reports/shadow/state/skill-radar-candidates-filtered.json
 ```
 
 Do not proceed unless validation passes.
@@ -148,7 +197,7 @@ The values must come from the matching reconciled evidence.
 Validate the link from evidence to decisions:
 
 ```text
-node tools/quality/validate-verification-evidence.mjs --evidence reports/shadow/state/skill-radar-verification-evidence.json --candidates reports/shadow/state/skill-radar-candidates-filtered.json --draft reports/shadow/state/skill-radar-source-portfolio-draft.json
+node tools/quality/validate-verification-harness-v2.mjs --evidence reports/shadow/state/skill-radar-verification-evidence.json --candidates reports/shadow/state/skill-radar-candidates-filtered.json --draft reports/shadow/state/skill-radar-source-portfolio-draft.json
 ```
 
 Then finalize with the existing shadow command. Do not hand-write Markdown.
@@ -158,8 +207,10 @@ Then finalize with the existing shadow command. Do not hand-write Markdown.
 Report:
 
 - candidate, eligible, and decision counts;
-- primary and specialist completion and retry counts;
+- primary, specialist, and adjudicator completion and retry counts;
 - number of recovered, migrated, and specialist-reviewed candidates;
+- number of disputes, adjudicator resolutions, unresolved removals, and each
+  removal's reason or disagreement fields;
 - recommend/defer/reject counts;
 - evidence, Sidecar, and Markdown paths;
 - production files changed: no;

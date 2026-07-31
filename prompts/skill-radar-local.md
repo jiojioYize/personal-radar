@@ -198,7 +198,7 @@ preference signals.
 For every candidate it must return the fields in `$defs.evidence` from:
 
 ```text
-schemas/skill-radar-verification-v1.schema.json
+schemas/skill-radar-verification-v2.schema.json
 ```
 
 It must use first-party evidence to verify exact artifact identity, current
@@ -226,13 +226,55 @@ Allow one bounded contract repair.
 Normalize URLs by removing trailing slashes and artifact paths by removing
 leading/trailing slashes and trailing `/SKILL.md`. Cosmetic title differences
 are not identity conflicts. Verdict, normalized URL, normalized artifact path,
-repository status, and identity-change fields are material identity fields.
+repository status, source-repository-change, and identity-change fields are
+material identity fields.
 
+- Use `recovered_current` with `identityChanged: false` when the canonical
+  repository, artifact slug or name, and material purpose remain the same and
+  first-party path history supports continuity. A corrected category folder,
+  directory, deep link, or `SKILL.md` locator is not a migration.
+- Set `sourceRepositoryChanged: true` and use `migrated` when the maintained
+  artifact moved to a different canonical repository. Repository migration
+  does not by itself mean that the Skill identity changed.
+- Use `identityChanged: true` only when the selected current artifact changes
+  artifact identity or material capability/scope, such as an evidenced
+  successor or replacement. A 404, guessed path, or repository move alone
+  never proves identity change.
+- `migrated` requires `sourceRepositoryChanged: true`;
+  `verified_current` and `recovered_current` require it to be `false`.
 - If both verifiers agree on material identity, use the agreed evidence.
-- If they disagree, remove the candidate.
+- If they disagree, do not remove the candidate yet. Record exactly which
+  material fields disagree and create the structured dispute packet below.
 - Remove `ambiguous`, `invalid`, and `inconclusive` candidates.
 - For `recovered_current` or agreed `migrated`, update title, `sourceUrl`, and
   `artifactPath` to the current artifact.
+
+For every material disagreement, create `dispute` with:
+
+- `fields` in this fixed order when present: `verdict`, `currentUrl`,
+  `artifactPath`, `repositoryStatus`, `sourceRepositoryChanged`,
+  `identityChanged`;
+- exactly one focused question per field;
+- `evidencePolicy: "first_party_only"`;
+- `maxAdjudicationAttempts: 1`.
+
+Create one third fresh-context adjudicator subagent only when at least one
+dispute exists. Give it the original candidate, anonymized evidence A and B,
+the disagreement fields, and field-specific questions. Do not identify which
+evidence came from the primary or specialist, do not include recommendation
+instructions or preference signals, and do not ask which verifier is more
+convincing. Ask it to independently verify only the disputed identity facts
+from first-party sources and return one complete `$defs.evidence` object.
+Allow one bounded contract repair for malformed output.
+
+- The adjudicator evidence becomes `reconciled`.
+- A reconciled `verified_current`, `recovered_current`, or `migrated` artifact
+  may continue only after its corrected identity reruns through the code-owned
+  filter.
+- A reconciled `ambiguous`, `invalid`, or `inconclusive` result is removed and
+  must retain the complete primary, specialist, dispute, adjudication, and
+  removal trajectory with `requiresFollowup: true`.
+- Do not run open-ended debate or a second substantive adjudication attempt.
 
 Replace removed candidates from the same planned lane and rerun the code-owned
 filter. Every corrected identity must also rerun through the filter. Use the
@@ -246,14 +288,23 @@ Write:
 reports/state/skill-radar-verification-evidence.json
 ```
 
-using `schemas/skill-radar-verification-v1.schema.json`. Include exactly one
-result for every final eligible candidate. `artifactKey` and `candidateId` must
-match the final filtered candidate.
+using `schemas/skill-radar-verification-v2.schema.json`. Include one `retained`
+result for every final eligible candidate and preserve every verification-stage
+removal as a `removed` result. The evidence artifact is the complete trajectory,
+not only the successful final set.
+
+For a retained result, `artifactKey` and `candidateId` must match the final
+filtered candidate. `originalSourceUrl` and `originalArtifactPath` retain the
+identity first given to the primary verifier. Set all specialist, dispute,
+adjudication, disposition, removal, and follow-up fields from the protocol
+above. Mark unused specialist or adjudicator run metadata as entirely
+unattempted. This internal evidence must not appear in reader-facing report
+content.
 
 Run:
 
 ```text
-node tools/quality/validate-verification-evidence.mjs --evidence reports/state/skill-radar-verification-evidence.json --candidates reports/state/skill-radar-candidates-filtered.json
+node tools/quality/validate-verification-harness-v2.mjs --evidence reports/state/skill-radar-verification-evidence.json --candidates reports/state/skill-radar-candidates-filtered.json
 ```
 
 Do not proceed unless validation passes.
@@ -372,7 +423,7 @@ calculate or write those dates yourself.
 Before finalization, validate the evidence-to-decision link:
 
 ```text
-node tools/quality/validate-verification-evidence.mjs --evidence reports/state/skill-radar-verification-evidence.json --candidates reports/state/skill-radar-candidates-filtered.json --draft reports/state/skill-radar-curated-draft.json
+node tools/quality/validate-verification-harness-v2.mjs --evidence reports/state/skill-radar-verification-evidence.json --candidates reports/state/skill-radar-candidates-filtered.json --draft reports/state/skill-radar-curated-draft.json
 ```
 
 Do not finalize unless it passes.
@@ -404,7 +455,9 @@ reports/outbox/skill-radar-YYYY-MM-DD.md
 - Do not add generated reports, history, drafts, or candidates to Git.
 
 After success report the date, candidate count, code-excluded count, primary
-verification count, specialist verification count and trigger reason, bounded
-contract-repair count, decision counts, verification evidence path, output
-paths, repository files changed (`no`), and forwarding
+verification count, specialist and adjudicator counts with trigger reasons,
+bounded contract-repair count, decision counts, dispute and adjudication
+counts, unresolved removal count and each removal's exact reason or
+disagreement fields, verification evidence path, output paths, repository
+files changed (`no`), and forwarding
 (`handled by the local forwarder`).

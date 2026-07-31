@@ -15,6 +15,61 @@ automatically classified as product defects.
 
 ## Incidents
 
+### 2026-07-31: Same-Artifact Path Recovery Was Misclassified as Identity Change
+
+- Production verification found `Grill With Docs` in
+  `mattpocock/skills`, but the primary and specialist verifiers disagreed on
+  whether the corrected directory represented an identity change. The
+  candidate was removed before quality evaluation; the remaining report still
+  completed and delivered normally.
+- Independent first-party verification found the maintained artifact at
+  `skills/engineering/grill-with-docs`. Repository history showed the same
+  slug, title, path, and material purpose across multiple commits since April.
+  The correction was therefore `recovered_current` with
+  `identityChanged: false`, not a migration.
+- Root cause: the prompts defined material identity fields but did not give a
+  sufficiently explicit continuity test for category-path corrections.
+  Removed candidates were also absent from the final evidence artifact, so the
+  successful report concealed the near miss outside the Automation transcript.
+- Resolution: add an explicit same-repository continuity rule, a permanent
+  Grill With Docs adversarial regression case, and a required internal
+  `removals` audit. Every specialist disagreement now records the differing
+  fields and requires follow-up even if enough other candidates allow the
+  report to succeed.
+- Delivery policy: do not edit or republish the already delivered report. The
+  artifact remains eligible for normal future discovery and quality
+  evaluation.
+- Classification: content-quality false negative and observability gap; no
+  website, PushPlus, scheduler, or delivery outage.
+
+### 2026-07-30: Equivalent GitHub URLs Failed Evidence Validation
+
+- Codex Automation triggered normally at 07:31 Beijing time, generated the
+  authoritative source plan, collected 10 candidates, and left 8 eligible
+  after the code-owned filter.
+- Fresh-context verification completed for every eligible candidate. For
+  `Workplace Skill`, it recovered the exact current `SKILL.md` through a
+  `raw.githubusercontent.com` URL after the original GitHub blob locator was
+  reported as unavailable.
+- The final filtered candidate still used the equivalent
+  `github.com/.../blob/.../SKILL.md` URL. The evidence validator compares
+  normalized URL strings and does not currently canonicalize GitHub blob and
+  raw-content URLs to the same artifact identity.
+- Validation therefore stopped with
+  `src_304f7a82: verified current URL does not match filtered candidate`.
+  No curated draft, Sidecar, Markdown report, website update, or PushPlus
+  message was produced.
+- Resolution: the validator now canonicalizes GitHub blob and raw-content URLs
+  to the same repository-and-artifact identity while continuing to reject a
+  different repository or artifact path. A regression test and replay against
+  the retained 2026-07-30 production state both passed. The missed report was
+  not backfilled. The next formal run on 2026-07-31 completed source
+  verification, specialist routing, report generation, Worker storage,
+  website rendering, and PushPlus delivery successfully.
+- Classification: deterministic identity-normalization defect in the promoted
+  multi-agent verification flow, not a network, scheduler, or delivery
+  incident.
+
 ### 2026-07-27: Stale Deep Link Masked a Deprecated Source Migration
 
 - The production run discovered `Figma Implement Design` through

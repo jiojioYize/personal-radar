@@ -69,6 +69,9 @@ function validateRunContract(expected, actual) {
     if (finalEvidence.repositoryStatus !== expectedCase.expectedRepositoryStatus) {
       fail(`${id}: expected repository status ${expectedCase.expectedRepositoryStatus}, received ${finalEvidence.repositoryStatus}`);
     }
+    if (finalEvidence.identityChanged !== expectedCase.expectedIdentityChanged) {
+      fail(`${id}: expected identityChanged ${expectedCase.expectedIdentityChanged}, received ${finalEvidence.identityChanged}`);
+    }
     if (expectedCase.expectedCurrentUrlPrefix) {
       if (!finalEvidence.currentUrl?.startsWith(expectedCase.expectedCurrentUrlPrefix)) {
         fail(`${id}: current URL does not match the expected maintained source`);

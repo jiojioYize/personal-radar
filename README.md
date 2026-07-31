@@ -111,7 +111,8 @@ npm run deploy
 
 Cloudflare Cron 默认关闭。推荐让 Codex Automation 负责智能搜索和写报告，让 Worker 负责接收、存储、展示和推送。
 
-Stage 2 默认继续使用 `PUSHPLUS_TEMPLATE=markdown`。完成一次真实微信 HTML 对照测试后，可改为 `html`。
+Stage 2 已完成真实微信 HTML 测试，生产环境使用
+`PUSHPLUS_TEMPLATE=html`。`markdown` 仅作为兼容选项。
 
 ### 手动发布一篇报告
 
@@ -279,8 +280,8 @@ npm run deploy
 
 Cloudflare Cron is disabled by default. Codex Automation handles intelligent search and report writing; the Worker handles ingest, storage, rendering, and push delivery.
 
-Stage 2 keeps `PUSHPLUS_TEMPLATE=markdown` until a real-device HTML comparison
-is accepted. Set it to `html` afterward to enable concise HTML cards.
+Stage 2 completed real-device HTML testing, and production uses
+`PUSHPLUS_TEMPLATE=html`. `markdown` remains a compatibility option.
 
 ### Publish a Report Manually
 

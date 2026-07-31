@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "case": {
+    "id": "remotion-repository-migration-path",
+    "title": "Remotion Best Practices",
+    "originalCandidate": {
+      "sourceUrl": "https://github.com/remotion-dev/skills/tree/main/skills/remotion-best-practices",
+      "artifactPath": "skills/remotion-best-practices",
+      "canonicalRepository": "https://github.com/remotion-dev/skills"
+    },
+    "dispute": {
+      "fields": ["currentUrl", "artifactPath"],
+      "questions": [
+        {
+          "field": "currentUrl",
+          "question": "Which exact current canonical first-party directory URL hosts Remotion Best Practices?"
+        },
+        {
+          "field": "artifactPath",
+          "question": "What exact normalized repository-relative directory contains its current SKILL.md?"
+        }
+      ],
+      "evidencePolicy": "first_party_only",
+      "maxAdjudicationAttempts": 1
+    },
+    "evidenceA": {
+      "verdict": "migrated",
+      "currentUrl": "https://github.com/remotion-dev/remotion/tree/main/packages/skills/skills/remotion",
+      "artifactPath": "packages/skills/skills/remotion",
+      "repositoryStatus": "current",
+      "sourceRepositoryChanged": true,
+      "identityChanged": false,
+      "skillMdVerified": true,
+      "evidence": [
+        "The old remotion-dev/skills source points to the remotion-dev/remotion repository.",
+        "A Remotion-related SKILL.md exists under packages/skills/skills/remotion."
+      ]
+    },
+    "evidenceB": {
+      "verdict": "migrated",
+      "currentUrl": "https://github.com/remotion-dev/remotion/tree/main/packages/skills/skills/remotion-best-practices",
+      "artifactPath": "packages/skills/skills/remotion-best-practices",
+      "repositoryStatus": "current",
+      "sourceRepositoryChanged": true,
+      "identityChanged": false,
+      "skillMdVerified": true,
+      "evidence": [
+        "The current first-party repository contains packages/skills/skills/remotion-best-practices/SKILL.md.",
+        "The artifact slug and documented purpose remain Remotion Best Practices after the repository move."
+      ]
+    }
+  }
+}
