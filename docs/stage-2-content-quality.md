@@ -554,9 +554,10 @@ PushPlus was switched to the HTML card format.
 | 2026-07-07 | `published` | 5 | Schema, semantic, and forwarder pair validation passed | None | Reviewed 10 candidates, selected 5 non-recent sources, and confirmed production outbox files were not overwritten |
 | 2026-07-06 | `published` | 6 | Schema, semantic, and forwarder pair validation passed | None | Found and fixed a forwarder false positive when a summary mentioned a later item title before its heading |
 
-Shadow runs use `prompts/skill-radar-shadow.md` and write only to
-`reports/shadow/`. Three successful runs are required before Worker v2
-deployment.
+Current production-format regression runs use
+`prompts/skill-radar-multi-agent-production-shadow.md` and write only to
+`reports/shadow/`. The earlier three-run gate preceded the Worker v2 rollout
+and is already complete.
 
 ## Production Acceptance
 

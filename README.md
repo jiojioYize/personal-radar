@@ -15,8 +15,10 @@ The site publishes public AI-agent skill and rule radar reports. Pages default t
 - [MVP Stage 1 Record](docs/mvp-stage-1.md): current production flow, completed scope, operational checklist, and next-stage candidates.
 - [Stage 2 Content Quality](docs/stage-2-content-quality.md): structured reports, quality rules, production acceptance, and post-launch observation.
 - [Skill Source Audit](docs/skill-source-audit.md): source landscape, artifact boundaries, and the production source-portfolio decision.
-- [Stage 2 Shadow Prompt](prompts/skill-radar-shadow.md): safely test structured generation without publishing or replacing a production report.
+- [Agent Harness](docs/agent-harness.md): multi-agent verification roles, disagreement handling, and Harness v2 promotion evidence.
+- [Harness v2 Shadow Prompt](prompts/skill-radar-multi-agent-production-shadow.md): isolated production-format regression testing without publishing or replacing a production report.
 - [Product Strategy](docs/product-strategy.md): long-term product positioning, user model, hosted and self-hosted paths, website evolution, and storage roadmap.
+- [Incident Log](docs/incident-log.md): operational failures, product defects, and the decisions made after each incident.
 - [Encoding Playbook](docs/encoding-playbook.md): UTF-8 and PowerShell lessons from the report delivery chain.
 
 ## 中文指南

@@ -185,7 +185,8 @@ The content system separates discovery from verification.
   from host-specific manifests, tools, hooks, authentication, or runtime
   requirements.
 - GitHub repositories and official project documentation are primary evidence.
-- Web search and X can provide discovery signals.
+- Web search can provide discovery signals. X remains a possible auxiliary
+  discovery experiment rather than a current daily production source.
 - Social engagement and creator recommendations do not count as quality
   evidence.
 - A socially discovered item must include or lead to a verifiable official
@@ -193,9 +194,9 @@ The content system separates discovery from verification.
 - Xiaohongshu is not a planned automated source because reliable public
   search and compliant unattended access are insufficient for the current
   project.
-- X web results can be used as an auxiliary discovery source. Page scraping is
-  not planned; an official API should only be considered after source value has
-  been measured.
+- X web results may be tested as an auxiliary discovery source. Page scraping
+  is not planned; an official API should only be considered after a bounded
+  experiment measures source value.
 
 The system should prefer no-update output over lowering its recommendation
 threshold. One to six qualified items form a normal report. Zero qualified
@@ -295,18 +296,28 @@ ingest, KV persistence, public reports, and PushPlus delivery.
 
 ### Stage 2: Content Quality And Reading Experience
 
-Status: planned.
+Status: complete as of 2026-07-31.
 
-Build structured reports, cross-run history, duplicate control, consistent
-evaluation, local feedback learning, auxiliary X discovery, mobile HTML
-summaries, and structured website reading.
+Implemented structured reports, artifact-level history and review state,
+duplicate control, qualitative recommendation decisions, local interest
+ordering and replay, multi-agent source verification, mobile HTML summaries,
+and structured website reading.
 
 Stage 2 remains single-user and local-first. It does not add accounts, paid
 subscriptions, or multi-user hosting.
 
+### Stage 2.5: Content Productization And Visual Experience
+
+Status: planned.
+
+Improve report information hierarchy, editorial consistency, card design,
+archive browsing, and cross-device readability. Richer media can be researched,
+but generated images are not an initial release requirement.
+
 ### Stage 3: Hosted Subscription
 
-Begin only after Stage 2 demonstrates sustained content value.
+Begin only after the current content and reading experience demonstrates
+sustained value.
 
 Add accounts, entitlement rules, delivery subscriptions, explicit preferences,
 feedback-backed personalization, D1 storage, and hosted operations.
@@ -315,7 +326,8 @@ feedback-backed personalization, D1 storage, and hosted operations.
 
 - Add new channels only after the `skill-radar` quality loop is stable.
 - Consider richer media after text and card usefulness is validated.
-- Consider the X API only after auxiliary-source yield is measured.
+- Consider the X API only after a bounded auxiliary-source experiment measures
+  yield.
 - Produce a short product video when the end-to-end hosted experience is ready
   to demonstrate.
 
