@@ -203,8 +203,13 @@ Current Stage 2 production rules:
 8. Multi-skill repositories use artifact-level 30-day identity, with at most
    one artifact per repository per report and two repository appearances in the
    preceding seven days unless a material change is evidenced.
-9. Version 3 public cards do not show `install` or `adapt` labels. They explain
-   what the skill does, who it suits, how to start, and the main caution.
+9. New Version 3 reports use `readerContractVersion: 2`. Public cards do not
+   show `install` or `adapt` labels. Their quick layer explains in plain
+   language what the skill helps accomplish, when it becomes useful, and what
+   must be available before starting. Installation, adaptation, limitations,
+   trust boundaries, and a guarded AI handoff task live in the deeper layer.
+   Older reports without the reader contract retain their original labels and
+   layout so stored content is not reinterpreted.
 10. Feedback is positive-interest-primary. Missing feedback means unknown.
     Preference cannot change quality eligibility or decisions; validated
     feedback IDs may only reorder otherwise qualified recommendations, with

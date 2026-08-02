@@ -1165,28 +1165,32 @@ function renderLanguage(report, language) {
   const marker = language === "zh" ? "zh" : "en";
   const heading = `# Skill Radar Deep Dive - ${report.reportDate}`;
   const labels = language === "zh"
-    ? {
+      ? {
         category: "类别",
         source: "来源",
+        what: "它能帮你做什么",
         why: "为什么现在值得看",
         problem: "解决问题",
-        bestFor: "适合",
-        usability: "可用性",
+        bestFor: "什么时候值得用",
+        prerequisite: "开始前需要",
+        usability: "安装与开始",
         adaptation: "平台适配",
+        limitations: "限制与风险",
         trust: "信任/安全",
-        recommendation: "怎么用",
         conclusion: "今日结论",
       }
     : {
         category: "Category",
         source: "Source",
+        what: "What it helps you do",
         why: "Why now",
         problem: "Problem solved",
-        bestFor: "Best for",
-        usability: "Usability",
+        bestFor: "When it helps",
+        prerequisite: "Before you start",
+        usability: "Install and get started",
         adaptation: "Platform adaptation",
+        limitations: "Limits and risks",
         trust: "Trust/security",
-        recommendation: "How to use",
         conclusion: "Bottom line",
       };
   const lines = [`<!-- ${marker} -->`, heading, "", report.summary[language]];
@@ -1204,13 +1208,15 @@ function renderLanguage(report, language) {
       "",
       `- **${labels.category}:** ${item.category}`,
       `- **${labels.source}:** [${item.title}](${item.sourceUrl})`,
+      `- **${labels.what}:** ${display.oneLiner}`,
       `- **${labels.why}:** ${display.whyNow}`,
       `- **${labels.problem}:** ${display.problem}`,
       `- **${labels.bestFor}:** ${display.bestFor}`,
+      `- **${labels.prerequisite}:** ${display.action}`,
       `- **${labels.usability}:** ${display.usability}`,
       `- **${labels.adaptation}:** ${display.adaptation}`,
+      `- **${labels.limitations}:** ${display.primaryCaution}`,
       `- **${labels.trust}:** ${display.trust}`,
-      `- **${labels.recommendation}:** ${display.action}`,
     );
   }
 

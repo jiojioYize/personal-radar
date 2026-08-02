@@ -14,7 +14,7 @@ or PushPlus.
 
 ## Implementation Status
 
-As of 2026-07-31:
+As of 2026-08-01:
 
 - the v2 Schema and deterministic validator are implemented;
 - regression tests cover a resolved `Grill With Docs` identity disagreement,
@@ -28,8 +28,13 @@ As of 2026-07-31:
 - a second production-format shadow passed the no-risk path, and a targeted
   live Remotion dispute passed the updated adjudication contract;
 - Harness v2 was promoted into the formal production prompt on 2026-07-31
-  after the baseline shadow and targeted Remotion adjudication passed. The
-  first scheduled production run remains the post-promotion observation gate.
+  after the baseline shadow and targeted Remotion adjudication passed;
+- the first scheduled production run passed on 2026-08-01: primary verification
+  covered every eligible artifact and one bounded replacement, two same-repository
+  locator recoveries remained identity-continuous, one invalid exact artifact
+  was retained in the removal audit, and specialist and adjudicator calls were
+  correctly skipped because no trigger occurred. The validated report was then
+  delivered through the normal forwarder, Worker, website, and PushPlus path.
 
 ## Verifier v1 Assessment
 
@@ -154,10 +159,11 @@ production-format shadow run to pass. A reduction in false negatives must not
 increase false positives or allow unresolved identity into recommendation
 judgment.
 
-## Shadow Log
+## Harness Validation Log
 
 | Date | Result | Harness behavior | Finding |
 | --- | --- | --- | --- |
+| 2026-08-01 first scheduled production run | Pass | Ten final eligible artifacts received primary verification; Prisma Database Setup and Better Auth Best Practices used same-repository locator recovery; invalid Git Guardrails evidence remained in the removal trajectory; no migration, repository-status, identity, or disagreement trigger occurred, so specialist and adjudicator runs remained unused; five recommendations and five deferrals finalized and delivered | Confirms the promoted Harness v2 no-risk production path, bounded replacement handling, complete removal audit, evidence-to-draft validation, preference-based ordering, and end-to-end delivery without unnecessary agent calls |
 | 2026-07-31 | Semantic retry required | Five retained candidates; one Remotion repository-migration risk triggered a specialist; URL and path disagreement triggered one adjudicator; the adjudicator selected the exact current `remotion-best-practices` artifact; two recommendations and three deferrals finalized without production impact | The run used `migrated` with `identityChanged: false`. That can be correct for an identity-continuous repository move, but v2 had no separate field proving the repository change and its prompt previously conflated the concepts. `sourceRepositoryChanged` is now required and code-enforced. The retained output is valid test evidence, not a promotion pass |
 | 2026-07-31 second production-format shadow | Baseline pass | Six retained current-source candidates; no migration or repository-status risk; specialist and adjudicator correctly remained unused; all six results recorded `sourceRepositoryChanged: false`; three recommendations and three deferrals finalized without production impact | Confirms the no-risk path and prevention of unnecessary agent calls, but does not retest repository-migration adjudication. A fixed Remotion dispute test was added instead of waiting for random daily discovery |
 | 2026-07-31 targeted Remotion adjudication | Pass | One fresh-context adjudicator received the fixed anonymized URL/path dispute, required no contract repair, verified the exact `remotion-best-practices` directory and `SKILL.md`, and routed the current artifact to evaluation without production impact | Correctly returned `migrated`, `sourceRepositoryChanged: true`, and `identityChanged: false`. This closes the semantic gap found in the first shadow and completes the v2 adjudication promotion evidence |

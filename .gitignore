@@ -17,4 +17,6 @@ reports/experiments/
 docs/portfolio-personal-radar.*
 docs/assets/portfolio-*.png
 docs/assets/personal-radar-architecture.png
+output/playwright/
+design-qa.md
 .DS_Store

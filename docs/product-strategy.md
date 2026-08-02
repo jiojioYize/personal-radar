@@ -308,11 +308,35 @@ subscriptions, or multi-user hosting.
 
 ### Stage 2.5: Content Productization And Visual Experience
 
-Status: planned.
+Status: in progress as of 2026-08-02.
 
-Improve report information hierarchy, editorial consistency, card design,
-archive browsing, and cross-device readability. Richer media can be researched,
-but generated images are not an initial release requirement.
+The current release replaces implementation-oriented report framing with a
+reader-facing daily brief: a compact introduction, reader-facing topic labels,
+expandable evidence, and a bilingual archive. A unified header provides
+previous/next navigation and a date chooser built only from reports that
+actually exist; archive and language controls use the same pattern across
+report and archive pages. Internal selection statistics, priority framing, and
+source-verification timestamps remain in structured data rather than the
+reader-facing page. Recommendations are presented as equal-weight collapsed
+rows. Interest signals may reorder qualified items, but the UI does not expose
+rank numbers or imply that the first item is a top pick. Visual emphasis is
+reserved for the item the reader actively expands. Official sources open in a
+new tab so the report remains available for comparison. Desktop and 390px
+mobile layouts are verified against a real structured report before deployment.
+
+Recommendation details follow progressive disclosure. The first decision layer
+uses plain language to explain what the skill helps accomplish, when it is
+useful, and what must be available before starting. Identity-based audience
+labels and dense technical cautions do not occupy this layer. Interested
+readers can then inspect verified installation guidance, platform adaptation,
+limitations, trust boundaries, and a copyable AI handoff task. The handoff asks
+the user's own agent to evaluate compatibility and propose a plan before making
+changes, connecting discovery to guarded adoption without granting automatic
+installation authority.
+
+Next work will refine the PushPlus reading experience and evaluate richer media
+only after the text hierarchy proves stable. Portfolio illustration needs will
+be planned separately; generated images are not a dependency for this stage.
 
 ### Stage 3: Hosted Subscription
 

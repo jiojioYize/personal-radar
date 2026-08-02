@@ -182,6 +182,15 @@ For each `recommend` decision also provide bilingual `display.zh` and
 - `oneLiner`, `whyNow`, `bestFor`, `action`,
   `primaryCaution`, `problem`, `usability`, `adaptation`, and `trust`.
 
+Use the production reader-facing semantics: `oneLiner` states the plain user
+outcome with at most one optional accurate analogy; `bestFor` describes a task
+or trigger rather than a user identity; `action` lists prerequisites before
+use; `primaryCaution` explains one important limitation and its consequence;
+`usability` gives only primary-source-backed installation, first-use, and
+success-check guidance; `adaptation` covers native platforms and realistic
+cross-agent adaptation; and `trust` explains permissions, data, credentials,
+scripts, and rollback in user language. Never invent undocumented setup steps.
+
 Keep names, commands, URLs, and identifiers in English. Do not include raw
 HTML. `defer` and `reject` decisions do not need display content. The finalizer
 stores `defer` for a 14-day cooldown and `reject` for a 90-day cooldown; do not

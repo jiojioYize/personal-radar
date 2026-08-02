@@ -82,6 +82,7 @@ export function enrichCuratedReport(input, { recentSources = [] } = {}) {
 
   return {
     schemaVersion: 3,
+    readerContractVersion: 2,
     status: items.length ? "published" : "no_update",
     channel: "skill-radar",
     reportDate: String(draft.reportDate || ""),
@@ -101,12 +102,15 @@ export function enrichCuratedReport(input, { recentSources = [] } = {}) {
   };
 }
 
-export function validateCuratedReport(report, { sourceProfile = null } = {}) {
+export function validateCuratedReport(report, { sourceProfile = null, allowLegacyReaderContract = false } = {}) {
   const errors = [];
   sourceProfile ||= Object.hasOwn(report.stats?.sourceCounts || {}, "registryPulse")
     ? "portfolio-v1"
     : "legacy-v3";
   if (report.schemaVersion !== 3) errors.push("schemaVersion must be 3");
+  if (report.readerContractVersion !== 2 && !(allowLegacyReaderContract && report.readerContractVersion == null)) {
+    errors.push("readerContractVersion must be 2");
+  }
   if (report.channel !== "skill-radar") errors.push("channel must be skill-radar");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(report.reportDate || "")) errors.push("reportDate must use YYYY-MM-DD");
   if (!localized(report.summary) || !localized(report.conclusion)) errors.push("summary and conclusion must be bilingual");

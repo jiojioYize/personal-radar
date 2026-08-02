@@ -6,6 +6,7 @@ import { curatedFixture } from "../test-support/curated-report.js";
 test("enriches all curated decisions without numeric scoring or action labels", () => {
   const report = enrichCuratedReport(curatedFixture());
   assert.equal(report.schemaVersion, 3);
+  assert.equal(report.readerContractVersion, 2);
   assert.equal(report.status, "published");
   assert.equal(report.items.length, 1);
   assert.equal(report.stats.reviewedCount, 8);

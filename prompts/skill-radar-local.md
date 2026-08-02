@@ -415,6 +415,42 @@ For each `recommend` decision also provide bilingual `display.zh` and
 - `oneLiner`, `whyNow`, `bestFor`, `action`,
   `primaryCaution`, `problem`, `usability`, `adaptation`, and `trust`.
 
+These fields serve different reading depths. Follow these meanings exactly:
+
+- `oneLiner`: explain the direct user outcome in plain language. Lead with
+  what the skill helps someone accomplish, not its implementation. Avoid
+  specialist terminology when ordinary language works. An optional short
+  analogy may follow the factual explanation only when it makes an unfamiliar
+  concept easier to picture; use at most one, never force it, and never use
+  promotional claims such as "magic" or "all-in-one".
+- `bestFor`: describe the concrete task, trigger, or situation in which the
+  skill becomes useful. Do not define suitability only through identity labels
+  such as developer, engineer, team, researcher, or non-technical user. Mention
+  a role only when a real permission or domain-knowledge boundary depends on it.
+- `action`: state what must be available before starting: supported agent or
+  platform, runtime, account, credential, dependency, data, permission, or
+  expected setup effort. Do not skip setup and jump directly to a usage prompt.
+- `primaryCaution`: state the single most decision-relevant limitation in plain
+  user language and explain its consequence. This is detailed content, not a
+  promotional-card tagline.
+- `usability`: provide a human-friendly installation and first-use guide based
+  only on the primary source. Cover the native install/import/copy method,
+  required configuration, a minimal first task, and how to verify success when
+  the source documents them. If the primary source omits any part, say so
+  explicitly instead of inventing commands or configuration.
+- `adaptation`: explain verified native platforms and the smallest realistic
+  adaptation needed for another skill-capable agent. Do not judge portability
+  only by Codex compatibility.
+- `trust`: explain permissions, external data transfer, credentials, scripts,
+  and rollback or removal considerations in terms of user impact.
+- `whyNow` and `problem`: retain evidence-backed timing and problem context for
+  readers who choose to inspect the deeper analysis.
+
+The website derives an AI handoff task from these verified fields. Write them
+so another AI can distinguish known facts from missing documentation, inspect
+compatibility, propose a plan before changing files, and validate or roll back
+an installation safely.
+
 Keep names, commands, URLs, and identifiers in English. Do not include raw
 HTML. `defer` and `reject` decisions do not need display content. The finalizer
 stores `defer` for a 14-day cooldown and `reject` for a 90-day cooldown; do not

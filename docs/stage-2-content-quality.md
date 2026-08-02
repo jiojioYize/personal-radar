@@ -383,8 +383,12 @@ does not create D1 or R2 resources.
 ## Reading Experience
 
 Public copy follows a strict reader-facing contract. `summary`, `conclusion`,
-and card display fields explain useful themes, user value, suitable users,
-how to start, and practical cautions. Discovery directories, candidate pools,
+and card display fields explain useful themes, plain-language outcomes,
+concrete use situations, and prerequisites. Suitability is not reduced to role
+labels such as developer or team. Optional analogies may clarify unfamiliar
+ideas only after the factual outcome and are never required. Installation,
+platform adaptation, limitations, trust boundaries, and rollback guidance sit
+in the deeper reading layer. Discovery directories, candidate pools,
 source quotas, filtering, internal decision labels, Sidecar, Schema, and
 deferred/rejected-item narration remain in internal decision and statistics
 data. Deterministic validation rejects these internal terms before a v3 report
@@ -398,7 +402,8 @@ first, followed directly by recommendations or the no-update explanation.
 
 - HTML cards contain no generated images.
 - All selected items appear in concise form.
-- Each card shows the action, core value, best-fit audience, and main caution.
+- Each card shows the plain-language value, a concrete use situation, and what
+  must be available before starting. Technical risks remain in the full report.
 - The full report link points to the dated public website page.
 - `PUSHPLUS_TEMPLATE=html` is the production default as of 2026-07-09.
 - HTML messages use a fixed light reading shell and summary card so mobile dark
@@ -408,9 +413,12 @@ first, followed directly by recommendations or the no-update explanation.
 
 Structured reports show:
 
-1. report theme and screening statistics;
+1. the report theme without internal screening statistics;
 2. scannable summaries for every recommendation;
-3. expandable evidence, usability, adaptation, and security details.
+3. an expanded decision layer covering value, use situation, and prerequisites;
+4. installation, adaptation, limitations, security evidence, and a
+   deterministic AI handoff task that requires planning and approval before
+   installation.
 
 Old Markdown reports, archive browsing, direct links, and Chinese/English
 switching remain supported.
@@ -528,7 +536,7 @@ npm run quality:summary
 | Feedback ranking replay | Passed five isolated historical-report scenarios on 2026-07-26: four positive-interest cases and one combined positive/optional-negative case; selected sets stayed unchanged, unrelated items stayed neutral, and every non-neutral effect remained traceable |
 | Multi-agent source verification | Promoted into `prompts/skill-radar-local.md` on 2026-07-29 after the fixed adversarial suite covered current, migrated, invalid, missing, and ambiguous sources, and the corrected production-format shadow passed candidate/evidence/draft identity validation. The formal Automation entry prompt remains unchanged |
 | Production acceptance | Passed 2026-07-31: specialist routing, evidence validation, outbox generation, forwarding, Worker storage, website rendering, and PushPlus delivery all completed |
-| Post-launch observation | Continues after Stage 2 closes; the 2026-07-31 Grill With Docs near miss led to Harness v2 with explicit identity continuity, complete verification trajectories, conditional adjudication, and separate repository-migration evidence without changing the completed Stage 2 delivery acceptance |
+| Post-launch observation | Passed the first scheduled Harness v2 production run on 2026-08-01: 10 eligible artifacts received primary verification, two identity-continuous locator recoveries passed, one invalid exact artifact remained auditable, unnecessary specialist/adjudicator calls were skipped, preference ordering promoted the matching design recommendation, and the report completed normal website and PushPlus delivery. Observation continues without changing the completed Stage 2 acceptance |
 
 Worker v2 deployment on 2026-07-08 upgraded ingest, KV compatibility, and
 structured website rendering while initially keeping PushPlus on the
