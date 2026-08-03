@@ -451,7 +451,8 @@ Finalize a simplified curated-source draft:
 ```powershell
 node tools/quality/report-quality.mjs finalize-curated `
   --input reports/state/skill-radar-curated-draft.json `
-  --candidates reports/state/skill-radar-candidates-filtered.json
+  --candidates reports/state/skill-radar-candidates-filtered.json `
+  --verification-evidence reports/state/skill-radar-verification-evidence.json
 ```
 
 Finalize an Automation draft:
@@ -546,6 +547,7 @@ npm run quality:summary
 | Production acceptance | Passed 2026-07-31: specialist routing, evidence validation, outbox generation, forwarding, Worker storage, website rendering, and PushPlus delivery all completed |
 | Post-launch observation | Passed the first scheduled Harness v2 production run on 2026-08-01: 10 eligible artifacts received primary verification, two identity-continuous locator recoveries passed, one invalid exact artifact remained auditable, unnecessary specialist/adjudicator calls were skipped, preference ordering promoted the matching design recommendation, and the report completed normal website and PushPlus delivery. Observation continues without changing the completed Stage 2 acceptance |
 | Stage 2.5 dual-surface reading acceptance | Passed 2026-08-03: the scheduled `readerContractVersion: 2` report rendered the website's progressive-disclosure details and the concise dark PushPlus briefing successfully; machine category slugs are localized through a Worker-owned bilingual taxonomy with a Chinese-safe fallback |
+| Production-chain hardening before Stage 3A | Implemented and deployed 2026-08-03 as Worker version `12f57a3a-5afd-4b5b-8076-97614a0a5e3a`; `/health` returned the expected service response. The forwarder now accepts every schema v3 recommendation up to the schema maximum while preserving the v2 one-to-six compatibility rule; production `finalize-curated` fail-closed requires Harness v2 evidence for `portfolio-v1`, emits machine-readable recovery classifications, and persists at most two bounded repair attempts, while historical non-Harness portfolio shadows remain runnable; and Worker KV records PushPlus delivery attempts so an explicitly failed delivery can be retried only by the identical `sourceRunId` without re-pushing an API-accepted or legacy-unknown report. PushPlus success means HTTP success plus response `code: 200`, which is provider acceptance rather than proof of terminal delivery. |
 
 Worker v2 deployment on 2026-07-08 upgraded ingest, KV compatibility, and
 structured website rendering while initially keeping PushPlus on the

@@ -145,6 +145,28 @@ adjudicator cannot resolve a meaningful share of valid disputes.
 - Broad network or verifier availability failures stop the run and cannot be
   represented as `no_update`.
 
+### Finalization Recovery
+
+The fail-closed production finalizer emits one machine-readable
+`QUALITY_ERROR_JSON` classification and maintains
+`reports/state/skill-radar-finalization-recovery.json`. Recovery is bounded to
+two attempts for the report date:
+
+- `deterministic` repairs may rebuild only candidate/evidence links, indexes,
+  dispute routing, preference bindings, or schema fields that are derivable
+  from already validated inputs;
+- `targeted_verifier` repair may invoke only the affected fresh-context role
+  and candidate, and the role-level `retryCount` may move from zero to one;
+- every retry declares its round and stage, is recorded as failed or
+  succeeded, and a used round cannot be replayed;
+- the second round must follow the latest machine-readable repair stage;
+- non-repairable identity outcomes, a second substantive adjudication, broad
+  reruns of valid candidates, and any third repair attempt are forbidden.
+
+Successful recovery marks the record `resolved`. Exhausted recovery remains a
+system or contract failure, leaves the publishable outbox unchanged, and is
+never converted to `no_update`, `defer`, or `reject` merely to finish the run.
+
 ## Evaluation
 
 Harness v2 is evaluated against v1 rather than promoted by intuition.

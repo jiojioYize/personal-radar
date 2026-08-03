@@ -183,8 +183,9 @@ function Read-StructuredReport {
   }
 
   $items = @($structured.items)
-  if ($structured.status -eq "published" -and ($items.Count -lt 1 -or $items.Count -gt 6)) {
-    throw "Published structured reports must contain 1-6 items"
+  $maximumPublishedItems = if ([int]$structured.schemaVersion -ge 3) { 20 } else { 6 }
+  if ($structured.status -eq "published" -and ($items.Count -lt 1 -or $items.Count -gt $maximumPublishedItems)) {
+    throw "Published schema v$($structured.schemaVersion) reports must contain 1-$maximumPublishedItems items"
   }
   if ($structured.status -eq "no_update" -and $items.Count -ne 0) {
     throw "no_update structured reports must contain zero items"

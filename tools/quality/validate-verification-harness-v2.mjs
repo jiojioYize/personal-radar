@@ -15,23 +15,72 @@ const MATERIAL_FIELDS = [
   "identityChanged",
 ];
 const ELIGIBLE_VERDICTS = new Set(["verified_current", "recovered_current", "migrated"]);
-const args = parseArgs(process.argv.slice(2));
-const [schema, evidenceFile, candidateFile, draftFile] = await Promise.all([
-  readJson(SCHEMA_PATH),
-  readJson(args.evidence),
-  readJson(args.candidates),
-  args.draft ? readJson(args.draft) : null,
-]);
+const directlyInvoked = process.argv[1]
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-const ajv = new Ajv2020({ allErrors: true, strict: true });
-addFormats(ajv);
-const validate = ajv.compile(schema);
-if (!validate(evidenceFile)) {
-  fail(validate.errors.map((error) => `${error.instancePath || "/"} ${error.message}`).join("\n"));
+export class HarnessValidationError extends Error {
+  constructor(message, classification = classifyHarnessFailure(message)) {
+    super(message);
+    this.name = "HarnessValidationError";
+    this.code = classification.code;
+    this.candidateId = classification.candidateId;
+    this.repairable = classification.repairable;
+    this.retryStage = classification.retryStage;
+    this.recommendedAction = classification.recommendedAction;
+  }
+
+  toJSON() {
+    return {
+      version: 1,
+      source: "harness-v2",
+      code: this.code,
+      candidateId: this.candidateId,
+      repairable: this.repairable,
+      retryStage: this.retryStage,
+      recommendedAction: this.recommendedAction,
+      message: this.message,
+    };
+  }
 }
 
-validateHarness(evidenceFile, candidateFile, draftFile);
-console.log(`Valid adjudicated verification harness evidence: ${args.evidence}`);
+if (directlyInvoked) {
+  try {
+    const args = parseArgs(process.argv.slice(2));
+    const [evidence, candidates, draft] = await Promise.all([
+      readJson(args.evidence),
+      readJson(args.candidates),
+      args.draft ? readJson(args.draft) : null,
+    ]);
+    await validateVerificationHarnessV2({ evidence, candidates, draft });
+    console.log(`Valid adjudicated verification harness evidence: ${args.evidence}`);
+  } catch (error) {
+    console.error(error.message);
+    if (error instanceof HarnessValidationError) {
+      console.error(`QUALITY_ERROR_JSON ${JSON.stringify(error.toJSON())}`);
+    }
+    process.exitCode = 1;
+  }
+}
+
+export async function validateVerificationHarnessV2({ evidence, candidates, draft = null }) {
+  const schema = await readJson(SCHEMA_PATH);
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  addFormats(ajv);
+  const validate = ajv.compile(schema);
+  if (!validate(evidence)) {
+    throw new HarnessValidationError(
+      validate.errors.map((error) => `${error.instancePath || "/"} ${error.message}`).join("\n"),
+      {
+        code: "HARNESS_SCHEMA_INVALID",
+        candidateId: null,
+        repairable: true,
+        retryStage: "deterministic",
+        recommendedAction: "rebuild_schema_fields_from_retained_verifier_outputs",
+      },
+    );
+  }
+  validateHarness(evidence, candidates, draft);
+}
 
 function validateHarness(evidence, candidates, draft) {
   if (evidence.reportDate !== candidates.asOf) {
@@ -358,6 +407,111 @@ async function readJson(filePath) {
 }
 
 function fail(message) {
-  console.error(message);
-  process.exit(1);
+  throw new HarnessValidationError(message);
+}
+
+function classifyHarnessFailure(message) {
+  const candidateId = String(message).match(/\b(src_[a-f0-9]{8})\b/)?.[1] || null;
+  const rules = [
+    {
+      pattern: /draft verification reference is missing or inconsistent/,
+      code: "DRAFT_EVIDENCE_LINK_MISMATCH",
+      repairable: true,
+      retryStage: "deterministic",
+      recommendedAction: "rebind_draft_verification_from_reconciled_evidence",
+    },
+    {
+      pattern: /draft decisions must match|draft decision has no matching|draft repeats retained candidate/,
+      code: "DRAFT_CANDIDATE_LINK_MISMATCH",
+      repairable: true,
+      retryStage: "deterministic",
+      recommendedAction: "rebuild_draft_candidate_links",
+    },
+    {
+      pattern: /duplicate evidence candidateId|artifactKey does not match|retained evidence must cover|missing retained verification evidence/,
+      code: "EVIDENCE_COVERAGE_MISMATCH",
+      repairable: true,
+      retryStage: "deterministic",
+      recommendedAction: "rebuild_evidence_index_then_reverify_affected_candidate_if_needed",
+    },
+    {
+      pattern: /specialist evidence is required|runs\.specialist must be an available/,
+      code: "SPECIALIST_EVIDENCE_REQUIRED",
+      repairable: true,
+      retryStage: "targeted_verifier",
+      recommendedAction: "run_specialist_for_affected_candidate",
+    },
+    {
+      pattern: /runs\.primary must be an available/,
+      code: "PRIMARY_EVIDENCE_REQUIRED",
+      repairable: true,
+      retryStage: "targeted_verifier",
+      recommendedAction: "rerun_primary_verification_for_affected_candidates",
+    },
+    {
+      pattern: /adjudication evidence is required|runs\.adjudicator must be an available/,
+      code: "ADJUDICATION_EVIDENCE_REQUIRED",
+      repairable: true,
+      retryStage: "targeted_verifier",
+      recommendedAction: "run_adjudicator_for_structured_dispute",
+    },
+    {
+      pattern: /disagreementFields do not match|dispute fields do not match|dispute must contain one question/,
+      code: "DISPUTE_PACKET_MISMATCH",
+      repairable: true,
+      retryStage: "deterministic",
+      recommendedAction: "rebuild_dispute_packet_from_material_disagreements",
+    },
+    {
+      pattern: /specialistRequired does not match|specialist evidence is not expected|must remain unused/,
+      code: "ROLE_ROUTING_STATE_MISMATCH",
+      repairable: true,
+      retryStage: "deterministic",
+      recommendedAction: "rebuild_role_routing_state_from_verified_risk_fields",
+    },
+    {
+      pattern: /reconciled identity must follow|adjudicationRequired does not match/,
+      code: "RECONCILIATION_CONFLICT",
+      repairable: true,
+      retryStage: "targeted_verifier",
+      recommendedAction: "repair_affected_adjudicator_contract_or_reconcile_deterministically",
+    },
+    {
+      pattern: /verified current URL does not match|artifact path does not match|must verify a current exact artifact|migrated verdict requires|sourceRepositoryChanged true requires/,
+      code: "SOURCE_IDENTITY_EVIDENCE_CONFLICT",
+      repairable: true,
+      retryStage: "targeted_verifier",
+      recommendedAction: "rerun_primary_verification_for_affected_candidate",
+    },
+    {
+      pattern: /unresolved adjudication must require follow-up|adjudication removal requires|final eligible candidate cannot be marked removed/,
+      code: "REMOVAL_TRAJECTORY_INCOMPLETE",
+      repairable: true,
+      retryStage: "deterministic",
+      recommendedAction: "rebuild_removal_state_without_changing_reconciled_evidence",
+    },
+    {
+      pattern: /unresolved source verdict cannot be retained/,
+      code: "UNRESOLVED_SOURCE_IDENTITY",
+      repairable: false,
+      retryStage: "none",
+      recommendedAction: "stop_and_preserve_unresolved_trajectory",
+    },
+    {
+      pattern: /candidates must contain five to twenty eligible candidates/,
+      code: "ELIGIBLE_SET_OUT_OF_BOUNDS",
+      repairable: false,
+      retryStage: "none",
+      recommendedAction: "stop_finalization_and_return_to_bounded_candidate_replenishment",
+    },
+  ];
+  const match = rules.find((rule) => rule.pattern.test(String(message)));
+  if (match) return { ...match, candidateId, pattern: undefined };
+  return {
+    code: "HARNESS_CONTRACT_FAILURE",
+    candidateId,
+    repairable: true,
+    retryStage: "deterministic",
+    recommendedAction: "inspect_schema_error_and_rebuild_only_derivable_fields",
+  };
 }

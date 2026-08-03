@@ -294,6 +294,66 @@ test("quality CLI finalizes a draft into a validated Sidecar and Markdown pair",
       { cwd: projectRoot },
     );
     assert.match(forwarder.stdout, /Validated Stage 2 report pair/);
+
+    const v3Sidecar = structuredClone(sidecar);
+    v3Sidecar.schemaVersion = 3;
+    while (v3Sidecar.items.length < 7) {
+      const item = structuredClone(v3Sidecar.items[0]);
+      const ordinal = v3Sidecar.items.length + 1;
+      item.title = `Stage Two V3 Item ${ordinal}`;
+      item.sourceUrl = `https://github.com/example/stage-two-v3-${ordinal}`;
+      item.canonicalUrl = item.sourceUrl;
+      v3Sidecar.items.push(item);
+    }
+    v3Sidecar.stats.selectedCount = v3Sidecar.items.length;
+    const extraMarkdown = v3Sidecar.items.slice(2).map((item, index) =>
+      `\n## ${index + 3}. ${item.title}\n\nSource: ${item.sourceUrl}\n`
+    ).join("");
+    await fs.writeFile(sidecarPath, JSON.stringify(v3Sidecar), "utf8");
+    await fs.writeFile(markdownPath, `${markdown}${extraMarkdown}`, "utf8");
+    const v3Forwarder = await execFileAsync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        path.join(projectRoot, "tools", "codex-forwarder", "forward-codex-report.ps1"),
+        "-ReportPath",
+        markdownPath,
+        "-LogPath",
+        path.join(root, "forwarder-v3.log"),
+        "-StatePath",
+        path.join(root, "forwarder-v3-state.json"),
+        "-ValidateOnly",
+      ],
+      { cwd: projectRoot },
+    );
+    assert.match(v3Forwarder.stdout, /Items=7/);
+
+    v3Sidecar.schemaVersion = 2;
+    await fs.writeFile(sidecarPath, JSON.stringify(v3Sidecar), "utf8");
+    await assert.rejects(
+      execFileAsync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          path.join(projectRoot, "tools", "codex-forwarder", "forward-codex-report.ps1"),
+          "-ReportPath",
+          markdownPath,
+          "-LogPath",
+          path.join(root, "forwarder-v2-limit.log"),
+          "-StatePath",
+          path.join(root, "forwarder-v2-limit-state.json"),
+          "-ValidateOnly",
+        ],
+        { cwd: projectRoot },
+      ),
+      /schema v2 reports must contain 1-6 items/,
+    );
   }
 
   await fs.rm(root, { recursive: true, force: true });
@@ -590,6 +650,16 @@ test("source portfolio mode supports production while keeping shadow state isola
   assert.equal(filtered.eligibleCandidates.length, 8);
   assert.equal(filtered.eligibleCandidates[1].sourceId, "anthropicSkills");
 
+  const shadowEvidence = attachHarnessEvidence(draft, filtered);
+  await Promise.all([
+    fs.writeFile(path.join(shadowStateDir, "portfolio-draft.json"), JSON.stringify(draft), "utf8"),
+    fs.writeFile(
+      path.join(shadowStateDir, "skill-radar-verification-evidence.json"),
+      JSON.stringify(shadowEvidence),
+      "utf8",
+    ),
+  ]);
+
   await execFileAsync(
     process.execPath,
     [
@@ -690,8 +760,38 @@ test("source portfolio mode supports production while keeping shadow state isola
     matchedFeedbackIds: [feedbackId],
     rationale: "Matches the explicit coding-workflow interest.",
   };
+  const missingEvidenceDraftPath = path.join(productionStateDir, "portfolio-missing-evidence-draft.json");
+  await fs.writeFile(missingEvidenceDraftPath, JSON.stringify(productionDraft), "utf8");
+  await assert.rejects(
+    execFileAsync(
+      process.execPath,
+      [
+        path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+        "finalize-curated", "--input", missingEvidenceDraftPath,
+        "--candidates", productionFilteredPath,
+      ],
+      { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+    ),
+    /skill-radar-verification-evidence\.json/,
+  );
+  const initialRecovery = JSON.parse(await fs.readFile(
+    path.join(productionStateDir, "skill-radar-finalization-recovery.json"),
+    "utf8",
+  ));
+  assert.equal(initialRecovery.status, "open");
+  assert.equal(initialRecovery.maxRepairRounds, 2);
+  assert.equal(initialRecovery.initialFailure.code, "HARNESS_EVIDENCE_UNAVAILABLE");
+  assert.equal(initialRecovery.initialFailure.retryStage, "deterministic");
+  const productionEvidence = attachHarnessEvidence(productionDraft, productionFiltered);
   const productionDraftPath = path.join(productionStateDir, "portfolio-draft.json");
-  await fs.writeFile(productionDraftPath, JSON.stringify(productionDraft), "utf8");
+  await Promise.all([
+    fs.writeFile(productionDraftPath, JSON.stringify(productionDraft), "utf8"),
+    fs.writeFile(
+      path.join(productionStateDir, "skill-radar-verification-evidence.json"),
+      JSON.stringify(productionEvidence),
+      "utf8",
+    ),
+  ]);
   const invalidPreferenceDraft = structuredClone(productionDraft);
   invalidPreferenceDraft.decisions[1].preference.matchedFeedbackIds = ["fb_invented"];
   const invalidPreferenceDraftPath = path.join(productionStateDir, "portfolio-draft-invalid-preference.json");
@@ -703,6 +803,7 @@ test("source portfolio mode supports production while keeping shadow state isola
         path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
         "finalize-curated", "--input", invalidPreferenceDraftPath,
         "--candidates", productionFilteredPath,
+        "--recovery-round", "1", "--recovery-stage", "deterministic",
       ],
       { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
     ),
@@ -715,6 +816,7 @@ test("source portfolio mode supports production while keeping shadow state isola
       path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
       "finalize-curated", "--input", productionDraftPath,
       "--candidates", productionFilteredPath,
+      "--recovery-round", "2", "--recovery-stage", "deterministic",
     ],
     { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
   );
@@ -727,6 +829,31 @@ test("source portfolio mode supports production while keeping shadow state isola
   assert.equal(productionSidecar.decisions[1].preference.effect, "boosted");
   assert.deepEqual(productionSidecar.decisions[1].preference.matchedFeedbackIds, [feedbackId]);
   assert.equal(productionSidecar.decisions[0].sourceContext.lane, "registryPulse");
+  const resolvedRecovery = JSON.parse(await fs.readFile(
+    path.join(productionStateDir, "skill-radar-finalization-recovery.json"),
+    "utf8",
+  ));
+  assert.equal(resolvedRecovery.status, "resolved");
+  assert.equal(resolvedRecovery.attempts[0].round, 1);
+  assert.equal(resolvedRecovery.attempts[0].stage, "deterministic");
+  assert.equal(resolvedRecovery.attempts[0].outcome, "failed");
+  assert.equal(resolvedRecovery.attempts[0].error.code, "PREFERENCE_BINDING_INVALID");
+  assert.equal(resolvedRecovery.attempts[1].round, 2);
+  assert.equal(resolvedRecovery.attempts[1].stage, "deterministic");
+  assert.equal(resolvedRecovery.attempts[1].outcome, "succeeded");
+  await assert.rejects(
+    execFileAsync(
+      process.execPath,
+      [
+        path.join(projectRoot, "tools", "quality", "report-quality.mjs"),
+        "finalize-curated", "--input", productionDraftPath,
+        "--candidates", productionFilteredPath,
+        "--recovery-round", "2", "--recovery-stage", "deterministic",
+      ],
+      { cwd: projectRoot, env: { ...process.env, PERSONAL_RADAR_ROOT: root } },
+    ),
+    /already resolved/,
+  );
   const productionRotation = JSON.parse(await fs.readFile(
     path.join(productionStateDir, "skill-radar-source-rotation.json"),
     "utf8",
@@ -842,8 +969,16 @@ test("confirmed recheck candidates are mandatory and leave the queue after final
     license: "MIT",
     preference: { effect: "neutral", matchedFeedbackIds: [], rationale: null },
   });
+  const evidence = attachHarnessEvidence(draft, filtered);
   const draftPath = path.join(stateDir, "recheck-draft.json");
-  await fs.writeFile(draftPath, JSON.stringify(draft), "utf8");
+  await Promise.all([
+    fs.writeFile(draftPath, JSON.stringify(draft), "utf8"),
+    fs.writeFile(
+      path.join(stateDir, "skill-radar-verification-evidence.json"),
+      JSON.stringify(evidence),
+      "utf8",
+    ),
+  ]);
   await execFileAsync(process.execPath, [
     tool, "finalize-curated", "--input", draftPath, "--candidates", filteredPath,
   ], { cwd: projectRoot, env });
@@ -858,3 +993,84 @@ test("confirmed recheck candidates are mandatory and leave the queue after final
 
   await fs.rm(root, { recursive: true, force: true });
 });
+
+function attachHarnessEvidence(draft, filtered) {
+  const unusedRun = {
+    attempted: false,
+    available: false,
+    completed: false,
+    freshContextRequested: false,
+    retryCount: 0,
+    notes: [],
+  };
+  const results = filtered.eligibleCandidates.map((candidate) => {
+    const verified = {
+      verdict: "verified_current",
+      originalUrlStatus: 200,
+      currentTitle: candidate.title,
+      currentUrl: candidate.sourceUrl,
+      artifactPath: candidate.artifactPath,
+      skillMdVerified: true,
+      repositoryStatus: "current",
+      sourceRepositoryChanged: false,
+      identityChanged: false,
+      license: "MIT",
+      capability: "Provides a concrete reusable workflow.",
+      usability: "Can be used directly from its instruction file.",
+      portability: "Can be adapted across compatible agent products.",
+      maintenance: "Current first-party maintenance evidence was inspected.",
+      trustCaveat: "Review dependencies and instructions before enabling it.",
+      evidence: [
+        "The exact artifact directory was inspected at its primary source.",
+        "The current instruction file and repository status were verified.",
+        "Identity, maintenance, dependencies, and trust boundaries were checked.",
+      ],
+    };
+    const decision = draft.decisions.find((entry) =>
+      entry.sourceUrl === candidate.sourceUrl
+      && (entry.artifactPath ?? null) === (candidate.artifactPath ?? null)
+    );
+    assert.ok(decision, `fixture decision missing for ${candidate.id}`);
+    decision.verification = {
+      candidateId: candidate.id,
+      verdict: verified.verdict,
+      currentUrl: verified.currentUrl,
+    };
+    return {
+      candidateId: candidate.id,
+      artifactKey: candidate.artifactKey,
+      title: candidate.title,
+      originalSourceUrl: candidate.sourceUrl,
+      originalArtifactPath: candidate.artifactPath,
+      primary: verified,
+      specialistRequired: false,
+      specialist: null,
+      disagreementFields: [],
+      dispute: null,
+      adjudicationRequired: false,
+      adjudication: null,
+      reconciled: verified,
+      disposition: "retained",
+      removalReason: null,
+      requiresFollowup: false,
+    };
+  });
+  return {
+    version: 2,
+    reportDate: filtered.asOf,
+    profile: "multi-agent-harness-v2",
+    runs: {
+      primary: {
+        attempted: true,
+        available: true,
+        completed: true,
+        freshContextRequested: true,
+        retryCount: 0,
+        notes: [],
+      },
+      specialist: structuredClone(unusedRun),
+      adjudicator: structuredClone(unusedRun),
+    },
+    results,
+  };
+}

@@ -79,11 +79,68 @@ export default {
 
       const stored = await storeReport(env, report);
       if (stored.duplicate) {
-        return Response.json({ ok: true, stored: false, pushed: false, duplicate: true, reason: stored.reason, report: stored.report });
+        const sameSourceRun = Boolean(
+          report.sourceRunId
+          && stored.report?.sourceRunId
+          && report.sourceRunId === stored.report.sourceRunId
+        );
+        if (sameSourceRun) {
+          try {
+            const delivery = await deliverReport(env, report, url.origin, { retry: true });
+            return Response.json({
+              ok: true,
+              stored: false,
+              pushed: delivery.pushed,
+              duplicate: true,
+              reason: stored.reason,
+              deliveryStatus: delivery.status,
+              deliveryRetried: delivery.retried,
+              alreadyDelivered: delivery.alreadyDelivered,
+              report: stored.report,
+            });
+          } catch (error) {
+            return Response.json({
+              ok: false,
+              stored: false,
+              pushed: false,
+              duplicate: true,
+              reason: stored.reason,
+              deliveryStatus: "failed",
+              error: safeDeliveryError(error),
+              report: stored.report,
+            }, { status: 502 });
+          }
+        }
+        return Response.json({
+          ok: true,
+          stored: false,
+          pushed: false,
+          duplicate: true,
+          reason: stored.reason,
+          deliveryStatus: "not_retried",
+          report: stored.report,
+        });
       }
 
-      const pushed = await pushReport(env, report, url.origin);
-      return Response.json({ ok: true, stored: true, pushed, report: stored.report });
+      try {
+        const delivery = await deliverReport(env, report, url.origin, { initial: true });
+        return Response.json({
+          ok: true,
+          stored: true,
+          pushed: delivery.pushed,
+          deliveryStatus: delivery.status,
+          report: stored.report,
+        });
+      } catch (error) {
+        return Response.json({
+          ok: false,
+          stored: true,
+          pushed: false,
+          deliveryStatus: "failed",
+          error: safeDeliveryError(error),
+          report: stored.report,
+        }, { status: 502 });
+      }
     }
 
     if (url.pathname === "/admin/prune-reports") {
@@ -239,6 +296,83 @@ async function pushReport(env, report, origin) {
   return false;
 }
 
+async function deliverReport(env, report, origin, { initial = false, retry = false } = {}) {
+  if (!env.RADAR_STATE) {
+    const pushed = await pushReport(env, report, origin);
+    return {
+      pushed,
+      status: pushed ? "succeeded" : "not_configured",
+      retried: retry && pushed,
+      alreadyDelivered: false,
+    };
+  }
+
+  const key = deliveryStorageKey(report);
+  const previous = await getJsonFromKV(env.RADAR_STATE, key);
+  if (["accepted", "succeeded"].includes(previous?.status)) {
+    return { pushed: false, status: "accepted", retried: false, alreadyDelivered: true };
+  }
+  if (previous?.status === "not_configured") {
+    return { pushed: false, status: "not_configured", retried: false, alreadyDelivered: false };
+  }
+  if (!initial && !previous) {
+    // Reports delivered before the ledger existed have unknown push state. Re-pushing
+    // them would create a notification duplicate, so only explicit failed attempts retry.
+    return { pushed: false, status: "legacy_unknown", retried: false, alreadyDelivered: false };
+  }
+  if (retry && previous?.status === "attempting") {
+    throw new Error("PushPlus delivery is already in progress");
+  }
+  if (retry && previous?.status !== "failed") {
+    return { pushed: false, status: previous?.status || "not_retried", retried: false, alreadyDelivered: false };
+  }
+
+  const attempt = Number(previous?.attempts || 0) + 1;
+  const attemptedAt = new Date().toISOString();
+  await env.RADAR_STATE.put(key, JSON.stringify({
+    version: 1,
+    status: "attempting",
+    attempts: attempt,
+    attemptedAt,
+    sourceRunId: report.sourceRunId || null,
+    category: report.category,
+    reportDate: report.structured?.reportDate || null,
+  }));
+
+  try {
+    const pushed = await pushReport(env, report, origin);
+    const status = pushed ? "accepted" : "not_configured";
+    await env.RADAR_STATE.put(key, JSON.stringify({
+      version: 1,
+      status,
+      attempts: attempt,
+      attemptedAt,
+      completedAt: new Date().toISOString(),
+      sourceRunId: report.sourceRunId || null,
+      category: report.category,
+      reportDate: report.structured?.reportDate || null,
+    }));
+    return { pushed, status, retried: retry && pushed, alreadyDelivered: false };
+  } catch (error) {
+    await env.RADAR_STATE.put(key, JSON.stringify({
+      version: 1,
+      status: "failed",
+      attempts: attempt,
+      attemptedAt,
+      failedAt: new Date().toISOString(),
+      lastError: safeDeliveryError(error),
+      sourceRunId: report.sourceRunId || null,
+      category: report.category,
+      reportDate: report.structured?.reportDate || null,
+    }));
+    throw error;
+  }
+}
+
+function safeDeliveryError(error) {
+  return String(error?.message || "Push delivery failed").slice(0, 500);
+}
+
 export function buildPushMessage(report, origin, template) {
   const structured = report.structured;
   if (!structured) {
@@ -338,9 +472,18 @@ async function sendPushPlus(env, report, origin) {
     }),
   });
 
+  const body = await response.text();
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`PushPlus failed: ${response.status} ${body}`);
+    throw new Error(`PushPlus failed with HTTP ${response.status}`);
+  }
+  let result;
+  try {
+    result = JSON.parse(body);
+  } catch {
+    throw new Error("PushPlus returned an invalid JSON response");
+  }
+  if (Number(result.code) !== 200) {
+    throw new Error(`PushPlus rejected the request with code ${String(result.code ?? "unknown")}`);
   }
 }
 
@@ -1108,6 +1251,12 @@ function reportIndexStorageKey(category) {
 
 function sourceRunStorageKey(sourceRunId) {
   return `source-run:${sourceRunId}`;
+}
+
+function deliveryStorageKey(report) {
+  if (report.sourceRunId) return `delivery:pushplus:source-run:${report.sourceRunId}`;
+  const meta = reportMeta(report);
+  return `delivery:pushplus:report:${meta.category}:${meta.date}`;
 }
 
 function normalizeStoredContent(report) {

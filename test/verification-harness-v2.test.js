@@ -43,7 +43,13 @@ test("accepts bounded adjudication and preserves an unresolved removal trajector
     execFileAsync(process.execPath, [
       validator, "--evidence", evidencePath, "--candidates", candidatePath,
     ], { cwd: root }),
-    /disagreementFields do not match verifier outputs/
+    (error) => {
+      assert.match(error.stderr, /disagreementFields do not match verifier outputs/);
+      assert.match(error.stderr, /QUALITY_ERROR_JSON/);
+      assert.match(error.stderr, /DISPUTE_PACKET_MISMATCH/);
+      assert.match(error.stderr, /"repairable":true/);
+      return true;
+    },
   );
 
   evidence = evidenceFixture(candidates.eligibleCandidates);

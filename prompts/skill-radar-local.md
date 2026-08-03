@@ -466,24 +466,43 @@ HTML. `defer` and `reject` decisions do not need display content. The finalizer
 stores `defer` for a 14-day cooldown and `reject` for a 90-day cooldown; do not
 calculate or write those dates yourself.
 
-Before finalization, validate the evidence-to-decision link:
-
-```text
-node tools/quality/validate-verification-harness-v2.mjs --evidence reports/state/skill-radar-verification-evidence.json --candidates reports/state/skill-radar-candidates-filtered.json --draft reports/state/skill-radar-curated-draft.json
-```
-
-Do not finalize unless it passes.
+The finalizer validates the evidence-to-decision link in-process. Do not run a
+separate second link validator and then assume finalization is safe; the
+finalizer is the authoritative fail-closed gate.
 
 ## 7. Finalize
 
 Run:
 
 ```text
-node tools/quality/report-quality.mjs finalize-curated --input reports/state/skill-radar-curated-draft.json --candidates reports/state/skill-radar-candidates-filtered.json
+node tools/quality/report-quality.mjs finalize-curated --input reports/state/skill-radar-curated-draft.json --candidates reports/state/skill-radar-candidates-filtered.json --verification-evidence reports/state/skill-radar-verification-evidence.json
 ```
 
-Fix draft errors and retry when validation reports a concrete field problem.
-Do not hand-write final Markdown.
+On failure, read the `QUALITY_ERROR_JSON` line and
+`reports/state/skill-radar-finalization-recovery.json`. The finalizer writes
+the initial failure into that recovery record. Use at most two repair rounds:
+
+1. If `retryStage` is `deterministic`, repair only values derivable from the
+   filtered candidates, reconciled evidence, prepared feedback, or schema.
+   Typical actions are rebuilding draft verification links, candidate indexes,
+   dispute fields, or preference bindings. Do not change source facts, verdicts,
+   or identity fields merely to satisfy validation.
+2. If `retryStage` is `targeted_verifier`, rerun only the named candidate and
+   required role in a fresh context. Set that role's `retryCount` from `0` to
+   `1`; never exceed the schema maximum, rerun already valid candidates, or
+   perform a second substantive adjudication.
+
+After a repair, rerun the same finalizer with the matching attempt metadata:
+
+```text
+node tools/quality/report-quality.mjs finalize-curated --input reports/state/skill-radar-curated-draft.json --candidates reports/state/skill-radar-candidates-filtered.json --verification-evidence reports/state/skill-radar-verification-evidence.json --recovery-round 1 --recovery-stage deterministic
+```
+
+Use round `2` only if the first repair still returns `repairable: true`, and set
+`--recovery-stage` from the latest error. A successful retry marks the recovery
+record `resolved`. Stop immediately when `repairable` is false or after two
+failed repair rounds. Preserve all attempts and report a system/contract
+failure; never convert it to `no_update`. Do not hand-write final Markdown.
 
 Successful output exists only at:
 

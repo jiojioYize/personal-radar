@@ -9,6 +9,10 @@ matching `.quality.json` Sidecar. It checks the date, status, item count, item
 order, and source links before sending both artifacts. It keeps local sent state
 so the same report is not forwarded twice.
 
+Item-count validation is schema-aware: legacy schema v2 reports retain the
+one-to-six contract, while schema v3 reports deliver every recommendation and
+accept one to twenty items, matching the v3 report validator.
+
 When the Codex report includes these markers, the forwarder sends both language versions:
 
 ```markdown

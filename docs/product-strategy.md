@@ -199,9 +199,23 @@ The content system separates discovery from verification.
   experiment measures source value.
 
 The system should prefer no-update output over lowering its recommendation
-threshold. One to six qualified items form a normal report. Zero qualified
-items produce an explicit `no_update` result. A system failure must never be
+threshold. In the current schema v3 contract, every verified `recommend`
+decision is retained and delivered, up to the existing twenty-decision schema
+maximum. The Windows forwarder enforces that v3 limit; it keeps the historical
+one-to-six rule only for schema v2 compatibility. Neither number is a
+candidate-pool target or a quality-eligibility rule. The non-publishing Stage
+3A shadow uses the same v3 content contract and does not introduce another
+recommendation cap. A future hosted publication/display limit, if desired, is
+a separate channel/product decision made at cutover. Zero qualified items
+produce an explicit `no_update` result. A system failure must never be
 presented as a no-update day.
+
+The current production finalizer is fail-closed without being single-attempt:
+machine-readable validation failures may trigger at most two recorded repair
+rounds. Deterministic repair can rebuild only values derivable from validated
+state; factual source conflicts can rerun only the affected fresh-context
+role. Non-repairable identity conflicts and exhausted recovery remain system
+failures and cannot be converted into content decisions.
 
 ## Channel Experience
 
@@ -269,14 +283,41 @@ Storage should evolve with product complexity rather than migrate early.
 
 ### Stage 3A: Hosted Agent Engine
 
-Cloudflare D1 is introduced for the minimum durable operational state that is
-not already owned by Cloudflare Workflows, including daily-run idempotency,
-candidate and evidence identity, publication state, and incident metadata. KV
-continues serving existing report reads and caches during migration.
+Cloudflare Workflows becomes the durable orchestrator and D1 becomes the
+hosted engine's operational source of truth. D1 retains logical runs, source
+plans and rotation, candidate/artifact identity, evidence trajectories,
+history and review cooldowns, model usage and cost, incidents, shadow reports,
+and production comparisons. Workflow instance state supports step recovery but
+does not replace cross-run D1 state.
+
+The first Stage 3A deployment is a separate non-publishing shadow Worker with
+its own D1 database. It has model/search and read-only source credentials, but
+no production KV binding, PushPlus token, ingest key, or `/ingest-report` call.
+KV continues serving the existing public website and production report archive.
+The current Automation, outbox, Windows forwarder, Worker, KV, website, and
+PushPlus chain remains active until a separately approved cutover.
+
+Stage 3A uses explicit model-API calls under Workflow control rather than
+executing the local Automation prompt as one hosted prompt. The validated
+domain contracts are ported: the layered source portfolio, exact-artifact
+history, qualitative v3 decisions, Harness v2 verification and disagreement
+rules, reader contract v2, failure/no-update distinction, and no-backfill
+policy. Quality v2.1 numeric scoring and the obsolete daily GitHub collector
+are not target requirements.
+
+The initial API direction is OpenAI Responses with independently invoked
+fresh-context roles and strict structured outputs. Direct structured-source and
+first-party fetches remain the verification basis; built-in web search is
+limited to discovery and bounded locator recovery. Model aliases, reasoning
+levels, prompt versions, and prices are configuration recorded per run so they
+can be evaluated and changed without changing product semantics.
 
 Stage 3A does not add user accounts or subscriptions. It first proves that the
 content engine can run in the cloud without Codex Automation, a local proxy, a
-Windows forwarder, or a powered-on personal computer.
+Windows forwarder, or a powered-on personal computer. Detailed architecture,
+data model, cost and security controls, recovery rules, shadow comparison, and
+acceptance gates are maintained in
+[`docs/stage-3-agent-engine.md`](stage-3-agent-engine.md).
 
 ### Hosted Subscription Stage
 
@@ -360,13 +401,22 @@ images are not a dependency for this stage.
 
 ### Stage 3A: Hosted Multi-Agent Content Engine
 
-Status: ready to begin after completion of Stage 2.5.
+Status: architecture approved to begin on 2026-08-03; implementation has not
+started.
 
-Replace Codex Automation and the local forwarder with model APIs, Cloudflare
-Workflows scheduling, cloud-side source collection, deterministic contracts,
-and persisted run state. The first release is a non-publishing shadow for the
-existing single-user `skill-radar`; the current production chain remains the
-fallback until explicit promotion.
+Build a separate single-user `skill-radar` cloud shadow using model APIs,
+Cloudflare Workflows, cloud-side source collection, deterministic contracts,
+and D1 run state. The shadow writes only its own D1 records and artifacts. It
+does not update the website or send PushPlus.
+
+Promotion requires contract/recovery tests, three isolated cloud runs, and at
+least 14 consecutive scheduled opportunities yielding at least 10 paired valid
+production/shadow dates. The gate requires zero admitted unresolved identity,
+zero confirmed source-identity false positives, zero production writes from
+the shadow project, correct failure/no-update classification, complete Harness
+v2 evidence links, acceptable human review, and measured cost within the
+documented budget. Passing the gate produces a cutover proposal; it does not
+automatically disable or reschedule the current production chain.
 
 ### Stage 3B: Hosted Subscription Product
 

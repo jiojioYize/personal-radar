@@ -260,6 +260,12 @@ Current Stage 2 production rules:
     retain its complete internal trajectory. Unresolved adjudication requires
     explicit disagreement fields and follow-up even when the daily report
     otherwise succeeds.
+15. Production Harness v2 finalization is fail-closed but supports at most two
+    recorded repair rounds. Deterministic errors may rebuild only derivable
+    links, indexes, routing state, preference bindings, or schema fields;
+    source-fact conflicts may rerun only the affected fresh-context role, with
+    role `retryCount` capped at one. Machine-readable non-repairable errors and
+    exhausted recovery remain system/contract failures, never `no_update`.
 
 ## Operational Notes
 

@@ -11,6 +11,10 @@ import {
   validateStructuredSemantics,
 } from "../../src/report-structure.js";
 import { enrichCuratedReport, validateCuratedReport } from "../../src/curated-report.js";
+import {
+  HarnessValidationError,
+  validateVerificationHarnessV2,
+} from "./validate-verification-harness-v2.mjs";
 
 const ROOT = process.env.PERSONAL_RADAR_ROOT
   ? path.resolve(process.env.PERSONAL_RADAR_ROOT)
@@ -79,6 +83,9 @@ try {
   else printHelp();
 } catch (error) {
   console.error(`quality tool failed: ${error.message}`);
+  if (typeof error.toJSON === "function") {
+    console.error(`QUALITY_ERROR_JSON ${JSON.stringify(error.toJSON())}`);
+  }
   process.exitCode = 1;
 }
 
@@ -517,6 +524,43 @@ async function finalizeReport(options) {
 
 async function finalizeCuratedReport(options) {
   const paths = runtimePaths(options);
+  const recovery = parseRecoveryAttempt(options);
+  let reportDate = null;
+  let recoveryEnabled = false;
+  try {
+    const inputPath = resolveRequiredInput(options.input, "finalize-curated");
+    const candidatesPath = resolveRequiredInput(options.candidates, "finalize-curated --candidates");
+    const input = await readJsonRequired(inputPath);
+    const filtered = await readJsonRequired(candidatesPath);
+    reportDate = normalizeDate(input.reportDate || beijingDate());
+    const explicitEvidence = options["verification-evidence"]
+      ? path.resolve(ROOT, options["verification-evidence"])
+      : null;
+    const defaultEvidencePath = path.join(paths.stateDir, "skill-radar-verification-evidence.json");
+    recoveryEnabled = filtered.sourceProfile === "portfolio-v1"
+      && (!paths.shadow || explicitEvidence || await exists(defaultEvidencePath));
+    if (recovery && !recoveryEnabled) {
+      throw new Error("finalization recovery is available only for Harness v2 portfolio runs");
+    }
+    if (recoveryEnabled) {
+      if (recovery) await assertRecoveryAttemptAllowed(paths, reportDate, recovery);
+      else await assertNoOpenRecovery(paths, reportDate);
+    }
+    await finalizeCuratedReportImpl(options);
+    if (recoveryEnabled && recovery) {
+      await recordFinalizationRecovery(paths, reportDate, recovery, null);
+    }
+  } catch (error) {
+    const classified = classifyFinalizationFailure(error);
+    if (recoveryEnabled && reportDate && classified) {
+      await recordFinalizationRecovery(paths, reportDate, recovery, classified);
+    }
+    throw classified || error;
+  }
+}
+
+async function finalizeCuratedReportImpl(options) {
+  const paths = runtimePaths(options);
   const inputPath = resolveRequiredInput(options.input, "finalize-curated");
   const candidatesPath = resolveRequiredInput(options.candidates, "finalize-curated --candidates");
   await ensureLocalFiles(paths);
@@ -595,6 +639,35 @@ async function finalizeCuratedReport(options) {
     throw new Error(`curated decisions must cover every eligible candidate${missingDecision ? `; missing: ${missingDecision.title}` : ""}`);
   }
   deterministicRaw.decisions = boundDecisions;
+  if (sourceProfile === "portfolio-v1") {
+    const explicitEvidence = options["verification-evidence"]
+      ? path.resolve(ROOT, options["verification-evidence"])
+      : null;
+    const evidencePath = explicitEvidence
+      || path.join(paths.stateDir, "skill-radar-verification-evidence.json");
+    const evidenceRequired = !paths.shadow || explicitEvidence || await exists(evidencePath);
+    // Historical source-portfolio shadows predate Harness v2. Production and
+    // any shadow that supplies evidence remain fail-closed.
+    if (evidenceRequired) {
+      let evidence;
+      try {
+        evidence = await readJsonRequired(evidencePath);
+      } catch (error) {
+        throw new HarnessValidationError(error.message, {
+          code: "HARNESS_EVIDENCE_UNAVAILABLE",
+          candidateId: null,
+          repairable: true,
+          retryStage: "deterministic",
+          recommendedAction: "regenerate_evidence_artifact_from_retained_verifier_outputs",
+        });
+      }
+      await validateVerificationHarnessV2({
+        evidence,
+        candidates: filtered,
+        draft: deterministicRaw,
+      });
+    }
+  }
   const sidecarPath = path.join(paths.outboxDir, `skill-radar-${reportDate}.quality.json`);
   const history = await buildHistory(reportDate, sidecarPath, { includeShadow: paths.shadow });
   const enriched = enrichCuratedReport(deterministicRaw, { recentSources: history.sources });
@@ -620,6 +693,125 @@ async function finalizeCuratedReport(options) {
   await writeJson(paths.historyPath, await buildHistory(reportDate, null, { includeShadow: paths.shadow }));
   console.log(`Finalized${paths.shadow ? " shadow" : ""} curated report: ${relative(sidecarPath)}`);
   console.log(`Rendered bilingual Markdown: ${relative(markdownPath)}`);
+}
+
+function parseRecoveryAttempt(options) {
+  const roundValue = options["recovery-round"];
+  const stageValue = options["recovery-stage"];
+  if (roundValue == null && stageValue == null) return null;
+  if (roundValue == null || stageValue == null) {
+    throw new Error("--recovery-round and --recovery-stage must be provided together");
+  }
+  const round = Number(roundValue);
+  const stage = String(stageValue);
+  if (!Number.isInteger(round) || round < 1 || round > 2) {
+    throw new Error("--recovery-round must be 1 or 2");
+  }
+  if (!new Set(["deterministic", "targeted_verifier"]).has(stage)) {
+    throw new Error("--recovery-stage must be deterministic or targeted_verifier");
+  }
+  return { round, stage };
+}
+
+function classifyFinalizationFailure(error) {
+  if (error instanceof HarnessValidationError) return error;
+  const message = String(error?.message || "");
+  const rules = [
+    {
+      pattern: /curated decisions must cover every eligible candidate|curated decision was not eligible/,
+      code: "DRAFT_CANDIDATE_LINK_MISMATCH",
+      retryStage: "deterministic",
+      action: "rebuild_draft_candidate_links",
+    },
+    {
+      pattern: /curated schema validation failed/,
+      code: "CURATED_SCHEMA_INVALID",
+      retryStage: "deterministic",
+      action: "repair_only_schema_fields_derivable_from_validated_inputs",
+    },
+    {
+      pattern: /curated semantic validation failed/,
+      code: "CURATED_SEMANTIC_INVALID",
+      retryStage: "deterministic",
+      action: "repair_reader_copy_or_rerun_affected_verifier_if_facts_conflict",
+    },
+    {
+      pattern: /preference is required|references unknown feedback|preference/,
+      code: "PREFERENCE_BINDING_INVALID",
+      retryStage: "deterministic",
+      action: "rebind_preference_from_prepared_feedback_summary",
+    },
+  ];
+  const rule = rules.find((entry) => entry.pattern.test(message));
+  if (!rule) return null;
+  return new HarnessValidationError(message, {
+    code: rule.code,
+    candidateId: message.match(/\b(src_[a-f0-9]{8})\b/)?.[1] || null,
+    repairable: true,
+    retryStage: rule.retryStage,
+    recommendedAction: rule.action,
+  });
+}
+
+async function recordFinalizationRecovery(paths, reportDate, recovery, error) {
+  const recoveryPath = path.join(paths.stateDir, "skill-radar-finalization-recovery.json");
+  const current = await readJson(recoveryPath, null);
+  const state = current?.reportDate === reportDate
+    ? current
+    : { version: 1, reportDate, maxRepairRounds: 2, status: "open", initialFailure: null, attempts: [] };
+  if (!recovery) {
+    state.status = "open";
+    state.initialFailure = error?.toJSON() || state.initialFailure;
+  } else {
+    const attempt = {
+      round: recovery.round,
+      stage: recovery.stage,
+      outcome: error ? "failed" : "succeeded",
+      error: error?.toJSON() || null,
+      recordedAt: new Date().toISOString(),
+    };
+    state.attempts = [
+      ...(state.attempts || []).filter((entry) => entry.round !== recovery.round),
+      attempt,
+    ].sort((left, right) => left.round - right.round);
+    state.status = error ? "open" : "resolved";
+    if (!error) state.resolvedAt = attempt.recordedAt;
+  }
+  await writeJson(recoveryPath, state);
+}
+
+async function assertRecoveryAttemptAllowed(paths, reportDate, recovery) {
+  const recoveryPath = path.join(paths.stateDir, "skill-radar-finalization-recovery.json");
+  const state = await readJson(recoveryPath, null);
+  if (!state || state.reportDate !== reportDate || !state.initialFailure) {
+    throw new Error("recovery attempt requires a recorded initial finalization failure for the same reportDate");
+  }
+  if (state.status === "resolved") {
+    throw new Error("finalization recovery is already resolved");
+  }
+  if ((state.attempts || []).some((attempt) => attempt.round === recovery.round)) {
+    throw new Error(`recovery round ${recovery.round} has already been used`);
+  }
+  if (recovery.round === 2 && !(state.attempts || []).some((attempt) => attempt.round === 1)) {
+    throw new Error("recovery round 2 requires a completed round 1 attempt");
+  }
+  const latestFailure = [...(state.attempts || [])]
+    .filter((attempt) => attempt.outcome === "failed" && attempt.error)
+    .sort((left, right) => right.round - left.round)[0]?.error || state.initialFailure;
+  if (!latestFailure.repairable || latestFailure.retryStage === "none") {
+    throw new Error(`latest finalization failure is not repairable: ${latestFailure.code}`);
+  }
+  if (latestFailure.retryStage !== recovery.stage) {
+    throw new Error(`recovery stage must be ${latestFailure.retryStage} for ${latestFailure.code}`);
+  }
+}
+
+async function assertNoOpenRecovery(paths, reportDate) {
+  const recoveryPath = path.join(paths.stateDir, "skill-radar-finalization-recovery.json");
+  const state = await readJson(recoveryPath, null);
+  if (state?.reportDate === reportDate && state.status === "open") {
+    throw new Error("an open finalization recovery exists; retry with the next --recovery-round and matching --recovery-stage");
+  }
 }
 
 function discoveryLabel(discoveryType, sourceId) {
@@ -1539,7 +1731,7 @@ function printHelp() {
 Commands:
   prepare [--date YYYY-MM-DD] [--shadow] [--source-portfolio]
   finalize --input reports/state/skill-radar-draft.json [--shadow]
-  finalize-curated --input FILE --candidates FILTERED_FILE [--shadow]
+  finalize-curated --input FILE --candidates FILTERED_FILE [--verification-evidence FILE] [--recovery-round 1|2 --recovery-stage deterministic|targeted_verifier] [--shadow]
   filter-candidates --input FILE [--output FILE] [--date YYYY-MM-DD] [--shadow] [--source-portfolio]
   feedback --url URL --rating interested|not_interested [--date YYYY-MM-DD] [--title NAME] [--artifact-key KEY] [--category NAME] [--note TEXT]
   feedback-replay --report SIDECAR --scenario FILE [--output DIR]

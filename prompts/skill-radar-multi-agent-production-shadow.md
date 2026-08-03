@@ -200,7 +200,20 @@ Validate the link from evidence to decisions:
 node tools/quality/validate-verification-harness-v2.mjs --evidence reports/shadow/state/skill-radar-verification-evidence.json --candidates reports/shadow/state/skill-radar-candidates-filtered.json --draft reports/shadow/state/skill-radar-source-portfolio-draft.json
 ```
 
-Then finalize with the existing shadow command. Do not hand-write Markdown.
+Then finalize with:
+
+```text
+node tools/quality/report-quality.mjs finalize-curated --shadow --input reports/shadow/state/skill-radar-source-portfolio-draft.json --candidates reports/shadow/state/skill-radar-candidates-filtered.json --verification-evidence reports/shadow/state/skill-radar-verification-evidence.json
+```
+
+If this Harness-aware finalizer fails, it writes
+`reports/shadow/state/skill-radar-finalization-recovery.json` and a
+`QUALITY_ERROR_JSON` line. Follow the bounded recovery protocol in section 7
+of `prompts/skill-radar-local.md`, substituting the shadow paths above. Use at
+most two repair rounds and include `--shadow`, `--recovery-round`, and
+`--recovery-stage` on each retry. This overrides the older source-portfolio
+prompt's generic three-retry finalization instruction. Do not hand-write
+Markdown.
 
 ## 6. Finish
 

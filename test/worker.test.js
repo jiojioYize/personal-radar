@@ -352,6 +352,71 @@ test("returns duplicate for the same category and date", async () => {
   assert.equal(result.reason, "category-date");
 });
 
+test("retries a failed PushPlus delivery for the exact same source run", async () => {
+  const kv = new MemoryKv();
+  const structured = await exampleReport();
+  const originalFetch = globalThis.fetch;
+  let pushAttempts = 0;
+  globalThis.fetch = async () => {
+    pushAttempts += 1;
+    if (pushAttempts === 1) return new Response("temporary failure", { status: 503 });
+    return new Response('{"code":200}', { status: 200 });
+  };
+
+  try {
+    const options = {
+      generatedAt: "2026-07-09T02:00:00.000Z",
+      sourceRunId: "retryable-push",
+      envOverrides: { PUSHPLUS_TOKEN: "test-token" },
+    };
+    const first = await ingest(kv, structured, options);
+    const firstResult = await first.json();
+    assert.equal(first.status, 502);
+    assert.equal(firstResult.stored, true);
+    assert.equal(firstResult.deliveryStatus, "failed");
+
+    const retry = await ingest(kv, structured, options);
+    const retryResult = await retry.json();
+    assert.equal(retry.status, 200);
+    assert.equal(retryResult.duplicate, true);
+    assert.equal(retryResult.reason, "sourceRunId");
+    assert.equal(retryResult.pushed, true);
+    assert.equal(retryResult.deliveryRetried, true);
+    assert.equal(retryResult.deliveryStatus, "accepted");
+
+    const settledDuplicate = await ingest(kv, structured, options);
+    const settledResult = await settledDuplicate.json();
+    assert.equal(settledResult.duplicate, true);
+    assert.equal(settledResult.pushed, false);
+    assert.equal(settledResult.alreadyDelivered, true);
+    assert.equal(pushAttempts, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("treats a PushPlus application error as a retryable failure", async () => {
+  const kv = new MemoryKv();
+  const structured = await exampleReport();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response('{"code":900,"msg":"limited"}', { status: 200 });
+
+  try {
+    const response = await ingest(kv, structured, {
+      generatedAt: "2026-07-09T03:00:00.000Z",
+      sourceRunId: "pushplus-application-error",
+      envOverrides: { PUSHPLUS_TOKEN: "test-token" },
+    });
+    const result = await response.json();
+    assert.equal(response.status, 502);
+    assert.equal(result.stored, true);
+    assert.equal(result.deliveryStatus, "failed");
+    assert.match(result.error, /code 900/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("builds a concise HTML PushPlus message", async () => {
   const kv = new MemoryKv();
   const structured = await exampleReport();
