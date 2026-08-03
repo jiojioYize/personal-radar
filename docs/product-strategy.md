@@ -308,7 +308,7 @@ subscriptions, or multi-user hosting.
 
 ### Stage 2.5: Content Productization And Visual Experience
 
-Status: in progress as of 2026-08-02.
+Status: complete as of 2026-08-03.
 
 The current release replaces implementation-oriented report framing with a
 reader-facing daily brief: a compact introduction, reader-facing topic labels,
@@ -334,9 +334,16 @@ the user's own agent to evaluate compatibility and propose a plan before making
 changes, connecting discovery to guarded adoption without granting automatic
 installation authority.
 
-Next work will refine the PushPlus reading experience and evaluate richer media
-only after the text hierarchy proves stable. Portfolio illustration needs will
-be planned separately; generated images are not a dependency for this stage.
+PushPlus now acts as the discovery hook rather than a compressed copy of the
+website. Its accepted dark HTML briefing shows the daily theme, each Skill's
+plain-language outcome, and the situation that makes it worth opening, followed
+by one link to the full report. Setup, limitations, source evidence, and AI
+handoff stay on the website. The 2026-08-03 scheduled report validated the new
+reader contract and both production surfaces; subsequent changes are normal
+product iteration rather than unfinished Stage 2.5 scope.
+
+Richer media and portfolio illustrations are separate follow-up work. Generated
+images are not a dependency for this stage.
 
 ### Stage 3: Hosted Subscription
 

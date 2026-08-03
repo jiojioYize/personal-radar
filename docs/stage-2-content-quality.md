@@ -402,12 +402,14 @@ first, followed directly by recommendations or the no-update explanation.
 
 - HTML cards contain no generated images.
 - All selected items appear in concise form.
-- Each card shows the plain-language value, a concrete use situation, and what
-  must be available before starting. Technical risks remain in the full report.
+- Each card shows the plain-language value and a concrete use situation that
+  helps the reader decide whether to open the full report. Prerequisites,
+  installation, and technical risks remain in the website's deeper layer.
 - The full report link points to the dated public website page.
 - `PUSHPLUS_TEMPLATE=html` is the production default as of 2026-07-09.
-- HTML messages use a fixed light reading shell and summary card so mobile dark
-  backgrounds do not hide the introductory text.
+- HTML messages use an explicit dark briefing shell so the introduction and
+  recommendation cards remain legible in both light and dark WeChat hosts.
+- Local previews use `npm run preview:push` and never send a PushPlus message.
 
 ### Website
 
@@ -537,6 +539,7 @@ npm run quality:summary
 | Multi-agent source verification | Promoted into `prompts/skill-radar-local.md` on 2026-07-29 after the fixed adversarial suite covered current, migrated, invalid, missing, and ambiguous sources, and the corrected production-format shadow passed candidate/evidence/draft identity validation. The formal Automation entry prompt remains unchanged |
 | Production acceptance | Passed 2026-07-31: specialist routing, evidence validation, outbox generation, forwarding, Worker storage, website rendering, and PushPlus delivery all completed |
 | Post-launch observation | Passed the first scheduled Harness v2 production run on 2026-08-01: 10 eligible artifacts received primary verification, two identity-continuous locator recoveries passed, one invalid exact artifact remained auditable, unnecessary specialist/adjudicator calls were skipped, preference ordering promoted the matching design recommendation, and the report completed normal website and PushPlus delivery. Observation continues without changing the completed Stage 2 acceptance |
+| Stage 2.5 dual-surface reading acceptance | Passed 2026-08-03: the scheduled `readerContractVersion: 2` report rendered the website's progressive-disclosure details and the concise dark PushPlus briefing successfully; machine category slugs are localized through a Worker-owned bilingual taxonomy with a Chinese-safe fallback |
 
 Worker v2 deployment on 2026-07-08 upgraded ingest, KV compatibility, and
 structured website rendering while initially keeping PushPlus on the

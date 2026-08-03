@@ -239,7 +239,7 @@ async function pushReport(env, report, origin) {
   return false;
 }
 
-function buildPushMessage(report, origin, template) {
+export function buildPushMessage(report, origin, template) {
   const structured = report.structured;
   if (!structured) {
     const markdown = getPushContent(report);
@@ -251,9 +251,10 @@ function buildPushMessage(report, origin, template) {
 
   const reportUrl = `${origin}/reports/${encodeURIComponent(report.category)}/${encodeURIComponent(structured.reportDate)}?lang=zh`;
   const count = structured.items.length;
-  const title = structured.status === "no_update"
+  const baseTitle = structured.status === "no_update"
     ? "Skill Radar 今日无重要更新"
     : `Skill Radar 今日精选（${count}项）`;
+  const title = report.category.endsWith("-preview") ? `[测试] ${baseTitle}` : baseTitle;
 
   return {
     title,
@@ -264,59 +265,47 @@ function buildPushMessage(report, origin, template) {
 }
 
 function renderPushHtml(report, reportUrl) {
-  const summary = escapeHtml(truncateText(report.summary.zh, 160));
-  const usesReaderContract = Number(report.readerContractVersion || 0) >= 2;
+  const summary = escapeHtml(report.summary.zh);
   if (report.status === "no_update") {
     return [
-      '<div style="font-family:Arial,sans-serif;background:#f1f3ee;color:#172018;line-height:1.65;padding:12px">',
-      '<section style="background:#ffffff;padding:12px;margin:0 0 12px;border-left:4px solid #0b6b59">',
-      '<h2 style="margin:0 0 12px;color:#172018">今日无重要更新</h2>',
-      `<p style="margin:8px 0;color:#172018">${summary}</p>`,
-      `<p style="margin:8px 0;color:#172018">${escapeHtml(truncateText(report.conclusion.zh, 220))}</p>`,
+      '<div style="font-family:Arial,Microsoft YaHei,sans-serif;background:#0f1316;color:#f4f6f5;line-height:1.58;padding:16px 12px">',
+      '<section style="padding:4px 2px 18px;border-bottom:1px solid #2a3135">',
+      '<div style="font-size:12px;font-weight:700;color:#66d9e8;letter-spacing:2px">PERSONAL RADAR</div>',
+      '<h2 style="margin:8px 0 5px;font-size:26px;color:#f4f6f5">今日信号</h2>',
+      '<p style="margin:0;color:#aeb7b3">今天没有需要你立刻关注的重要更新。</p>',
       "</section>",
-      `<p style="margin:12px 0 0"><a href="${escapeHtml(reportUrl)}">查看网站归档</a></p>`,
+      `<section style="background:#171d21;border-left:3px solid #a8e653;padding:11px 12px;margin:12px 0"><p style="margin:0;color:#c9d0cd;font-size:14px">${summary}</p><p style="margin:6px 0 0;color:#89948f;font-size:12px">${escapeHtml(report.conclusion.zh)}</p></section>`,
+      `<p style="margin:14px 0 0"><a href="${escapeHtml(reportUrl)}" style="display:block;border:1px solid #66d9e8;color:#66d9e8;text-align:center;text-decoration:none;font-weight:700;padding:11px 14px">查看网站归档</a></p>`,
       "</div>",
     ].join("");
   }
 
-  const cards = report.items.map((item, index) => {
+  const cards = report.items.map((item) => {
     const display = item.display.zh;
-    const border = index === 0 ? "#0b6b59" : "#d9ded7";
-    const actionTag = report.schemaVersion >= 3 || !item.recommendation
-      ? ""
-      : `<div style="font-size:12px;font-weight:700;color:#994d1f;text-transform:uppercase">${escapeHtml(item.recommendation)}</div>`;
     return [
-      `<section style="border-left:4px solid ${border};padding:10px 12px;margin:12px 0;background:#f7f8f4">`,
-      actionTag,
-      `<h3 style="margin:2px 0 6px;font-size:17px">${escapeHtml(item.title)}</h3>`,
-      `<p style="margin:4px 0">${escapeHtml(display.oneLiner)}</p>`,
-      usesReaderContract
-        ? `<p style="margin:4px 0;color:#667064"><strong>什么时候值得用：</strong>${escapeHtml(display.bestFor)}</p>`
-        : `<p style="margin:4px 0;color:#667064"><strong>适合：</strong>${escapeHtml(display.bestFor)}</p>`,
-      usesReaderContract
-        ? `<p style="margin:4px 0;color:#667064"><strong>开始前需要：</strong>${escapeHtml(display.action)}</p>`
-        : `<p style="margin:4px 0;color:#667064"><strong>怎么用：</strong>${escapeHtml(display.action)}</p>`,
-      usesReaderContract
-        ? ""
-        : `<p style="margin:4px 0;color:#667064"><strong>注意：</strong>${escapeHtml(display.primaryCaution)}</p>`,
+      '<section style="background:#171d21;border-top:1px solid #2a3135;border-left:3px solid #a8e653;padding:13px 12px;margin:0">',
+      `<h3 style="margin:0 0 6px;font-size:17px;line-height:1.3;color:#f4f6f5;overflow-wrap:anywhere">${escapeHtml(item.title)}</h3>`,
+      `<p style="margin:0;color:#c9d0cd;font-size:14px">${escapeHtml(display.oneLiner)}</p>`,
+      `<p style="margin:8px 0 0;color:#aeb7b3;font-size:13px"><strong style="color:#66d9e8">值得点开，如果：</strong>${escapeHtml(display.bestFor)}</p>`,
       "</section>",
     ].join("");
   }).join("");
 
   return [
-    '<div style="font-family:Arial,sans-serif;background:#f1f3ee;color:#172018;line-height:1.65;padding:12px">',
-    '<section style="background:#ffffff;padding:12px;margin:0 0 12px;border-left:4px solid #0b6b59">',
-    '<h2 style="margin:0 0 8px;color:#172018">Skill Radar 今日精选</h2>',
-    `<p style="margin:8px 0;color:#172018">${summary}</p>`,
+    '<div style="font-family:Arial,Microsoft YaHei,sans-serif;background:#0f1316;color:#f4f6f5;line-height:1.58;padding:16px 12px">',
+    '<section style="padding:3px 2px 14px">',
+    '<div style="font-size:12px;font-weight:700;color:#66d9e8;letter-spacing:2px">PERSONAL RADAR</div>',
+    '<h2 style="margin:8px 0 5px;font-size:26px;color:#f4f6f5">今日信号</h2>',
+    `<p style="margin:0;color:#aeb7b3;font-size:14px">已为你整理 <strong style="color:#a8e653;font-size:17px">${report.items.length}</strong> 个值得继续探索的技能</p>`,
     "</section>",
+    `<section style="background:#11171a;border-top:1px solid #2a3135;border-bottom:1px solid #2a3135;padding:10px 12px;margin:0"><p style="margin:0;color:#aeb7b3;font-size:13px"><strong style="color:#66d9e8">今日摘要：</strong>${summary}</p></section>`,
     cards,
-    `<p style="margin-top:16px"><a href="${escapeHtml(reportUrl)}">查看完整分析与来源</a></p>`,
+    `<p style="margin:13px 0 0"><a href="${escapeHtml(reportUrl)}" style="display:block;border:1px solid #66d9e8;color:#66d9e8;text-align:center;text-decoration:none;font-weight:700;padding:10px 12px">查看完整分析</a></p>`,
     "</div>",
   ].join("");
 }
 
 function renderPushMarkdown(report, reportUrl) {
-  const usesReaderContract = Number(report.readerContractVersion || 0) >= 2;
   const lines = [
     report.status === "no_update" ? "## 今日无重要更新" : `## 今日精选 ${report.items.length} 项`,
     "",
@@ -328,19 +317,9 @@ function renderPushMarkdown(report, reportUrl) {
     const heading = report.schemaVersion >= 3 || !item.recommendation
       ? `### ${item.title}`
       : `### ${item.title} · ${item.recommendation}`;
-    const details = usesReaderContract
-      ? [
-          `- 什么时候值得用：${truncateText(display.bestFor, 64)}`,
-          `- 开始前需要：${truncateText(display.action, 72)}`,
-        ]
-      : [
-          `- 适合：${truncateText(display.bestFor, 50)}`,
-          `- 怎么用：${truncateText(display.action, 72)}`,
-          `- 注意：${truncateText(display.primaryCaution, 72)}`,
-        ];
-    lines.push("", heading, truncateText(display.oneLiner, 72), ...details);
+    lines.push("", heading, display.oneLiner, `- 值得关注：${display.bestFor}`);
   }
-  lines.push("", `[查看完整分析与来源](${reportUrl})`);
+  lines.push("", `[查看完整报告](${reportUrl})`);
   return lines.join("\n");
 }
 
@@ -769,6 +748,15 @@ function renderIcon(iconNode, className = "icon") {
 function renderCategoryIcon(category) {
   const icons = {
     "coding workflow": Braces,
+    "coding-workflow": Braces,
+    "frontend-design": Smartphone,
+    "web-performance": Braces,
+    "wordpress-performance": Braces,
+    "local-ai": Bot,
+    "local-model-inference": Bot,
+    "requirements-clarification": ClipboardCheck,
+    "cloud-platform": CloudUpload,
+    "azure-container-platform": CloudUpload,
     "mobile-app-design": Smartphone,
     "software-testing": TestTube,
     "smart-contract-security": ShieldCheck,
@@ -786,6 +774,24 @@ function formatCategoryLabel(category, language) {
   const value = String(category || "").trim().toLowerCase();
   const labels = {
     "coding workflow": ["编码工作流", "Coding workflow"],
+    "coding-workflow": ["编码工作流", "Coding workflow"],
+    "frontend-design": ["界面与体验", "Interface and experience"],
+    "web-performance": ["网站性能", "Web performance"],
+    "wordpress-performance": ["网站性能", "Website performance"],
+    "local-ai": ["本地 AI", "Local AI"],
+    "local-model-inference": ["本地 AI", "Local AI"],
+    "requirements-clarification": ["需求梳理", "Requirements clarification"],
+    "cloud-platform": ["云端与容器", "Cloud and containers"],
+    "azure-container-platform": ["云端与容器", "Cloud and containers"],
+    "content-collaboration": ["内容与协作", "Content and collaboration"],
+    "browser-automation": ["浏览器自动化", "Browser automation"],
+    "data-analysis": ["数据分析", "Data analysis"],
+    "research-knowledge": ["研究与知识", "Research and knowledge"],
+    "documentation": ["文档工作流", "Documentation"],
+    "skill-authoring": ["Skill 构建", "Skill authoring"],
+    "security": ["安全与治理", "Security and governance"],
+    "developer-tools": ["开发工具", "Developer tools"],
+    "productivity-automation": ["效率与自动化", "Productivity and automation"],
     "mobile-app-design": ["移动产品设计", "Mobile product design"],
     "software-testing": ["测试工程", "Software testing"],
     "smart-contract-security": ["智能合约安全", "Smart contract security"],
@@ -798,9 +804,12 @@ function formatCategoryLabel(category, language) {
   };
   const localized = labels[value];
   if (localized) return language === "en" ? localized[1] : localized[0];
+  // Categories are machine-readable slugs. Never leak a new raw English slug
+  // into the Chinese reader surface before its presentation label is defined.
+  if (language === "zh") return "Agent 工作流";
   return value.split(/[-_]+/).filter(Boolean).map((part) =>
-    language === "en" ? `${part.charAt(0).toUpperCase()}${part.slice(1)}` : part,
-  ).join(language === "en" ? " " : " · ") || (language === "en" ? "Agent workflow" : "Agent 工作流");
+    `${part.charAt(0).toUpperCase()}${part.slice(1)}`,
+  ).join(" ") || "Agent workflow";
 }
 
 function renderPage(title, body, language = "en") {

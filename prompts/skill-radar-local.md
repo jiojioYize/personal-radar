@@ -384,6 +384,16 @@ Every decision requires:
 
 - `title`, `category`, `sourceUrl`, `artifactScope`, and `artifactPath`; copy
   candidate identity fields exactly so the finalizer can match the artifact;
+- `category` is an internal stable slug, not public copy. Prefer the closest
+  existing reader-facing family instead of inventing repository-specific tag
+  combinations: `frontend-design`, `video-production`,
+  `content-collaboration`, `coding-workflow`, `software-testing`,
+  `browser-automation`, `data-analysis`, `research-knowledge`,
+  `documentation`, `skill-authoring`, `security`, `cloud-platform`,
+  `local-ai`, `web-performance`, `requirements-clarification`,
+  `developer-tools`, `productivity-automation`, `mobile-development`,
+  `database-development`, or `scientific-computing`. Choose the family by the
+  user's main outcome, not by copying repository topics or product names;
 - `decision`, `reason`, `officialSourceVerified: true`, `sourceCheckedAt`, and
   known license or `null`.
 - internal `preference` with `effect`, `matchedFeedbackIds`, and `rationale`:

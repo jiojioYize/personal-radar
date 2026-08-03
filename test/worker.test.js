@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import worker from "../src/index.js";
+import worker, { buildPushMessage } from "../src/index.js";
 import { enrichCuratedReport } from "../src/curated-report.js";
 import { curatedFixture } from "../test-support/curated-report.js";
 
@@ -117,6 +117,36 @@ test("presents a structured Chinese report as a reader-facing daily brief", asyn
   assert.doesNotMatch(html, /首选推荐|recommendation-index/);
 });
 
+test("localizes machine category slugs without leaking raw English into Chinese topic labels", async () => {
+  const categories = [
+    ["video-production", "视频与动效"],
+    ["wordpress-performance", "网站性能"],
+    ["local-model-inference", "本地 AI"],
+    ["requirements-clarification", "需求梳理"],
+    ["azure-container-platform", "云端与容器"],
+    ["future-unmapped-category", "Agent 工作流"],
+  ];
+  for (const [category, label] of categories) {
+    const kv = new MemoryKv();
+    const fixture = curatedFixture();
+    fixture.decisions[0].category = category;
+    const structured = enrichCuratedReport(fixture);
+    const response = await ingest(kv, structured, {
+      generatedAt: "2026-07-14T01:00:00.000Z",
+      sourceRunId: `localized-category-${category}`,
+    });
+    assert.equal(response.status, 200);
+
+    const page = await worker.fetch(
+      new Request("https://radar.example/reports/skill-radar/2026-07-14?lang=zh"),
+      env(kv),
+    );
+    const html = await page.text();
+    assert.match(html, new RegExp(label));
+    assert.doesNotMatch(html, new RegExp(category.split("-").join(" · ")));
+  }
+});
+
 test("keeps legacy v3 display semantics for already generated reports", async () => {
   const kv = new MemoryKv();
   const structured = enrichCuratedReport(curatedFixture());
@@ -182,7 +212,7 @@ test("localizes the structured report archive", async () => {
   assert.doesNotMatch(html, /Skill Radar Deep Dive/);
 });
 
-test("renders v3 PushPlus cards around understanding and usage", async () => {
+test("renders v3 PushPlus cards for quick discovery", async () => {
   const kv = new MemoryKv();
   const structured = enrichCuratedReport(curatedFixture());
   const originalFetch = globalThis.fetch;
@@ -202,15 +232,27 @@ test("renders v3 PushPlus cards around understanding and usage", async () => {
       },
     });
     assert.equal(response.status, 200);
-    assert.match(pushPayload.content, /什么时候值得用：/);
-    assert.match(pushPayload.content, /开始前需要：/);
-    assert.match(pushPayload.content, /Requires a skill-capable agent/);
-    assert.doesNotMatch(pushPayload.content, /限制与风险|注意：/);
+    assert.match(pushPayload.content, /值得点开，如果：/);
+    assert.doesNotMatch(pushPayload.content, /开始前|怎么用|Requires a skill-capable agent/);
+    assert.doesNotMatch(pushPayload.content, /限制与风险|注意：|安装方法|官方来源|AI 交接任务/);
+    assert.doesNotMatch(pushPayload.content, /编码工作流/);
+    assert.match(pushPayload.content, /查看完整分析/);
     assert.doesNotMatch(pushPayload.content, />install<|>adapt<|>watch</i);
     assert.doesNotMatch(pushPayload.content, /检查 .*排除重复/);
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("marks private preview-category push messages as tests", () => {
+  const structured = enrichCuratedReport(curatedFixture());
+  const message = buildPushMessage(
+    { structured, category: "skill-radar-preview" },
+    "https://radar.example",
+    "html",
+  );
+  assert.match(message.title, /^\[测试\]/);
+  assert.match(message.content, /\/reports\/skill-radar-preview\/2026-07-14\?lang=zh/);
 });
 test("keeps v1 Markdown reports readable", async () => {
   const kv = new MemoryKv();
@@ -333,13 +375,14 @@ test("builds a concise HTML PushPlus message", async () => {
     assert.equal(result.pushed, true);
     assert.equal(pushPayload.template, "html");
     assert.match(pushPayload.title, /今日精选/);
-    assert.match(pushPayload.content, /background:#f1f3ee/);
-    assert.match(pushPayload.content, /Skill Radar 今日精选/);
-    assert.match(pushPayload.content, /查看完整分析与来源/);
+    assert.match(pushPayload.content, /background:#0f1316/);
+    assert.match(pushPayload.content, /PERSONAL RADAR/);
+    assert.match(pushPayload.content, /今日信号/);
+    assert.match(pushPayload.content, /已为你整理[\s\S]*1[\s\S]*个值得继续探索的技能/);
+    assert.match(pushPayload.content, /查看完整分析/);
     assert.match(pushPayload.content, /example\/agent-skill/);
-    assert.match(pushPayload.content, /适合：/);
-    assert.match(pushPayload.content, /怎么用：/);
-    assert.match(pushPayload.content, /<strong>注意：/);
+    assert.match(pushPayload.content, /值得点开，如果：/);
+    assert.doesNotMatch(pushPayload.content, /适合：|怎么用：|<strong>注意：/);
     assert.ok(pushPayload.content.length < 6000);
   } finally {
     globalThis.fetch = originalFetch;
@@ -371,7 +414,7 @@ test("keeps HTML card fields untruncated", async () => {
     assert.equal(response.status, 200);
     assert.match(pushPayload.content, /VALUE_TAIL/);
     assert.match(pushPayload.content, /WHEN_USEFUL_TAIL/);
-    assert.match(pushPayload.content, /PREREQUISITE_TAIL/);
+    assert.doesNotMatch(pushPayload.content, /PREREQUISITE_TAIL/);
     assert.doesNotMatch(pushPayload.content, /VALUE_TAIL。…|WHEN_USEFUL_TAIL。…|PREREQUISITE_TAIL。…/);
     assert.ok(pushPayload.content.length < 7000);
   } finally {
