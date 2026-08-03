@@ -305,6 +305,17 @@ rules, reader contract v2, failure/no-update distinction, and no-backfill
 policy. Quality v2.1 numeric scoring and the obsolete daily GitHub collector
 are not target requirements.
 
+Stage 3A separates discovery coverage targets from run validity. Each run
+starts with 8-12 candidates and replenishes only while fewer than five remain
+eligible, stopping immediately when five are available. Three filter passes
+and twenty cumulative candidates are hard research-cost bounds, not output
+targets. If complete required-source collection exhausts those bounds with
+only 0-4 eligible candidates, the engine still verifies and decides the full
+remaining set and records `coverageStatus: exhausted_below_target`. A missing
+or failed required source remains a system failure. This shadow-only contract
+does not change the current production five-candidate minimum before a later
+evidence-backed migration decision.
+
 The initial API direction is OpenAI Responses with independently invoked
 fresh-context roles and strict structured outputs. Direct structured-source and
 first-party fetches remain the verification basis; built-in web search is

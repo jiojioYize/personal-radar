@@ -156,6 +156,23 @@ The following behavior must survive the runtime migration:
     limits continue to bound research cost, but no reader-item limit is derived
     from the Windows forwarder. Channel-specific publication limits are outside
     the shadow contract.
+18. Five eligible candidates is a replenishment target, not a Stage 3A validity
+    minimum. Stop replenishing immediately when five are available. If three
+    passes and twenty cumulative candidates are exhausted with 0-4 eligible
+    candidates after complete required-source collection, verify and decide
+    all remaining candidates and record `coverageStatus` as
+    `exhausted_below_target`. Required-source, API, or orchestration failure is
+    still a failed run and cannot use this status.
+
+This item is an intentional Stage 3A shadow divergence from the current
+production minimum. During 3A.0, parameterize the shared candidate/evidence
+validators so the production adapter keeps its default minimum of five while
+the hosted shadow accepts zero to twenty. Do not weaken the tracked public v3
+or Harness v2 schemas merely to encode the experiment. A separate internal
+`engine-shadow-result-v1` envelope carries `coverageStatus`, the complete
+decision set, and a would-be content outcome when fewer than five decisions
+cannot form a current public v3 Sidecar. Promotion must propose an explicit
+schema migration if this policy is later adopted for publication.
 
 ## Migration Boundary
 
@@ -314,7 +331,8 @@ One logical daily run uses these phases:
 3. collect registry, official, and community lanes
 4. normalize an initial 8-12 candidate pool
 5. apply code-owned history/review/repository filtering
-6. replenish within 3 filter passes and 20 total candidates
+6. replenish until five are eligible or 3 passes / 20 cumulative candidates
+   are exhausted; record `target_met` or `exhausted_below_target`
 7. fetch bounded first-party evidence bundles
 8. invoke one fresh primary verifier per eligible candidate
 9. route risk cases to fresh specialist calls
@@ -322,8 +340,10 @@ One logical daily run uses these phases:
 11. invoke one fresh adjudicator per disputed candidate
 12. reconcile, remove, correct identity, re-filter, and replace as required
 13. invoke the quality editor on reconciled retained evidence only
-14. validate evidence links, schema v3, semantics, public copy, and UTF-8
-15. render Sidecar and Markdown into shadow storage
+14. validate evidence links, the internal shadow envelope, v3-compatible
+    fields, semantics, public copy, and UTF-8
+15. render the complete shadow artifact and Markdown; emit a current v3
+    Sidecar only when its existing minimums are satisfied
 16. record cost, metrics, incidents, and comparison-ready status
 17. compare with the production baseline when it becomes available
 ```
@@ -347,7 +367,7 @@ The minimum schema is:
 
 | Table | Purpose and required uniqueness |
 | --- | --- |
-| `engine_runs` | One logical run per `(channel, report_date, mode, contract_version)`. Stores frozen config/model/source-policy hashes, run status, content outcome, separate `publication_state` (`blocked_shadow` in the first release), timestamps, budget, totals, and failure class. |
+| `engine_runs` | One logical run per `(channel, report_date, mode, contract_version)`. Stores frozen config/model/source-policy hashes, run status, content outcome, `coverage_status` (`target_met`, `exhausted_below_target`, or `source_incomplete`), separate `publication_state` (`blocked_shadow` in the first release), timestamps, budget, totals, and failure class. |
 | `workflow_attempts` | Maps unique Workflow instance IDs to a logical run and attempt number. Stores lease/heartbeat and terminal status. |
 | `source_plans` | Authoritative same-date plan, registry focus, assigned official/community sources, and plan hash. Unique by run. |
 | `source_rotation_entries` | Completed plan history. Advances only after a valid shadow report or valid `no_update`, never after a failed run. |
@@ -357,7 +377,7 @@ The minimum schema is:
 | `verification_cases` | Original identity, current identity, routing flags, disagreement fields, disposition, removal reason, and follow-up state. |
 | `verification_outputs` | One immutable structured output per `(case_id, role, attempt_no)`, including prompt version, model policy, response hash, evidence JSON, and semantic-validation result. |
 | `quality_decisions` | One decision per final eligible candidate, reason, preference evidence, editor response link, and deterministic validation result. |
-| `report_artifacts` | Shadow Sidecar JSON, Markdown, content hashes, schema/reader versions, content status, explicit non-publication state, and validation timestamps. Stores the complete recommendation set without a forwarder-derived item cap. Unique by run and format. |
+| `report_artifacts` | Internal `engine-shadow-result-v1`, optional current-v3 Sidecar, Markdown, content hashes, schema/reader versions, coverage/content status, explicit non-publication state, and validation timestamps. Stores the complete recommendation set without a forwarder-derived item cap. Unique by run and format. |
 | `artifact_history` | Recommendation dates and current 30-day identity history, including imported production seed origin. |
 | `review_state` | Latest defer/reject outcome and review-after date per artifact. |
 | `preference_signals` | Single-user sanitized interested/not-interested signals and import provenance. Missing rows mean unknown. |
@@ -397,7 +417,6 @@ failed_contract
 failed_source_system
 failed_model_provider
 failed_budget
-failed_candidate_shortage
 cancelled_operator
 ```
 
@@ -405,6 +424,9 @@ Only `shadow_ready`, `compared`, and `valid_no_update` are successful content
 outcomes. A comparison delay does not invalidate an already valid shadow
 artifact; it leaves the run `shadow_ready` with a pending comparison. A missed
 or failed date is recorded as an incident and is not automatically backfilled.
+Candidate shortage after complete bounded collection is represented by
+`coverageStatus: exhausted_below_target` on a successful content outcome, not
+by a failed run state.
 
 ## Idempotency
 
@@ -447,10 +469,11 @@ run-level recovery. Never silently spend through repeated ambiguous calls.
 | Authentication, schema/config error, blocked domain, unsupported content, or hard budget limit | Non-retryable Workflow error after incident write | Failed run |
 | One malformed model output | One repair using the same role and only validation errors | Failed candidate/run if still invalid; never parent-filled evidence |
 | Candidate locator failure | Same-repository bounded recovery, correction, re-filter, or same-lane replacement | Candidate removal unless resolved |
-| Candidate invalid/ambiguous | Preserve complete trajectory, remove, replace within pool bounds | Run may continue if at least five verified candidates remain |
+| Candidate invalid/ambiguous | Preserve complete trajectory, remove, and replace only while pool/pass budget remains | Continue with all remaining candidates; mark `exhausted_below_target` if the target can no longer be reached |
 | Material verifier disagreement | One field-scoped fresh adjudication | Remove with follow-up if unresolved |
 | Broad source or model outage | Stop after connector/provider retry budget | Failed run, not `no_update` |
-| Fewer than five verified candidates after limits | Stop | `failed_candidate_shortage` |
+| Fewer than five verified candidates after complete bounded discovery | Verify and decide all remaining candidates; do not invent replacements or lower filters | Valid `exhausted_below_target`; content outcome follows actual decisions |
+| Fewer than five because a required source lane did not complete | Preserve incident and stop | Failed run with `coverageStatus: source_incomplete`, never `no_update` |
 | Editor returns zero recommends after all verified decisions | Validate complete coverage | `valid_no_update` |
 | Workflow interruption | Resume from persisted successful step and D1 state | No repeated accepted work |
 | Production baseline not yet available | Delay/retry comparison only | Shadow content remains valid; comparison pending |
@@ -467,7 +490,8 @@ the cost and date policy still determine whether the run should continue.
 
 Start with these per-logical-run caps:
 
-- 20 total distinct candidates;
+- 8-12 initial candidates and 20 cumulative distinct candidates only when
+  bounded replenishment is needed;
 - three candidate filter passes;
 - 30 web-search tool calls;
 - one primary verifier plus at most one contract repair per eligible artifact;
@@ -633,7 +657,8 @@ Before scheduled cloud shadow runs:
   ambiguous, resolved-dispute, unresolved-dispute, and complete-removal cases
   pass;
 - duplicate schedule, Workflow restart, retryable provider failure, malformed
-  output repair, budget stop, source shortage, and missed-baseline tests pass;
+  output repair, budget stop, valid below-target exhaustion, required-source
+  shortage, and missed-baseline tests pass;
 - no test can create a production KV write, ingest request, or PushPlus call.
 
 ### Gate B: Isolated Cloud Runs
@@ -646,9 +671,11 @@ Run at least three manual cloud shadows with different source plans:
 - one interruption/restart run proving completed steps and accepted model
   outputs are not repeated.
 
-Every run must produce a complete auditable D1 trajectory and a valid shadow
-Sidecar/Markdown pair, or an explicit failed-run record. No failure may become
-`no_update`.
+Every run must produce a complete auditable D1 trajectory and a valid internal
+shadow artifact/Markdown pair, or an explicit failed-run record. A current-v3
+Sidecar is additionally required when the existing v3 minimums are satisfied.
+No failure may become `no_update`; a completely collected
+`exhausted_below_target` run is not a failure.
 
 ### Gate C: Scheduled Paired Shadow
 
@@ -702,6 +729,9 @@ disabled, edited, or rescheduled as a consequence of shadow acceptance alone.
 
 - Approve this plan.
 - Extract pure v3, identity, history, source-plan, and Harness v2 modules.
+- Add an internal `engine-shadow-result-v1` envelope and parameterized
+  candidate/evidence minimums; keep production defaults and public schemas
+  unchanged.
 - Keep all production commands and behavior intact.
 - Add D1 migrations and cloud-only fixtures.
 

@@ -60,6 +60,14 @@ orchestration, and persisted run state.
 - Preserve the current report contracts, Harness v2 evidence rules, reader
   contract, history semantics, and no-backfill incident policy unless the new
   Stage 3A plan explicitly replaces them.
+- Stage 3A explicitly treats five eligible candidates as a replenishment
+  target rather than a validity minimum. Start with 8-12 candidates and stop
+  replenishing as soon as five are eligible; otherwise exhaust at most three
+  passes and twenty cumulative candidates, then verify and decide all 0-4
+  remaining candidates with `coverageStatus: exhausted_below_target`. This is
+  valid only when required source collection completed. Source/API failure is
+  still a failed run. Current production keeps its existing five-candidate
+  minimum until shadow evidence supports a separate migration decision.
 - The in-prompt verifier roles in the current Automation are a validated domain
   contract to port, not the target hosted runtime architecture.
 
