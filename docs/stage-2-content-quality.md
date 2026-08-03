@@ -64,6 +64,12 @@ contract and are not current acceptance requirements.
 This document is the single living record for the Stage 2 plan, rollout,
 production acceptance, and post-launch observation.
 
+## Historical Quality v2.1 Calibration Record
+
+The following section is retained for audit only. Numeric Quality v2.1 scoring
+was superseded by the qualitative v3 production contract described above and
+must not be treated as current Stage 3A requirements.
+
 Quality v2.1 calibration started on 2026-07-12 after a three-star repository
 received a score of 75 despite having only four evidence references. The item
 may still be useful, but the score was not sufficiently supported. The
@@ -86,7 +92,7 @@ The goal is not a predetermined mix of popular and obscure projects. It is a
 defensible set of high-quality recommendations whose scores can be traced to
 observable evidence.
 
-Latest local verification completed on 2026-07-12:
+Historical local verification snapshot from 2026-07-12:
 
 - 31 Node tests passed, including deterministic GitHub discovery, SQLite
   snapshots, repository-diverse artifact export, field-level evidence binding, artifact-level
@@ -106,9 +112,9 @@ Latest local verification completed on 2026-07-12:
   bindings, only 10 candidates were reviewed, discovery lanes and required
   external-source attempts were missing, its artifact path was absent, and its
   low community score had no qualifying external adoption evidence.
-- Automated screenshot verification is still pending because the in-app browser
-  blocked the local preview address. It must be completed before production
-  rollout, together with the real-device PushPlus comparison.
+- At that snapshot, automated screenshot verification and the real-device
+  PushPlus comparison were still pending. Both were completed in the later
+  production acceptance and Stage 2.5 dual-surface validation recorded below.
 
 ## Goal
 

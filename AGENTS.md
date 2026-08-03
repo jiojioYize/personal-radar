@@ -42,6 +42,27 @@ multi-agent production flow is observed.
 
 Local Codex Automation can read/write project files and run on schedule, but its shell network access may fail. Treat the local forwarder as the production delivery bridge.
 
+## Stage 3A Transition
+
+Stage 1, Stage 2, and Stage 2.5 are complete. The next implementation stage is
+Stage 3A: replace the local Codex Automation and Windows forwarder dependency
+with a hosted multi-agent content engine built from model APIs, durable cloud
+orchestration, and persisted run state.
+
+- The Automation flow above remains the current production baseline until an
+  explicit cutover. Do not disable or rewrite its schedule as part of initial
+  Stage 3A development.
+- Stage 3A should begin as a non-publishing cloud shadow and must not update the
+  website or PushPlus while it is being compared with production.
+- Cloudflare Workflows is the preferred scheduling and durable-orchestration
+  direction. Model calls require API credentials stored as Cloudflare secrets;
+  a Codex subscription or desktop Automation is not a callable model backend.
+- Preserve the current report contracts, Harness v2 evidence rules, reader
+  contract, history semantics, and no-backfill incident policy unless the new
+  Stage 3A plan explicitly replaces them.
+- The in-prompt verifier roles in the current Automation are a validated domain
+  contract to port, not the target hosted runtime architecture.
+
 ## Schedule
 
 - The Stage 2.1 GitHub collector is no longer required by the v3 production
@@ -181,6 +202,9 @@ Stage 2 implementation and acceptance are maintained in
 
 Multi-agent orchestration, disagreement handling, and Harness v2 promotion
 criteria are maintained in `docs/agent-harness.md`.
+
+Stage 3A hosted engine architecture, rollout, cost controls, and acceptance
+criteria should be created and maintained in `docs/stage-3-agent-engine.md`.
 
 Current Stage 2 production rules:
 

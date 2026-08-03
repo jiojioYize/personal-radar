@@ -12,6 +12,12 @@ Harness v2 changes only source verification and its internal evidence
 contract. It does not change discovery, recommendation judgment, the website,
 or PushPlus.
 
+These role boundaries and evidence contracts are portable into Stage 3A, but
+the current Automation prompt is not the target hosted architecture. Stage 3A
+should invoke the roles through independently observable model-API steps under
+a durable orchestrator, preserve deterministic validation between steps, and
+run as a non-publishing shadow before replacing the current production flow.
+
 ## Implementation Status
 
 As of 2026-08-01:

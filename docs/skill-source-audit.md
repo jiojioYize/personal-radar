@@ -1,13 +1,14 @@
 # Skill Radar Source Audit
 
-Last updated: 2026-07-16
+Last updated: 2026-08-03
 
 ## Status
 
 The source landscape review is complete. After two successful isolated shadow
-dates, `portfolio-v1` was approved for controlled production on 2026-07-16.
-The original three-source flow remains available only as a short-term rollback
-reference while the first three production dates are observed.
+dates, `portfolio-v1` was approved for controlled production on 2026-07-16 and
+subsequently became the Stage 2 production baseline. The original three-source
+flow is retained only as a historical isolated-test reference; it is not a
+production fallback or the starting point for Stage 3A.
 
 The promotion deliberately accepts one residual test gap: the bounded model
 recovery path was covered by code-level boundary tests but was not naturally
@@ -17,7 +18,7 @@ recovery stops report generation instead of publishing invalid content.
 
 ## Decision Summary
 
-The current three-source flow was valuable because it made Automation bounded
+The former three-source flow was valuable because it made Automation bounded
 and repeatable. It should not become the permanent source strategy:
 
 - the three sources have different meanings and quality boundaries;
@@ -41,6 +42,11 @@ usage-ranked skill registry
 The recommendation target remains a concrete skill, rule, mode, or focused
 instruction pack. A plugin, extension, marketplace, or directory is a discovery
 container, not automatically a recommendation unit.
+
+Stage 3A should preserve this layered-source and exact-artifact model while
+replacing the local rotation and browsing mechanism with cloud collection and
+durable orchestration. The specific Stage 2 source list is an evidence-backed
+baseline to reassess, not an immutable hosted-engine requirement.
 
 ## Object Model
 

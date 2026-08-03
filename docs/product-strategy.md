@@ -1,6 +1,6 @@
 # Personal Radar Product Strategy
 
-Last updated: 2026-07-16
+Last updated: 2026-08-03
 
 ## Purpose
 
@@ -162,7 +162,7 @@ The early hosted product should not run a complete AI research task separately
 for every user. It should:
 
 1. generate one high-quality shared base radar;
-2. attach structured categories, evidence, scores, and risk signals;
+2. attach structured categories, evidence, qualitative decisions, and risk signals;
 3. filter, rank, and summarize that base content for each subscriber.
 
 This keeps model cost controlled while still allowing meaningful
@@ -222,14 +222,16 @@ structured report
 └─ bilingual Markdown artifact
 ```
 
-Push notifications should show all selected items concisely, emphasize the
-strongest recommendation, and link to the complete report. The first version
-uses HTML hierarchy without generated images.
+Push notifications should show all selected items concisely and link to the
+complete report. Qualified recommendations are presented without rank numbers
+or a visually privileged first item; interest signals may change order without
+implying a universal top pick. The current version uses HTML hierarchy without
+generated images.
 
 ## Website Evolution
 
-The current website is a public MVP report archive and should remain available
-during the content-quality stage.
+The current website is a public report archive and should remain available
+during the Stage 3A engine migration.
 
 The mature hosted website is expected to become:
 
@@ -264,6 +266,17 @@ Storage should evolve with product complexity rather than migrate early.
   personal feedback.
 - KV remains appropriate while writes are infrequent and the product is
   single-user and read-heavy.
+
+### Stage 3A: Hosted Agent Engine
+
+Cloudflare D1 is introduced for the minimum durable operational state that is
+not already owned by Cloudflare Workflows, including daily-run idempotency,
+candidate and evidence identity, publication state, and incident metadata. KV
+continues serving existing report reads and caches during migration.
+
+Stage 3A does not add user accounts or subscriptions. It first proves that the
+content engine can run in the cloud without Codex Automation, a local proxy, a
+Windows forwarder, or a powered-on personal computer.
 
 ### Hosted Subscription Stage
 
@@ -345,13 +358,28 @@ product iteration rather than unfinished Stage 2.5 scope.
 Richer media and portfolio illustrations are separate follow-up work. Generated
 images are not a dependency for this stage.
 
-### Stage 3: Hosted Subscription
+### Stage 3A: Hosted Multi-Agent Content Engine
 
-Begin only after the current content and reading experience demonstrates
-sustained value.
+Status: ready to begin after completion of Stage 2.5.
+
+Replace Codex Automation and the local forwarder with model APIs, Cloudflare
+Workflows scheduling, cloud-side source collection, deterministic contracts,
+and persisted run state. The first release is a non-publishing shadow for the
+existing single-user `skill-radar`; the current production chain remains the
+fallback until explicit promotion.
+
+### Stage 3B: Hosted Subscription Product
 
 Add accounts, entitlement rules, delivery subscriptions, explicit preferences,
-feedback-backed personalization, D1 storage, and hosted operations.
+feedback-backed personalization, and multi-user hosted operations. One shared
+high-quality base radar should be personalized after generation rather than
+rerunning full research for every subscriber.
+
+### Stage 3C: Commercial And Scale Validation
+
+Validate model cost, subscription value, delivery reliability, privacy,
+operational support, and channel expansion before treating the system as a
+mature commercial product.
 
 ### Later Expansion
 
