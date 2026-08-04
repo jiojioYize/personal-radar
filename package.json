@@ -16,7 +16,8 @@
     "quality:validate-multi-agent-shadow": "node tools/quality/validate-multi-agent-shadow.mjs",
     "quality:validate-verification": "node tools/quality/validate-verification-evidence.mjs",
     "quality:validate-harness-v2": "node tools/quality/validate-verification-harness-v2.mjs",
-    "quality:validate-harness-adjudication": "node tools/quality/validate-harness-adjudication.mjs"
+    "quality:validate-harness-adjudication": "node tools/quality/validate-harness-adjudication.mjs",
+    "stage3a:check": "wrangler deploy --dry-run --config wrangler.stage3a.jsonc --outdir .wrangler/stage3a-dry-run"
   },
   "devDependencies": {
     "ajv": "^8.20.0",

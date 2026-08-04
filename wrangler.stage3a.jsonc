@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "personal-radar-stage3a-shadow",
+  "main": "src/stage3a/index.js",
+  "compatibility_date": "2026-08-04",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "STAGE3A_EXECUTION_ENABLED": "false",
+    "PUBLICATION_ENABLED": "false"
+  },
+  "d1_databases": [
+    {
+      "binding": "ENGINE_DB",
+      "database_name": "personal-radar-stage3a-shadow",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations/stage3a"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "personal-radar-skill-radar-shadow",
+      "binding": "SKILL_RADAR_SHADOW_WORKFLOW",
+      "class_name": "SkillRadarShadowWorkflow"
+    }
+  ]
+}

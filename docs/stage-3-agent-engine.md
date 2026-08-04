@@ -727,6 +727,14 @@ disabled, edited, or rescheduled as a consequence of shadow acceptance alone.
 
 ### 3A.0: Documentation And Contract Extraction
 
+Implementation checkpoint (2026-08-04): the internal
+`engine-shadow-result-v1` contract, parameterized Harness v2 minimum, initial
+D1 migration, D1 run repository, and fail-closed Workflow bootstrap are now
+implemented on `codex/stage-3a-shadow`. `wrangler.stage3a.jsonc` is an isolated
+dry-run configuration with a placeholder D1 ID, no routes, no schedule,
+`STAGE3A_EXECUTION_ENABLED=false`, and `PUBLICATION_ENABLED=false`. No cloud
+resource has been created and the production `wrangler.toml` remains unchanged.
+
 - Approve this plan.
 - Extract pure v3, identity, history, source-plan, and Harness v2 modules.
 - Add an internal `engine-shadow-result-v1` envelope and parameterized
