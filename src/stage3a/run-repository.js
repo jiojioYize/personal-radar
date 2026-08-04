@@ -124,6 +124,24 @@ export class ShadowRunRepository {
       WHERE channel = ? AND report_date = ? AND mode = 'shadow' AND contract_version = ?
     `).bind(params.channel, params.reportDate, params.contractVersion).first();
   }
+
+  async setSourceCollectionStatus({ runId, status, now }) {
+    if (!["complete", "degraded", "source_incomplete"].includes(status)) {
+      throw new TypeError("source collection status is invalid");
+    }
+    await this.database.prepare(`
+      UPDATE engine_runs SET source_collection_status = ?, updated_at = ?
+      WHERE id = ? AND status = 'collecting'
+        AND (source_collection_status IS NULL OR source_collection_status = ?)
+    `).bind(status, now, runId, status).run();
+    const row = await this.database.prepare(`
+      SELECT status, source_collection_status FROM engine_runs WHERE id = ?
+    `).bind(runId).first();
+    if (!row || row.status !== "collecting" || row.source_collection_status !== status) {
+      throw new ShadowRunConflictError("source collection status conflicts with persisted run state");
+    }
+    return { runId, status: row.source_collection_status };
+  }
 }
 
 function assertFrozenRunConfiguration(row, params) {

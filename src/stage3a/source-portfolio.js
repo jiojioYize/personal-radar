@@ -143,6 +143,16 @@ export function validateCollectionCoverage(results) {
   return errors;
 }
 
+export function deriveSourceCollectionStatus(tasks, results) {
+  const successfulTaskIds = new Set((results || [])
+    .filter((result) => result?.status === "succeeded")
+    .map((result) => result.taskId));
+  const complete = tasks.length > 0
+    && tasks.every((task) => successfulTaskIds.has(task.taskId));
+  if (complete) return "complete";
+  return validateCollectionCoverage(results).length === 0 ? "degraded" : "source_incomplete";
+}
+
 export function validateCollectionResult(task, result) {
   const errors = [];
   if (result?.taskId !== task?.taskId
@@ -150,17 +160,31 @@ export function validateCollectionResult(task, result) {
     || result?.sourceId !== task?.sourceId) {
     errors.push("collection result identity does not match its task");
   }
-  if (!["succeeded", "failed"].includes(result?.status)) errors.push("collection result status is invalid");
+  if (!["succeeded", "failed", "degraded_cached"].includes(result?.status)) {
+    errors.push("collection result status is invalid");
+  }
+  if (typeof result?.retryable !== "boolean") errors.push("collection result retryable must be boolean");
   if (!Array.isArray(result?.candidateSignals)) errors.push("candidateSignals must be an array");
   const signals = Array.isArray(result?.candidateSignals) ? result.candidateSignals : [];
   if (signals.length > task.maxCandidateSignals) {
     errors.push(`collection result exceeds ${task.maxCandidateSignals} candidate signals`);
+  }
+  if (new TextEncoder().encode(JSON.stringify(signals)).byteLength > 65_536) {
+    errors.push("candidate signals exceed their total byte limit");
   }
   if (result?.status === "succeeded" && !/^[a-f0-9]{64}$/.test(result?.contentHash || "")) {
     errors.push("successful collection requires a SHA-256 content hash");
   }
   if (result?.status === "failed" && !result?.errorClass) {
     errors.push("failed collection requires an error class");
+  }
+  const expectedCacheStatuses = {
+    succeeded: new Set(["fresh", "validated_304"]),
+    failed: new Set(["none"]),
+    degraded_cached: new Set(["stale_fallback"]),
+  };
+  if (!expectedCacheStatuses[result?.status]?.has(result?.cacheStatus)) {
+    errors.push("collection cache status does not match result status");
   }
   if (new TextEncoder().encode(String(result?.boundedExcerpt || "")).byteLength
     > task.maxExcerptBytes) {
@@ -179,6 +203,9 @@ function sourceTask(lane, sourceId, url, extra = {}) {
     provenancePolicy: lane === "communityTrend" ? "independent" : "first_party_or_official",
     maxExcerptBytes: 32_768,
     maxCandidateSignals: 4,
+    maxResponseBytes: 1_048_576,
+    maxRedirects: 2,
+    timeoutMs: 15_000,
     ...extra,
   };
 }

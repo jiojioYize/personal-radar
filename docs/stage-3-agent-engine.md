@@ -738,7 +738,12 @@ The hosted source-plan module now reproduces the validated `portfolio-v1`
 rotation without changing the production CLI, persists one immutable plan hash
 per logical run, advances the explicit run state to `collecting`, and separates
 the global 8-12/20/three-pass candidate budget from per-source candidate
-signals. Network connectors are still contract-only and make no requests yet.
+signals. The first HTTP connector is now implemented but remains untriggered. It records
+fresh success, origin-validated `304` cache success, retryable failure, terminal
+failure, and `degraded_cached` fallback separately. All six assigned sources
+remain attempt targets; `complete` means 1/3/2 success, `degraded` means the
+1/2/1 quorum was met with partial failure, and `source_incomplete` means the
+quorum was missed. Stale cache never counts as a fresh source success.
 
 - Approve this plan.
 - Extract pure v3, identity, history, source-plan, and Harness v2 modules.

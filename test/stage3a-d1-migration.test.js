@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const migrationPath = path.join(root, "migrations", "stage3a", "0001_shadow_engine.sql");
+const sourceMigrationPath = path.join(root, "migrations", "stage3a", "0002_source_collection.sql");
 
 test("creates the complete Stage 3A shadow persistence model and required indexes", async () => {
   const db = await migratedDatabase();
@@ -35,6 +36,10 @@ test("creates the complete Stage 3A shadow persistence model and required indexe
     ]) {
       assert.ok(indexes.has(index), `missing index ${index}`);
     }
+    assert.ok(indexes.has("idx_source_fetches_run_task_attempt"));
+    const runColumns = new Set(db.prepare("PRAGMA table_info(engine_runs)").all()
+      .map((column) => column.name));
+    assert.ok(runColumns.has("source_collection_status"));
   } finally {
     db.close();
   }
@@ -127,6 +132,7 @@ async function migratedDatabase() {
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(await fs.readFile(migrationPath, "utf8"));
+  db.exec(await fs.readFile(sourceMigrationPath, "utf8"));
   return db;
 }
 

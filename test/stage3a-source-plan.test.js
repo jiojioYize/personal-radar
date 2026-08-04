@@ -84,6 +84,8 @@ test("builds bounded collection tasks and requires completed source lanes", () =
     lane: tasks[0].lane,
     sourceId: tasks[0].sourceId,
     status: "succeeded",
+    retryable: false,
+    cacheStatus: "fresh",
     contentHash: "a".repeat(64),
     boundedExcerpt: "bounded evidence",
     candidateSignals: Array.from({ length: 4 }, (_, index) => ({ title: `Signal ${index}` })),
