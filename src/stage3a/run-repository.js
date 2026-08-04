@@ -1,3 +1,5 @@
+import { assertRunTransition } from "./run-state.js";
+
 export class ShadowRunConflictError extends Error {
   constructor(message) {
     super(message);
@@ -89,16 +91,23 @@ export class ShadowRunRepository {
   }
 
   async markClaimed({ runId, now }) {
+    return this.transitionStatus({ runId, from: "scheduled", to: "claimed", now });
+  }
+
+  async transitionStatus({ runId, from, to, now }) {
+    assertRunTransition(from, to);
     await this.database.prepare(`
-      UPDATE engine_runs SET status = 'claimed', updated_at = ?
-      WHERE id = ? AND status = 'scheduled'
-    `).bind(now, runId).run();
+      UPDATE engine_runs SET status = ?, updated_at = ?
+      WHERE id = ? AND status = ?
+    `).bind(to, now, runId, from).run();
     const row = await this.database.prepare(`
       SELECT id, status, publication_state FROM engine_runs WHERE id = ?
     `).bind(runId).first();
     if (!row) throw new Error("logical run no longer exists");
-    if (row.status !== "claimed") {
-      throw new ShadowRunConflictError(`logical run cannot be claimed from status ${row.status}`);
+    if (row.status !== to) {
+      throw new ShadowRunConflictError(
+        `logical run cannot transition ${from} -> ${to} from status ${row.status}`,
+      );
     }
     if (row.publication_state !== "blocked_shadow") {
       throw new ShadowRunConflictError("shadow publication state is not blocked");

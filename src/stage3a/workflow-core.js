@@ -1,4 +1,5 @@
 import { logicalRunId, validateShadowRunParams } from "./run-identity.js";
+import { createSourcePortfolioPlan } from "./source-portfolio.js";
 
 const DATABASE_RETRY = {
   retries: { limit: 3, delay: "2 seconds", backoff: "exponential" },
@@ -43,5 +44,36 @@ export async function bootstrapShadowWorkflow({ event, step, repository, now = n
     status: claimed.status,
     publicationState: claimed.publicationState,
     nextStage: "source_plan",
+  };
+}
+
+export async function prepareShadowSourcePlan({
+  run,
+  reportDate,
+  step,
+  runRepository,
+  sourcePlanRepository,
+  now = new Date(),
+}) {
+  const timestamp = now.toISOString();
+  const completedRunCount = await step.do("count completed source rotations", DATABASE_RETRY, () =>
+    sourcePlanRepository.completedRunCount({ beforeReportDate: reportDate }));
+  const proposedPlan = createSourcePortfolioPlan({ reportDate, completedRunCount });
+  const authoritative = await step.do("persist authoritative source plan", DATABASE_RETRY, () =>
+    sourcePlanRepository.createOrGetPlan({ runId: run.runId, plan: proposedPlan, now: timestamp }));
+  const collecting = await step.do("enter source collection state", DATABASE_RETRY, () =>
+    runRepository.transitionStatus({
+      runId: run.runId,
+      from: "claimed",
+      to: "collecting",
+      now: timestamp,
+    }));
+  return {
+    ...run,
+    status: collecting.status,
+    sourcePlanId: authoritative.id,
+    sourcePlanHash: authoritative.planHash,
+    sourcePlan: authoritative.plan,
+    nextStage: "source_collection",
   };
 }

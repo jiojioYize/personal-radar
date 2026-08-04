@@ -734,6 +734,11 @@ implemented on `codex/stage-3a-shadow`. `wrangler.stage3a.jsonc` is an isolated
 dry-run configuration with a placeholder D1 ID, no routes, no schedule,
 `STAGE3A_EXECUTION_ENABLED=false`, and `PUBLICATION_ENABLED=false`. No cloud
 resource has been created and the production `wrangler.toml` remains unchanged.
+The hosted source-plan module now reproduces the validated `portfolio-v1`
+rotation without changing the production CLI, persists one immutable plan hash
+per logical run, advances the explicit run state to `collecting`, and separates
+the global 8-12/20/three-pass candidate budget from per-source candidate
+signals. Network connectors are still contract-only and make no requests yet.
 
 - Approve this plan.
 - Extract pure v3, identity, history, source-plan, and Harness v2 modules.
