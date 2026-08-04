@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar.dailyingest.cn/schemas/engine-shadow-result-v1.json",
+  "title": "Personal Radar Stage 3A internal shadow result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion", "channel", "reportDate", "mode", "coverageStatus",
+    "publicationState", "runStatus", "candidateStats", "publicV3Compatible",
+    "content", "failure"
+  ],
+  "properties": {
+    "contractVersion": { "const": "engine-shadow-result-v1" },
+    "channel": { "const": "skill-radar" },
+    "reportDate": { "type": "string", "format": "date" },
+    "mode": { "const": "shadow" },
+    "coverageStatus": {
+      "enum": ["target_met", "exhausted_below_target", "source_incomplete"]
+    },
+    "publicationState": { "const": "blocked_shadow" },
+    "runStatus": { "enum": ["shadow_ready", "valid_no_update", "failed"] },
+    "candidateStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "initialCount", "cumulativeCount", "eligibleCount", "filterPasses",
+        "requiredSourcesComplete", "replenishmentStopReason"
+      ],
+      "properties": {
+        "initialCount": { "type": "integer", "minimum": 0, "maximum": 12 },
+        "cumulativeCount": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "eligibleCount": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "filterPasses": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "requiredSourcesComplete": { "type": "boolean" },
+        "replenishmentStopReason": {
+          "enum": [
+            "target_met", "pass_limit", "candidate_limit",
+            "sources_exhausted", "source_incomplete"
+          ]
+        }
+      }
+    },
+    "publicV3Compatible": { "type": "boolean" },
+    "content": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "readerContractVersion", "status", "channel", "reportDate",
+            "summary", "conclusion", "stats", "items", "decisions"
+          ],
+          "properties": {
+            "readerContractVersion": { "const": 2 },
+            "status": { "enum": ["published", "no_update"] },
+            "channel": { "const": "skill-radar" },
+            "reportDate": { "type": "string", "format": "date" },
+            "summary": {
+              "$ref": "https://radar.dailyingest.cn/schemas/skill-radar-report-v3.json#/$defs/localizedText"
+            },
+            "conclusion": {
+              "$ref": "https://radar.dailyingest.cn/schemas/skill-radar-report-v3.json#/$defs/localizedText"
+            },
+            "stats": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "reviewedCount", "candidateCount", "selectedCount",
+                "duplicateCount", "deferredCount", "rejectedCount", "sourceCounts"
+              ],
+              "properties": {
+                "reviewedCount": { "type": "integer", "minimum": 0, "maximum": 20 },
+                "candidateCount": { "type": "integer", "minimum": 8, "maximum": 20 },
+                "selectedCount": { "type": "integer", "minimum": 0, "maximum": 20 },
+                "duplicateCount": { "type": "integer", "minimum": 0 },
+                "deferredCount": { "type": "integer", "minimum": 0, "maximum": 20 },
+                "rejectedCount": { "type": "integer", "minimum": 0, "maximum": 20 },
+                "sourceCounts": {
+                  "type": "object",
+                  "additionalProperties": { "type": "integer", "minimum": 0 }
+                }
+              }
+            },
+            "items": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "$ref": "https://radar.dailyingest.cn/schemas/skill-radar-report-v3.json#/$defs/item"
+              }
+            },
+            "decisions": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "$ref": "https://radar.dailyingest.cn/schemas/skill-radar-report-v3.json#/$defs/decision"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "failure": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["class", "message", "retryable"],
+          "properties": {
+            "class": { "type": "string", "minLength": 1 },
+            "message": { "type": "string", "minLength": 1 },
+            "retryable": { "type": "boolean" }
+          }
+        }
+      ]
+    }
+  }
+}

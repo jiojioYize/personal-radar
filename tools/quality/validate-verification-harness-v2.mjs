@@ -62,8 +62,23 @@ if (directlyInvoked) {
   }
 }
 
-export async function validateVerificationHarnessV2({ evidence, candidates, draft = null }) {
-  const schema = await readJson(SCHEMA_PATH);
+export async function validateVerificationHarnessV2({
+  evidence,
+  candidates,
+  draft = null,
+  minimumEligibleCandidates = 5,
+}) {
+  if (!Number.isInteger(minimumEligibleCandidates)
+    || minimumEligibleCandidates < 0
+    || minimumEligibleCandidates > 20) {
+    throw new TypeError("minimumEligibleCandidates must be an integer from zero to twenty");
+  }
+  const schema = structuredClone(await readJson(SCHEMA_PATH));
+  if (minimumEligibleCandidates < 5) {
+    // The tracked Harness v2 schema remains the production contract. Hosted
+    // shadow validation relaxes only the in-memory result minimum.
+    schema.properties.results.minItems = 0;
+  }
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   addFormats(ajv);
   const validate = ajv.compile(schema);
@@ -79,18 +94,23 @@ export async function validateVerificationHarnessV2({ evidence, candidates, draf
       },
     );
   }
-  validateHarness(evidence, candidates, draft);
+  validateHarness(evidence, candidates, draft, { minimumEligibleCandidates });
 }
 
-function validateHarness(evidence, candidates, draft) {
+function validateHarness(evidence, candidates, draft, { minimumEligibleCandidates }) {
   if (evidence.reportDate !== candidates.asOf) {
     fail("evidence reportDate must match candidates.asOf");
   }
   const eligible = Array.isArray(candidates.eligibleCandidates) ? candidates.eligibleCandidates : [];
-  if (eligible.length < 5 || eligible.length > 20) {
-    fail("candidates must contain five to twenty eligible candidates");
+  if (eligible.length < minimumEligibleCandidates || eligible.length > 20) {
+    const minimumLabel = minimumEligibleCandidates === 5 ? "five" : minimumEligibleCandidates;
+    fail(`candidates must contain ${minimumLabel} to twenty eligible candidates`);
   }
-  requireCompletedRun(evidence.runs.primary, "runs.primary");
+  if (evidence.results.length > 0) {
+    requireCompletedRun(evidence.runs.primary, "runs.primary");
+  } else {
+    requireUnusedRun(evidence.runs.primary, "runs.primary");
+  }
 
   const expected = new Map(eligible.map((candidate) => [candidate.id, candidate]));
   const retained = new Map();
