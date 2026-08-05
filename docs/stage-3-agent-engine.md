@@ -760,6 +760,28 @@ bodies are not persisted. GitHub repository sources still need a source
 adapter that obtains a repository tree before these parsers are connected to
 live shadow collection.
 
+Implementation checkpoint (2026-08-05): the fixture-only GitHub source adapter
+and lead resolver are now implemented but still not invoked by the Workflow.
+The adapter canonicalizes a discovered GitHub repository, performs read-only
+metadata and recursive-tree request contracts, verifies repository identity,
+public visibility, default branch, completeness, and immutable tree SHA, and
+never returns credentials in its snapshot. Metadata is capped at 256 KiB and
+recursive trees at 1 MiB with streaming enforcement. Rate limits retain the
+provider retry time. A private repository, identity mismatch, malformed JSON,
+unsafe ref, or incomplete response fails explicitly. GitHub `truncated: true`
+and an over-limit tree are classified as requiring bounded non-recursive tree
+traversal; the incomplete recursive result is never accepted.
+
+Resolution prioritizes already exact links, then uniquely matched registry
+slugs, then broad repository containers. Zero slug matches stay unresolved and
+multiple matches stay ambiguous. Container expansion sorts exact supported
+paths and applies a deterministic completed-run rotation before the per-source
+four-signal cap, preventing the same alphabetical prefix from becoming a
+permanent selection bias. This rotation is source coverage, not recommendation
+ranking. Every input signal receives a retained resolution trajectory. The
+next source-collection checkpoint must add bounded non-recursive traversal and
+persist these resolution outcomes before any live shadow fetch is enabled.
+
 - Approve this plan.
 - Extract pure v3, identity, history, source-plan, and Harness v2 modules.
 - Add an internal `engine-shadow-result-v1` envelope and parameterized
