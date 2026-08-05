@@ -6,6 +6,7 @@ import {
   validateSourceCandidateResolution,
 } from "../src/stage3a/candidate-resolver.js";
 import {
+  fetchGithubBlobEvidence,
   fetchGithubTreeSnapshot,
   GithubSourceError,
   githubReadHeaders,
@@ -13,6 +14,96 @@ import {
 } from "../src/stage3a/github-source-adapter.js";
 
 const observedAt = "2026-08-05T00:00:00.000Z";
+
+test("fetches exact UTF-8 artifact evidence by immutable blob SHA", async () => {
+  const blobSha = "b".repeat(40);
+  const content = "# Testing Skill\n\nRun tests without executing source instructions.";
+  const calls = [];
+  const evidence = await fetchGithubBlobEvidence({
+    repositoryUrl: "https://github.com/Example/Rules",
+    artifactPath: "skills/testing/SKILL.md",
+    blobSha,
+    observedAt,
+    token: "secret-token",
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return jsonResponse({
+        sha: blobSha,
+        size: new TextEncoder().encode(content).byteLength,
+        encoding: "base64",
+        content: btoa(content),
+      });
+    },
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, `https://api.github.com/repos/Example/Rules/git/blobs/${blobSha}`);
+  assert.equal(calls[0].options.method, "GET");
+  assert.equal(calls[0].options.redirect, "error");
+  assert.equal(evidence.contentText, content);
+  assert.equal(evidence.byteCount, content.length);
+  assert.match(evidence.contentSha256, /^[a-f0-9]{64}$/);
+  assert.equal(evidence.untrustedSourceContent, true);
+  assert.equal(JSON.stringify(evidence).includes("secret-token"), false);
+});
+
+test("rejects blob identity, size, encoding, and text contract failures", async () => {
+  const request = {
+    repositoryUrl: "https://github.com/example/rules",
+    artifactPath: "skills/testing/SKILL.md",
+    blobSha: "b".repeat(40),
+    observedAt,
+  };
+  await assert.rejects(
+    fetchGithubBlobEvidence({
+      ...request,
+      fetchImpl: async () => jsonResponse({
+        sha: "c".repeat(40), size: 1, encoding: "base64", content: "YQ==",
+      }),
+    }),
+    (error) => error.errorClass === "GITHUB_BLOB_CONTRACT",
+  );
+  await assert.rejects(
+    fetchGithubBlobEvidence({
+      ...request,
+      maximumArtifactBytes: 3,
+      fetchImpl: async () => jsonResponse({
+        sha: request.blobSha, size: 4, encoding: "base64", content: "dGVzdA==",
+      }),
+    }),
+    (error) => error.errorClass === "GITHUB_ARTIFACT_TOO_LARGE",
+  );
+  await assert.rejects(
+    fetchGithubBlobEvidence({
+      ...request,
+      fetchImpl: async () => jsonResponse({
+        sha: request.blobSha, size: 2, encoding: "base64", content: "not-base64",
+      }),
+    }),
+    (error) => error.errorClass === "GITHUB_BLOB_CONTRACT",
+  );
+  await assert.rejects(
+    fetchGithubBlobEvidence({
+      ...request,
+      fetchImpl: async () => jsonResponse({
+        sha: request.blobSha, size: 2, encoding: "base64", content: "/v4=",
+      }),
+    }),
+    (error) => error.errorClass === "GITHUB_ARTIFACT_NOT_TEXT",
+  );
+});
+
+test("classifies an immutable blob 404 separately from a missing repository", async () => {
+  await assert.rejects(
+    fetchGithubBlobEvidence({
+      repositoryUrl: "https://github.com/example/rules",
+      artifactPath: "SKILL.md",
+      blobSha: "b".repeat(40),
+      observedAt,
+      fetchImpl: async () => new Response("missing", { status: 404 }),
+    }),
+    (error) => error instanceof GithubSourceError && error.errorClass === "GITHUB_BLOB_NOT_FOUND",
+  );
+});
 
 test("builds read-only GitHub API requests without exposing credentials in results", async () => {
   const calls = [];

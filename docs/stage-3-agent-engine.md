@@ -380,6 +380,7 @@ The minimum schema is:
 | `candidate_discoveries` | Exact artifact observations with tree/blob SHA evidence. Multiple sources may observe the same candidate before global candidate-pool normalization. |
 | `candidate_pool_passes` | Immutable input/result hashes and counts for each global filter pass. Separates the coverage status from the next action, so an exhausted below-target pool still advances to verification. Unique by run and pass. |
 | `candidate_filter_events` | Complete per-pass disposition for every distinct discovered artifact, including selected, history-filtered, duplicate, target-met, and candidate-budget deferrals, with primary and corroborating discovery links. |
+| `evidence_bundles` | One bounded exact-artifact source body per eligible run candidate, anchored to its discovery tree/blob SHA, with byte count, SHA-256, untrusted-content policy, immutable bundle hash, and verification-case link. Unique by run and candidate. |
 | `artifacts` | Canonical repository URL, artifact path/key, type, container, provenance, first/last seen, and identity lineage. Unique by canonical artifact key. |
 | `run_candidates` | Candidate snapshot, lane/source metadata, filter pass, eligibility, exclusion reason, material-change evidence, and final disposition. Unique by `(run_id, candidate_id)`. |
 | `verification_cases` | Original identity, current identity, routing flags, disagreement fields, disposition, removal reason, and follow-up state. |
@@ -850,6 +851,32 @@ pool's explicit next action is `verify_below_target`: all remaining eligible
 candidates still proceed. It is not a stop or a synthetic `no_update`. Live
 shadow fetches, Workflow wiring, model calls, public writes, and PushPlus remain
 disabled.
+
+The `0005_artifact_evidence.sql` migration and fixture-only evidence repository
+now implement the next boundary. Evidence preparation is allowed only after the
+latest candidate-pool pass says `verify` or `verify_below_target`; only
+code-eligible `run_candidates` become tasks. A filtered candidate cannot create
+a model case. Every task is rebuilt from the authoritative pool snapshot and
+its exact primary discovery, including repository, path, tree SHA, and blob
+SHA, so caller-supplied identity drift is rejected.
+
+GitHub artifact content is fetched through the read-only Git blob endpoint by
+the already recorded immutable blob SHA, not by a moving branch name. The
+adapter validates response SHA, Base64 encoding, declared and decoded size,
+UTF-8 text, absence of binary nulls, and a separately computed SHA-256. The
+application cap is 128 KiB and the JSON transport cap is 256 KiB, far below the
+provider limit. Source text is explicitly marked untrusted and never executed.
+This checkpoint stores the complete exact artifact only within that bound; the
+later verifier-request compiler must create a smaller role-specific evidence
+packet before model input rather than sending arbitrary repository pages.
+
+Bundle metadata excludes credentials and records the source API URL, fetch
+time, byte count, content hash, identity task, and non-execution policy. D1
+persists the bounded content, immutable bundle hash, and linked pending
+`verification_case` in one transaction. A forced case-insert failure rolls the
+bundle back; replay verifies content, metadata, identity, and case linkage.
+The hosted model connector is still absent and no evidence task is wired into
+the Workflow entrypoint.
 
 - Approve this plan.
 - Extract pure v3, identity, history, source-plan, and Harness v2 modules.

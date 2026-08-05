@@ -3,6 +3,8 @@ import { canonicalRepositoryUrl } from "./candidate-signals.js";
 export const DEFAULT_GITHUB_API_VERSION = "2022-11-28";
 export const GITHUB_METADATA_BYTE_LIMIT = 262_144;
 export const GITHUB_TREE_BYTE_LIMIT = 1_048_576;
+export const GITHUB_ARTIFACT_BYTE_LIMIT = 131_072;
+export const GITHUB_BLOB_RESPONSE_BYTE_LIMIT = 262_144;
 export const DEFAULT_GITHUB_TRAVERSAL_LIMITS = Object.freeze({
   maximumRequests: 64,
   maximumDepth: 8,
@@ -84,6 +86,79 @@ export async function fetchGithubTreeSnapshot({
     treeRequests: 1,
     collectedTreeBytes: null,
   });
+}
+
+export async function fetchGithubBlobEvidence({
+  repositoryUrl,
+  artifactPath,
+  blobSha,
+  observedAt,
+  token,
+  fetchImpl = fetch,
+  apiVersion = DEFAULT_GITHUB_API_VERSION,
+  timeoutMs = 15_000,
+  maximumArtifactBytes = GITHUB_ARTIFACT_BYTE_LIMIT,
+}) {
+  const repository = githubRepositoryIdentity(repositoryUrl);
+  const path = validateArtifactPath(artifactPath);
+  const sha = String(blobSha || "").toLowerCase();
+  if (!validSha(sha)) throw new TypeError("GitHub blob SHA is invalid");
+  if (!Number.isFinite(Date.parse(observedAt))) throw new TypeError("observedAt is invalid");
+  if (!Number.isInteger(maximumArtifactBytes) || maximumArtifactBytes < 1
+    || maximumArtifactBytes > GITHUB_ARTIFACT_BYTE_LIMIT) {
+    throw new TypeError("maximumArtifactBytes is invalid");
+  }
+  const apiUrl = `${repository.apiUrl}/git/blobs/${sha}`;
+  const value = await githubJson(apiUrl, {
+    fetchImpl,
+    headers: githubReadHeaders({ token, apiVersion }),
+    timeoutMs,
+    maximumBytes: GITHUB_BLOB_RESPONSE_BYTE_LIMIT,
+    bodyErrorClass: "GITHUB_BLOB_RESPONSE_TOO_LARGE",
+    notFoundErrorClass: "GITHUB_BLOB_NOT_FOUND",
+  });
+  if (String(value?.sha || "").toLowerCase() !== sha || value?.encoding !== "base64") {
+    throw new GithubSourceError("GitHub blob identity or encoding did not match the request", {
+      errorClass: "GITHUB_BLOB_CONTRACT",
+    });
+  }
+  if (!Number.isInteger(value.size) || value.size < 0 || value.size > maximumArtifactBytes) {
+    throw new GithubSourceError("GitHub artifact exceeded its application byte limit", {
+      errorClass: "GITHUB_ARTIFACT_TOO_LARGE",
+    });
+  }
+  const bytes = decodeBase64(value.content);
+  if (bytes.byteLength !== value.size || bytes.byteLength > maximumArtifactBytes) {
+    throw new GithubSourceError("GitHub blob size did not match its decoded content", {
+      errorClass: "GITHUB_BLOB_CONTRACT",
+    });
+  }
+  let contentText;
+  try {
+    contentText = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new GithubSourceError("GitHub artifact is not valid UTF-8 text", {
+      errorClass: "GITHUB_ARTIFACT_NOT_TEXT",
+    });
+  }
+  if (contentText.includes("\0")) {
+    throw new GithubSourceError("GitHub artifact contains binary null bytes", {
+      errorClass: "GITHUB_ARTIFACT_NOT_TEXT",
+    });
+  }
+  return {
+    contractVersion: "github-blob-evidence-v1",
+    sourceType: "github_blob",
+    repositoryUrl: repository.repositoryUrl,
+    artifactPath: path,
+    blobSha: sha,
+    apiUrl,
+    observedAt,
+    byteCount: bytes.byteLength,
+    contentSha256: await sha256Bytes(bytes),
+    contentText,
+    untrustedSourceContent: true,
+  };
 }
 
 async function fetchGithubTreeByTraversal({
@@ -195,6 +270,7 @@ async function githubJson(url, {
   bodyErrorClass,
   requiresTraversal = false,
   aggregateBudget = null,
+  notFoundErrorClass = null,
 }) {
   let response;
   try {
@@ -211,7 +287,7 @@ async function githubJson(url, {
       retryable: true,
     });
   }
-  if (!response.ok) throw classifyGithubHttpError(response);
+  if (!response.ok) throw classifyGithubHttpError(response, notFoundErrorClass);
   const remainingAggregate = aggregateBudget
     ? aggregateBudget.maximumBytes - aggregateBudget.usedBytes
     : maximumBytes;
@@ -265,7 +341,7 @@ async function readBoundedResponse(response, maximumBytes, errorClass, requiresT
   return bytes;
 }
 
-function classifyGithubHttpError(response) {
+function classifyGithubHttpError(response, notFoundErrorClass = null) {
   const remaining = response.headers.get("x-ratelimit-remaining");
   const rateLimited = response.status === 429 || (response.status === 403 && remaining === "0");
   const retryable = rateLimited || response.status >= 500;
@@ -275,7 +351,7 @@ function classifyGithubHttpError(response) {
     ? new Date(Date.now() + retryAfter * 1000).toISOString()
     : Number.isFinite(reset) && reset > 0 ? new Date(reset * 1000).toISOString() : null;
   const errorClass = rateLimited ? "GITHUB_RATE_LIMIT"
-    : response.status === 404 ? "GITHUB_REPOSITORY_NOT_FOUND"
+    : response.status === 404 ? notFoundErrorClass || "GITHUB_REPOSITORY_NOT_FOUND"
       : response.status === 401 || response.status === 403 ? "GITHUB_AUTHORIZATION"
         : response.status >= 500 ? "GITHUB_UPSTREAM_ERROR" : "GITHUB_HTTP_ERROR";
   return new GithubSourceError(`GitHub returned HTTP ${response.status}`, {
@@ -379,4 +455,38 @@ function normalizeTreeEntry(entry) {
 
 function validSha(value) {
   return /^[a-f0-9]{40}$/i.test(String(value || ""));
+}
+
+function validateArtifactPath(value) {
+  const path = String(value || "");
+  if (!path || path.length > 500 || path.startsWith("/") || path.endsWith("/")
+    || path.includes("\\") || path.split("/").some((part) => !part || part === "." || part === "..")
+    || /[\u0000-\u001f\u007f]/.test(path)) {
+    throw new TypeError("GitHub artifact path is invalid");
+  }
+  return path;
+}
+
+function decodeBase64(value) {
+  const compact = String(value || "").replace(/\s/g, "");
+  if (!compact || compact.length % 4 !== 0
+    || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(compact)) {
+    throw new GithubSourceError("GitHub blob content is not valid Base64", {
+      errorClass: "GITHUB_BLOB_CONTRACT",
+    });
+  }
+  let binary;
+  try { binary = atob(compact); } catch { /* rejected below */ }
+  if (typeof binary !== "string") {
+    throw new GithubSourceError("GitHub blob content is not valid Base64", {
+      errorClass: "GITHUB_BLOB_CONTRACT",
+    });
+  }
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function sha256Bytes(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map((item) => item.toString(16).padStart(2, "0")).join("");
 }

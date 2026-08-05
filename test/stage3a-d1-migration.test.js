@@ -10,6 +10,7 @@ const migrationPath = path.join(root, "migrations", "stage3a", "0001_shadow_engi
 const sourceMigrationPath = path.join(root, "migrations", "stage3a", "0002_source_collection.sql");
 const resolutionMigrationPath = path.join(root, "migrations", "stage3a", "0003_candidate_resolution.sql");
 const poolMigrationPath = path.join(root, "migrations", "stage3a", "0004_candidate_pool.sql");
+const evidenceMigrationPath = path.join(root, "migrations", "stage3a", "0005_artifact_evidence.sql");
 
 test("creates the complete Stage 3A shadow persistence model and required indexes", async () => {
   const db = await migratedDatabase();
@@ -26,6 +27,7 @@ test("creates the complete Stage 3A shadow persistence model and required indexe
       "candidate_resolution_batches", "candidate_resolution_trajectories",
       "candidate_discoveries",
       "candidate_pool_passes", "candidate_filter_events",
+      "evidence_bundles",
     ]) {
       assert.ok(tables.has(table), `missing table ${table}`);
     }
@@ -46,9 +48,14 @@ test("creates the complete Stage 3A shadow persistence model and required indexe
     assert.ok(indexes.has("idx_candidate_discoveries_run_candidate"));
     assert.ok(indexes.has("idx_candidate_pool_passes_run_pass"));
     assert.ok(indexes.has("idx_candidate_filter_events_run_disposition"));
+    assert.ok(indexes.has("idx_evidence_bundles_run_candidate"));
+    assert.ok(indexes.has("idx_verification_cases_evidence_bundle"));
     const runColumns = new Set(db.prepare("PRAGMA table_info(engine_runs)").all()
       .map((column) => column.name));
     assert.ok(runColumns.has("source_collection_status"));
+    const caseColumns = new Set(db.prepare("PRAGMA table_info(verification_cases)").all()
+      .map((column) => column.name));
+    assert.ok(caseColumns.has("evidence_bundle_id"));
   } finally {
     db.close();
   }
@@ -144,6 +151,7 @@ async function migratedDatabase() {
   db.exec(await fs.readFile(sourceMigrationPath, "utf8"));
   db.exec(await fs.readFile(resolutionMigrationPath, "utf8"));
   db.exec(await fs.readFile(poolMigrationPath, "utf8"));
+  db.exec(await fs.readFile(evidenceMigrationPath, "utf8"));
   return db;
 }
 
