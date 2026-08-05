@@ -68,6 +68,17 @@ test("counts 304 with validated cache as success but stale fallback as degraded"
   assert.deepEqual(validateCollectionResult(task, fallback), []);
 });
 
+test("rejects a 304 cache entry whose candidate signals fail the current contract", async () => {
+  const task = sourceTask();
+  const result = await fetchSourceTaskOnce({
+    task,
+    cache: { ...validCache(), candidateSignals: [{ invented: true }] },
+    fetchImpl: async () => new Response(null, { status: 304 }),
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(result.errorClass, "CACHE_MISS_ON_304");
+});
+
 test("classifies retryable and terminal HTTP failures without hiding them as empty results", async () => {
   const task = sourceTask();
   const rateLimited = await fetchStatus(task, 429);

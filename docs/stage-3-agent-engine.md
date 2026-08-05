@@ -745,6 +745,21 @@ remain attempt targets; `complete` means 1/3/2 success, `degraded` means the
 1/2/1 quorum was met with partial failure, and `source_incomplete` means the
 quorum was missed. Stale cache never counts as a fresh source success.
 
+The first parser contract is fixture-complete but remains unwired to a
+deployed Workflow. A `candidate-signal-v1` record distinguishes an exact
+artifact from an artifact lead and a container lead. Registry slugs do not
+claim an exact repository path; community repository or collection links must
+be expanded; only exact supported artifact paths can enter candidate
+normalization. Exact identity is repository plus artifact path, so duplicate
+discoveries retain corroborating source trajectories while sibling artifacts
+in the same repository remain distinct. Each source response is parsed in
+memory after the response byte limit is enforced; only the bounded excerpt and
+at most four validated signals are retained. Invalid parser output is a
+terminal `SOURCE_PARSE_ERROR`, not an empty successful collection. Full page
+bodies are not persisted. GitHub repository sources still need a source
+adapter that obtains a repository tree before these parsers are connected to
+live shadow collection.
+
 - Approve this plan.
 - Extract pure v3, identity, history, source-plan, and Harness v2 modules.
 - Add an internal `engine-shadow-result-v1` envelope and parameterized

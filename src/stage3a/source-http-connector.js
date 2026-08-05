@@ -1,3 +1,6 @@
+import { validateCandidateSignal } from "./candidate-signals.js";
+import { validateCollectionResult } from "./source-portfolio.js";
+
 const RETRYABLE_STATUS = new Set([408, 425, 429]);
 const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
 const SUPPORTED_CONTENT_TYPES = [
@@ -17,6 +20,7 @@ export async function fetchSourceTaskOnce({
   task,
   fetchImpl = fetch,
   cache = null,
+  parse = null,
   now = new Date(),
 }) {
   assertSafeTask(task);
@@ -58,7 +62,7 @@ export async function fetchSourceTaskOnce({
   }
 
   if (response.status === 304) {
-    if (!validCache(cache)) {
+    if (!validCache(cache, task)) {
       return failure(task, "CACHE_MISS_ON_304", "Source returned 304 without validated cache", false, 304);
     }
     return success(task, {
@@ -85,21 +89,44 @@ export async function fetchSourceTaskOnce({
   const body = await readResponseBody(response, task.maxResponseBytes);
   if (!body.ok) return failure(task, body.errorClass, body.message, false, response.status);
   const contentHash = await sha256(body.bytes);
-  return success(task, {
+  let candidateSignals = [];
+  if (parse) {
+    try {
+      candidateSignals = await parse({
+        task,
+        content: new TextDecoder("utf-8", { fatal: false }).decode(body.bytes),
+        contentType,
+        finalUrl: currentUrl,
+        observedAt: now.toISOString(),
+      });
+      if (!Array.isArray(candidateSignals)) throw new TypeError("source parser must return an array");
+      for (const signal of candidateSignals) {
+        const errors = validateCandidateSignal(signal, task);
+        if (errors.length) throw new TypeError(errors.join("\n"));
+      }
+    } catch {
+      return failure(task, "SOURCE_PARSE_ERROR", "Source response did not satisfy its parser contract", false, response.status);
+    }
+  }
+  const result = success(task, {
     httpStatus: response.status,
     contentHash,
     boundedExcerpt: utf8Prefix(body.bytes, task.maxExcerptBytes),
-    candidateSignals: [],
+    candidateSignals,
     cacheStatus: "fresh",
     etag: response.headers.get("etag"),
     lastModified: response.headers.get("last-modified"),
     fetchedAt: now.toISOString(),
     redirectTarget: currentUrl === task.url ? null : currentUrl,
   });
+  if (validateCollectionResult(task, result).length) {
+    return failure(task, "SOURCE_PARSE_ERROR", "Source parser output exceeded its collection contract", false, response.status);
+  }
+  return result;
 }
 
 export function staleCacheFallback(task, cache, sourceFailure, now = new Date()) {
-  if (!validCache(cache)) throw new TypeError("validated cache is required for degraded fallback");
+  if (!validCache(cache, task)) throw new TypeError("validated cache is required for degraded fallback");
   return {
     taskId: task.taskId,
     lane: task.lane,
@@ -212,10 +239,14 @@ function failure(task, errorClass, errorMessage, retryable, httpStatus) {
   };
 }
 
-function validCache(cache) {
+function validCache(cache, task) {
   return /^[a-f0-9]{64}$/.test(cache?.contentHash || "")
     && typeof cache?.boundedExcerpt === "string"
-    && Array.isArray(cache?.candidateSignals);
+    && new TextEncoder().encode(cache.boundedExcerpt).byteLength <= task.maxExcerptBytes
+    && Array.isArray(cache?.candidateSignals)
+    && cache.candidateSignals.length <= task.maxCandidateSignals
+    && new TextEncoder().encode(JSON.stringify(cache.candidateSignals)).byteLength <= 65_536
+    && cache.candidateSignals.every((signal) => validateCandidateSignal(signal, task).length === 0);
 }
 
 function sameHostFamily(original, redirected) {

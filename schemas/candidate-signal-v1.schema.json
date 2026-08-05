@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radar.dailyingest.cn/schemas/candidate-signal-v1.json",
+  "title": "Personal Radar Stage 3A candidate discovery signal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "signalId", "taskId", "lane", "sourceId", "signalKind",
+    "title", "locatorUrl", "repositoryUrl", "artifactPath", "artifactType",
+    "evidenceText", "sourceRank", "observedAt", "parserVersion"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "signalId": { "type": "string", "pattern": "^sig_[a-f0-9]{64}$" },
+    "taskId": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "lane": { "enum": ["registryPulse", "officialRotation", "communityTrend"] },
+    "sourceId": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "signalKind": { "enum": ["exact_artifact", "artifact_lead", "container_lead"] },
+    "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "locatorUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+    "repositoryUrl": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^https://github\\.com/[^/]+/[^/]+$" }
+      ]
+    },
+    "artifactPath": { "type": ["string", "null"], "minLength": 1, "maxLength": 500 },
+    "artifactType": {
+      "enum": [
+        "skill", "claude_instruction", "codex_instruction", "cursor_rule",
+        "cline_rule", "roo_rule", "agent_definition", "instruction", "unknown"
+      ]
+    },
+    "evidenceText": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "sourceRank": { "type": ["integer", "null"], "minimum": 1, "maximum": 10000 },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "parserVersion": { "type": "string", "minLength": 1, "maxLength": 80 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "signalKind": { "const": "exact_artifact" } } },
+      "then": {
+        "properties": {
+          "repositoryUrl": { "type": "string" },
+          "artifactPath": { "type": "string" },
+          "artifactType": { "not": { "const": "unknown" } }
+        }
+      },
+      "else": { "properties": { "artifactPath": { "type": "null" } } }
+    }
+  ]
+}
