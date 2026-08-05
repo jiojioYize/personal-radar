@@ -1,12 +1,15 @@
 # Personal Radar Stage 3A: Hosted Multi-Agent Content Engine
 
-Last updated: 2026-08-03
+Last updated: 2026-08-05
 
 ## Status And Decision
 
-Stage 3A architecture was approved to begin on 2026-08-03 but is not yet
-implemented. This document is the architecture, migration boundary, rollout,
-and acceptance contract for the first hosted engine.
+Stage 3A architecture was approved to begin on 2026-08-03. Contract extraction,
+shadow persistence, source planning/collection fixtures, exact-artifact
+resolution, and deterministic candidate-pool materialization are now under
+implementation on the isolated shadow branch. No live cloud execution or
+production cutover has occurred. This document is the architecture, migration
+boundary, rollout, and acceptance contract for the first hosted engine.
 
 The first release is a single-user, `skill-radar`-only, non-publishing cloud
 shadow. It must not update the public website, write production KV, call
@@ -375,6 +378,8 @@ The minimum schema is:
 | `candidate_resolution_batches` | One immutable lead-resolution result per `(run_id, task_id, filter_pass)`, including bounded counts, result hash, and complete payload. |
 | `candidate_resolution_trajectories` | One queryable retained trajectory per input signal, including unresolved, ambiguous, corroborated, and budget-exhausted outcomes. |
 | `candidate_discoveries` | Exact artifact observations with tree/blob SHA evidence. Multiple sources may observe the same candidate before global candidate-pool normalization. |
+| `candidate_pool_passes` | Immutable input/result hashes and counts for each global filter pass. Separates the coverage status from the next action, so an exhausted below-target pool still advances to verification. Unique by run and pass. |
+| `candidate_filter_events` | Complete per-pass disposition for every distinct discovered artifact, including selected, history-filtered, duplicate, target-met, and candidate-budget deferrals, with primary and corroborating discovery links. |
 | `artifacts` | Canonical repository URL, artifact path/key, type, container, provenance, first/last seen, and identity lineage. Unique by canonical artifact key. |
 | `run_candidates` | Candidate snapshot, lane/source metadata, filter pass, eligibility, exclusion reason, material-change evidence, and final disposition. Unique by `(run_id, candidate_id)`. |
 | `verification_cases` | Original identity, current identity, routing flags, disagreement fields, disposition, removal reason, and follow-up state. |
@@ -807,10 +812,44 @@ status. Failed and `degraded_cached` attempts cannot create discoveries.
 `candidate_discoveries` is intentionally a pre-candidate staging table. Source
 batches do not write `run_candidates`, because concurrent source completion
 must not randomly choose the primary source for a duplicate artifact. After
-all assigned source attempts settle, a separate deterministic global step will
-apply source ordering, deduplication, history/review filtering, and the
-8-12/three-pass/20 candidate budget before materializing `run_candidates`.
-Live shadow fetches and Workflow wiring remain disabled.
+all assigned source attempts settle, a separate deterministic global step now
+applies source-plan ordering, deduplication, history/review filtering, and the
+8-12/three-pass/20 candidate budget before transactionally materializing
+`run_candidates`. Completion order cannot select the primary discovery. The
+step fairly interleaves planned source tasks without turning that ordering into
+a lane quota or recommendation ranking. One artifact observed by multiple
+sources consumes one global candidate slot and retains the other observations
+as corroboration.
+
+The `0004_candidate_pool.sql` migration stores immutable pool-pass hashes and a
+filter event for every distinct discovery considered in that pass. The first
+pass admits at most twelve candidates even when more exact discoveries exist;
+this is a research-input bound, not a recommendation cap. Later passes add
+candidates only while fewer than five are eligible and stop immediately when
+the fifth becomes eligible, subject to three passes and twenty cumulative
+distinct candidates. Exact discoveries deferred only by the first-pass limit
+remain available to later passes without requiring a duplicate network fetch.
+The filter ports the production 30-day exact-artifact,
+preceding-seven-day repository-frequency, and defer/reject review-after rules.
+It does not apply the later report rule of at most one artifact per repository
+per daily report. An evidenced material-change claim may bypass history in the
+same way as production; an empty assertion is rejected.
+
+Source completion remains independent of candidate attribution. Before a pool
+pass can commit, its expected resolution tasks must exactly equal the run's
+successful source tasks, and every one must have a resolution batch, including
+zero-yield batches. The 1/2/1 collection quorum is therefore evaluated from
+source fetch outcomes, never inferred from which lanes happen to produce the
+selected candidates. Pool pass, candidates, filter events, and run totals are
+one D1 transaction; forced child failure rolls the whole pass back. Replays
+read only candidates from earlier passes and verify immutable result, event,
+and candidate snapshots.
+
+Below-target exhaustion has `coverageStatus: exhausted_below_target` but the
+pool's explicit next action is `verify_below_target`: all remaining eligible
+candidates still proceed. It is not a stop or a synthetic `no_update`. Live
+shadow fetches, Workflow wiring, model calls, public writes, and PushPlus remain
+disabled.
 
 - Approve this plan.
 - Extract pure v3, identity, history, source-plan, and Harness v2 modules.
