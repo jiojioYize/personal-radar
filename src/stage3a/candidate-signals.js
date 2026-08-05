@@ -1,4 +1,5 @@
 const SIGNAL_KINDS = new Set(["exact_artifact", "artifact_lead", "container_lead"]);
+const SOURCE_LANES = new Set(["registryPulse", "officialRotation", "communityTrend"]);
 const ARTIFACT_TYPES = new Set([
   "skill", "claude_instruction", "codex_instruction", "cursor_rule",
   "cline_rule", "roo_rule", "agent_definition", "instruction", "unknown",
@@ -51,6 +52,7 @@ export function validateCandidateSignal(signal, task = null) {
   if (signal?.version !== 1) errors.push("candidate signal version must be 1");
   if (task && (signal?.taskId !== task.taskId || signal?.lane !== task.lane
     || signal?.sourceId !== task.sourceId)) errors.push("candidate signal identity does not match its task");
+  if (!SOURCE_LANES.has(signal?.lane)) errors.push("candidate signal lane is invalid");
   if (!SIGNAL_KINDS.has(signal?.signalKind)) errors.push("candidate signal kind is invalid");
   if (!ARTIFACT_TYPES.has(signal?.artifactType)) errors.push("candidate artifact type is invalid");
   if (!validText(signal?.title, 1, 160)) errors.push("candidate signal title is invalid");

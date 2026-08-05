@@ -372,6 +372,9 @@ The minimum schema is:
 | `source_plans` | Authoritative same-date plan, registry focus, assigned official/community sources, and plan hash. Unique by run. |
 | `source_rotation_entries` | Completed plan history. Advances only after a valid shadow report or valid `no_update`, never after a failed run. |
 | `source_fetches` | Normalized URL, purpose, request headers policy, status, redirect target, ETag/last-modified, fetch time, content hash, bounded excerpt, provenance class, and error. |
+| `candidate_resolution_batches` | One immutable lead-resolution result per `(run_id, task_id, filter_pass)`, including bounded counts, result hash, and complete payload. |
+| `candidate_resolution_trajectories` | One queryable retained trajectory per input signal, including unresolved, ambiguous, corroborated, and budget-exhausted outcomes. |
+| `candidate_discoveries` | Exact artifact observations with tree/blob SHA evidence. Multiple sources may observe the same candidate before global candidate-pool normalization. |
 | `artifacts` | Canonical repository URL, artifact path/key, type, container, provenance, first/last seen, and identity lineage. Unique by canonical artifact key. |
 | `run_candidates` | Candidate snapshot, lane/source metadata, filter pass, eligibility, exclusion reason, material-change evidence, and final disposition. Unique by `(run_id, candidate_id)`. |
 | `verification_cases` | Original identity, current identity, routing flags, disagreement fields, disposition, removal reason, and follow-up state. |
@@ -786,9 +789,28 @@ entry name is identity-checked, complete paths are reconstructed in memory,
 and the resulting snapshot records `collectionMode: bounded_traversal`, tree
 request count, and traversal bytes. Exhausting any cap produces
 `GITHUB_TREE_TRAVERSAL_LIMIT`; partial entries are discarded and cannot count
-as source success. The next source-collection checkpoint is D1 persistence for
-resolution trajectories and exact candidate snapshots. Live shadow fetches
-remain disabled.
+as source success.
+
+The `0003_candidate_resolution.sql` migration and fixture-only repository now
+persist resolution batches, complete per-input trajectories, canonical
+artifacts, and exact candidate discoveries in one transactional D1 batch. The
+immutable batch hash covers inputs, resolution, tree/blob evidence, and the
+derived discovery snapshot. Same-key replay returns the existing batch;
+payload, metadata, trajectory, or evidence drift raises a conflict. A forced
+mid-batch artifact collision regression proves that earlier batch and
+trajectory inserts roll back. Exact discoveries from different sources retain
+separate evidence while sharing one canonical candidate identity. Every batch
+also has a foreign key to the exact `source_fetches` attempt that supplied its
+input signals; the repository requires the same run/task and `succeeded`
+status. Failed and `degraded_cached` attempts cannot create discoveries.
+
+`candidate_discoveries` is intentionally a pre-candidate staging table. Source
+batches do not write `run_candidates`, because concurrent source completion
+must not randomly choose the primary source for a duplicate artifact. After
+all assigned source attempts settle, a separate deterministic global step will
+apply source ordering, deduplication, history/review filtering, and the
+8-12/three-pass/20 candidate budget before materializing `run_candidates`.
+Live shadow fetches and Workflow wiring remain disabled.
 
 - Approve this plan.
 - Extract pure v3, identity, history, source-plan, and Harness v2 modules.
