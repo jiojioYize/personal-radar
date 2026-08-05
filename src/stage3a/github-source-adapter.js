@@ -3,6 +3,12 @@ import { canonicalRepositoryUrl } from "./candidate-signals.js";
 export const DEFAULT_GITHUB_API_VERSION = "2022-11-28";
 export const GITHUB_METADATA_BYTE_LIMIT = 262_144;
 export const GITHUB_TREE_BYTE_LIMIT = 1_048_576;
+export const DEFAULT_GITHUB_TRAVERSAL_LIMITS = Object.freeze({
+  maximumRequests: 64,
+  maximumDepth: 8,
+  maximumEntries: 20_000,
+  maximumBytes: 4_194_304,
+});
 
 export class GithubSourceError extends Error {
   constructor(message, {
@@ -28,7 +34,9 @@ export async function fetchGithubTreeSnapshot({
   fetchImpl = fetch,
   apiVersion = DEFAULT_GITHUB_API_VERSION,
   timeoutMs = 15_000,
+  traversalLimits = DEFAULT_GITHUB_TRAVERSAL_LIMITS,
 }) {
+  validateTraversalLimits(traversalLimits);
   const repository = githubRepositoryIdentity(repositoryUrl);
   const headers = githubReadHeaders({ token, apiVersion });
   const metadata = await githubJson(repository.apiUrl, {
@@ -38,15 +46,22 @@ export async function fetchGithubTreeSnapshot({
   validateRepositoryMetadata(metadata, repository);
   const branch = validateRef(metadata.default_branch);
   const treeUrl = `${repository.apiUrl}/git/trees/${encodeURIComponent(branch)}?recursive=1`;
-  const tree = await githubJson(treeUrl, {
-    fetchImpl, headers, timeoutMs, maximumBytes: GITHUB_TREE_BYTE_LIMIT,
-    bodyErrorClass: "GITHUB_TREE_TOO_LARGE",
-    requiresTraversal: true,
-  });
-  if (tree?.truncated === true) {
-    throw new GithubSourceError("GitHub returned a truncated recursive tree", {
-      errorClass: "GITHUB_TREE_TRUNCATED",
+  let tree;
+  try {
+    tree = await githubJson(treeUrl, {
+      fetchImpl, headers, timeoutMs, maximumBytes: GITHUB_TREE_BYTE_LIMIT,
+      bodyErrorClass: "GITHUB_TREE_TOO_LARGE",
       requiresTraversal: true,
+    });
+  } catch (error) {
+    if (!(error instanceof GithubSourceError) || error.errorClass !== "GITHUB_TREE_TOO_LARGE") throw error;
+    return fetchGithubTreeByTraversal({
+      repository, metadata, branch, fetchImpl, headers, timeoutMs, traversalLimits,
+    });
+  }
+  if (tree?.truncated === true) {
+    return fetchGithubTreeByTraversal({
+      repository, metadata, branch, fetchImpl, headers, timeoutMs, traversalLimits,
     });
   }
   if (tree?.truncated !== false || !Array.isArray(tree.tree)) {
@@ -59,12 +74,89 @@ export async function fetchGithubTreeSnapshot({
       errorClass: "GITHUB_TREE_CONTRACT",
     });
   }
+  return snapshot({
+    repository,
+    metadata,
+    branch,
+    treeSha: tree.sha.toLowerCase(),
+    entries: tree.tree.map(normalizeTreeEntry).filter(Boolean),
+    collectionMode: "recursive",
+    treeRequests: 1,
+    collectedTreeBytes: null,
+  });
+}
+
+async function fetchGithubTreeByTraversal({
+  repository,
+  metadata,
+  branch,
+  fetchImpl,
+  headers,
+  timeoutMs,
+  traversalLimits,
+}) {
+  const queue = [{ ref: branch, prefix: "", depth: 0, root: true }];
+  const entries = [];
+  const budget = { usedBytes: 0, maximumBytes: traversalLimits.maximumBytes };
+  let treeRequests = 0;
+  let treeSha = null;
+  while (queue.length) {
+    if (treeRequests >= traversalLimits.maximumRequests) traversalLimit("request limit");
+    const current = queue.shift();
+    const url = `${repository.apiUrl}/git/trees/${encodeURIComponent(current.ref)}`;
+    const tree = await githubJson(url, {
+      fetchImpl,
+      headers,
+      timeoutMs,
+      maximumBytes: GITHUB_TREE_BYTE_LIMIT,
+      bodyErrorClass: "GITHUB_TREE_TRAVERSAL_LIMIT",
+      aggregateBudget: budget,
+    });
+    treeRequests += 1;
+    validateNonRecursiveTree(tree, current);
+    if (current.root) treeSha = tree.sha.toLowerCase();
+    for (const rawEntry of tree.tree) {
+      const entry = normalizeTraversalEntry(rawEntry, current.prefix);
+      if (!entry) continue;
+      entries.push(entry);
+      if (entries.length > traversalLimits.maximumEntries) traversalLimit("entry limit");
+      if (entry.type === "tree") {
+        if (current.depth >= traversalLimits.maximumDepth) traversalLimit("depth limit");
+        queue.push({ ref: entry.sha, prefix: entry.path, depth: current.depth + 1, root: false });
+      }
+    }
+  }
+  return snapshot({
+    repository,
+    metadata,
+    branch,
+    treeSha,
+    entries,
+    collectionMode: "bounded_traversal",
+    treeRequests,
+    collectedTreeBytes: budget.usedBytes,
+  });
+}
+
+function snapshot({
+  repository,
+  metadata,
+  branch,
+  treeSha,
+  entries,
+  collectionMode,
+  treeRequests,
+  collectedTreeBytes,
+}) {
   return {
     version: 1,
     repositoryUrl: repository.repositoryUrl,
     defaultBranch: branch,
-    treeSha: tree.sha.toLowerCase(),
-    entries: tree.tree.map(normalizeTreeEntry).filter(Boolean),
+    treeSha,
+    collectionMode,
+    treeRequests,
+    collectedTreeBytes,
+    entries,
     repository: {
       fullName: metadata.full_name,
       archived: Boolean(metadata.archived),
@@ -102,6 +194,7 @@ async function githubJson(url, {
   maximumBytes,
   bodyErrorClass,
   requiresTraversal = false,
+  aggregateBudget = null,
 }) {
   let response;
   try {
@@ -119,14 +212,23 @@ async function githubJson(url, {
     });
   }
   if (!response.ok) throw classifyGithubHttpError(response);
+  const remainingAggregate = aggregateBudget
+    ? aggregateBudget.maximumBytes - aggregateBudget.usedBytes
+    : maximumBytes;
+  if (remainingAggregate <= 0) traversalLimit("byte limit");
+  const effectiveMaximum = Math.min(maximumBytes, remainingAggregate);
+  const effectiveErrorClass = aggregateBudget ? "GITHUB_TREE_TRAVERSAL_LIMIT" : bodyErrorClass;
   const declared = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > maximumBytes) {
+  if (Number.isFinite(declared) && declared > effectiveMaximum) {
     throw new GithubSourceError("GitHub response exceeded its byte limit", {
-      errorClass: bodyErrorClass,
+      errorClass: effectiveErrorClass,
       requiresTraversal,
     });
   }
-  const bytes = await readBoundedResponse(response, maximumBytes, bodyErrorClass, requiresTraversal);
+  const bytes = await readBoundedResponse(
+    response, effectiveMaximum, effectiveErrorClass, requiresTraversal,
+  );
+  if (aggregateBudget) aggregateBudget.usedBytes += bytes.byteLength;
   try {
     return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
@@ -204,13 +306,73 @@ function validateRef(value) {
   return ref;
 }
 
-function normalizeTreeEntry(entry) {
+function validateTraversalLimits(limits) {
+  const valid = limits && Number.isInteger(limits.maximumRequests)
+    && limits.maximumRequests >= 1 && limits.maximumRequests <= 256
+    && Number.isInteger(limits.maximumDepth)
+    && limits.maximumDepth >= 1 && limits.maximumDepth <= 32
+    && Number.isInteger(limits.maximumEntries)
+    && limits.maximumEntries >= 1 && limits.maximumEntries <= 100_000
+    && Number.isInteger(limits.maximumBytes)
+    && limits.maximumBytes >= 65_536
+    && limits.maximumBytes <= 16_777_216;
+  if (!valid) throw new TypeError("GitHub traversal limits are invalid");
+}
+
+function validateNonRecursiveTree(tree, current) {
+  if (tree?.truncated === true) traversalLimit("non-recursive response was truncated");
+  if (tree?.truncated !== false || !Array.isArray(tree.tree) || !validSha(tree.sha)) {
+    throw new GithubSourceError("GitHub non-recursive tree response is incomplete", {
+      errorClass: "GITHUB_TREE_CONTRACT",
+    });
+  }
+  if (!current.root && tree.sha.toLowerCase() !== current.ref.toLowerCase()) {
+    throw new GithubSourceError("GitHub subtree identity did not match its requested SHA", {
+      errorClass: "GITHUB_TREE_IDENTITY_MISMATCH",
+    });
+  }
+}
+
+function normalizeTraversalEntry(entry, prefix) {
   if (!entry || !["blob", "tree"].includes(entry.type) || typeof entry.path !== "string") return null;
-  if (!entry.path || entry.path.length > 500 || entry.path.includes("..") || entry.path.includes("\\")) return null;
+  if (!entry.path || entry.path.includes("/") || entry.path.includes("\\") || entry.path.includes("..")) {
+    throw new GithubSourceError("GitHub non-recursive tree contained an unsafe entry name", {
+      errorClass: "GITHUB_TREE_CONTRACT",
+    });
+  }
+  if (!validSha(entry.sha)) {
+    throw new GithubSourceError("GitHub non-recursive tree entry is missing its SHA", {
+      errorClass: "GITHUB_TREE_CONTRACT",
+    });
+  }
+  const path = prefix ? `${prefix}/${entry.path}` : entry.path;
+  if (path.length > 500) traversalLimit("path length limit");
+  return {
+    path,
+    type: entry.type,
+    sha: entry.sha.toLowerCase(),
+    size: Number.isInteger(entry.size) && entry.size >= 0 ? entry.size : null,
+  };
+}
+
+function traversalLimit(detail) {
+  throw new GithubSourceError(`GitHub bounded tree traversal exceeded its ${detail}`, {
+    errorClass: "GITHUB_TREE_TRAVERSAL_LIMIT",
+  });
+}
+
+function normalizeTreeEntry(entry) {
+  if (!entry || !["blob", "tree"].includes(entry.type)) return null;
+  if (typeof entry.path !== "string" || !entry.path || entry.path.length > 500
+    || entry.path.includes("..") || entry.path.includes("\\") || !validSha(entry.sha)) {
+    throw new GithubSourceError("GitHub recursive tree contained an invalid path or SHA", {
+      errorClass: "GITHUB_TREE_CONTRACT",
+    });
+  }
   return {
     path: entry.path,
     type: entry.type,
-    sha: validSha(entry.sha) ? entry.sha : null,
+    sha: entry.sha.toLowerCase(),
     size: Number.isInteger(entry.size) && entry.size >= 0 ? entry.size : null,
   };
 }

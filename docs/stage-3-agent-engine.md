@@ -756,9 +756,8 @@ in the same repository remain distinct. Each source response is parsed in
 memory after the response byte limit is enforced; only the bounded excerpt and
 at most four validated signals are retained. Invalid parser output is a
 terminal `SOURCE_PARSE_ERROR`, not an empty successful collection. Full page
-bodies are not persisted. GitHub repository sources still need a source
-adapter that obtains a repository tree before these parsers are connected to
-live shadow collection.
+bodies are not persisted. At that checkpoint, GitHub repository collection
+was deliberately left unwired pending a bounded repository-tree adapter.
 
 Implementation checkpoint (2026-08-05): the fixture-only GitHub source adapter
 and lead resolver are now implemented but still not invoked by the Workflow.
@@ -769,8 +768,8 @@ never returns credentials in its snapshot. Metadata is capped at 256 KiB and
 recursive trees at 1 MiB with streaming enforcement. Rate limits retain the
 provider retry time. A private repository, identity mismatch, malformed JSON,
 unsafe ref, or incomplete response fails explicitly. GitHub `truncated: true`
-and an over-limit tree are classified as requiring bounded non-recursive tree
-traversal; the incomplete recursive result is never accepted.
+and an over-limit recursive tree now enter bounded non-recursive recovery; the
+incomplete recursive result itself is never accepted.
 
 Resolution prioritizes already exact links, then uniquely matched registry
 slugs, then broad repository containers. Zero slug matches stay unresolved and
@@ -778,9 +777,18 @@ multiple matches stay ambiguous. Container expansion sorts exact supported
 paths and applies a deterministic completed-run rotation before the per-source
 four-signal cap, preventing the same alphabetical prefix from becoming a
 permanent selection bias. This rotation is source coverage, not recommendation
-ranking. Every input signal receives a retained resolution trajectory. The
-next source-collection checkpoint must add bounded non-recursive traversal and
-persist these resolution outcomes before any live shadow fetch is enabled.
+ranking. Every input signal receives a retained resolution trajectory.
+
+The bounded traversal recovery uses breadth-first subtree reads with four
+independent hard caps: 64 tree requests, depth 8, 20,000 accumulated entries,
+and 4 MiB of accumulated traversal response bodies. Every subtree SHA and
+entry name is identity-checked, complete paths are reconstructed in memory,
+and the resulting snapshot records `collectionMode: bounded_traversal`, tree
+request count, and traversal bytes. Exhausting any cap produces
+`GITHUB_TREE_TRAVERSAL_LIMIT`; partial entries are discarded and cannot count
+as source success. The next source-collection checkpoint is D1 persistence for
+resolution trajectories and exact candidate snapshots. Live shadow fetches
+remain disabled.
 
 - Approve this plan.
 - Extract pure v3, identity, history, source-plan, and Harness v2 modules.

@@ -42,9 +42,11 @@ test("builds read-only GitHub API requests without exposing credentials in resul
   assert.equal(calls[0].options.headers.Authorization, "Bearer secret-token");
   assert.equal(JSON.stringify(snapshot).includes("secret-token"), false);
   assert.equal(snapshot.entries[0].path, "skills/testing/SKILL.md");
+  assert.equal(snapshot.collectionMode, "recursive");
+  assert.equal(snapshot.treeRequests, 1);
 });
 
-test("rejects identity drift, private repositories, and truncated trees", async () => {
+test("rejects identity drift and private repositories", async () => {
   await assert.rejects(
     fetchGithubTreeSnapshot({
       repositoryUrl: "https://github.com/example/rules",
@@ -65,16 +67,133 @@ test("rejects identity drift, private repositories, and truncated trees", async 
     }),
     (error) => error.errorClass === "GITHUB_PRIVATE_REPOSITORY",
   );
+});
+
+test("recovers a truncated recursive tree with bounded non-recursive traversal", async () => {
+  const rootSha = "a".repeat(40);
+  const skillsSha = "b".repeat(40);
+  const testingSha = "c".repeat(40);
+  const fileSha = "d".repeat(40);
+  const calls = [];
+  const snapshot = await fetchGithubTreeSnapshot({
+    repositoryUrl: "https://github.com/example/rules",
+    fetchImpl: async (url) => {
+      calls.push(url);
+      if (url.endsWith("/repos/example/rules")) return jsonResponse({
+        full_name: "example/rules", default_branch: "main", private: false,
+      });
+      if (url.endsWith("/git/trees/main?recursive=1")) return jsonResponse({
+        sha: rootSha, truncated: true, tree: [],
+      });
+      if (url.endsWith("/git/trees/main")) return jsonResponse({
+        sha: rootSha,
+        truncated: false,
+        tree: [{ path: "skills", type: "tree", sha: skillsSha }],
+      });
+      if (url.endsWith(`/git/trees/${skillsSha}`)) return jsonResponse({
+        sha: skillsSha,
+        truncated: false,
+        tree: [{ path: "testing", type: "tree", sha: testingSha }],
+      });
+      if (url.endsWith(`/git/trees/${testingSha}`)) return jsonResponse({
+        sha: testingSha,
+        truncated: false,
+        tree: [{ path: "SKILL.md", type: "blob", sha: fileSha, size: 120 }],
+      });
+      throw new Error(`Unexpected URL ${url}`);
+    },
+  });
+  assert.equal(snapshot.collectionMode, "bounded_traversal");
+  assert.equal(snapshot.treeSha, rootSha);
+  assert.equal(snapshot.treeRequests, 3);
+  assert.ok(snapshot.collectedTreeBytes > 0);
+  assert.deepEqual(snapshot.entries.map((entry) => entry.path), [
+    "skills", "skills/testing", "skills/testing/SKILL.md",
+  ]);
+  assert.equal(calls.length, 5);
+});
+
+test("fails closed when bounded traversal exhausts request or depth limits", async () => {
+  const rootSha = "a".repeat(40);
+  const childSha = "b".repeat(40);
+  const responses = async (url) => {
+    if (url.endsWith("/repos/example/rules")) return jsonResponse({
+      full_name: "example/rules", default_branch: "main", private: false,
+    });
+    if (url.endsWith("?recursive=1")) return jsonResponse({ sha: rootSha, truncated: true, tree: [] });
+    return jsonResponse({
+      sha: url.endsWith("/main") ? rootSha : childSha,
+      truncated: false,
+      tree: [{ path: "nested", type: "tree", sha: childSha }],
+    });
+  };
   await assert.rejects(
     fetchGithubTreeSnapshot({
       repositoryUrl: "https://github.com/example/rules",
-      fetchImpl: twoResponses(
-        { full_name: "example/rules", default_branch: "main", private: false },
-        { truncated: true, tree: [{ path: "skills/a/SKILL.md", type: "blob" }] },
-      ),
+      fetchImpl: responses,
+      traversalLimits: traversalLimits({ maximumRequests: 1 }),
     }),
-    (error) => error.errorClass === "GITHUB_TREE_TRUNCATED"
-      && error.retryable === false && error.requiresTraversal === true,
+    (error) => error.errorClass === "GITHUB_TREE_TRAVERSAL_LIMIT" && /request limit/.test(error.message),
+  );
+  await assert.rejects(
+    fetchGithubTreeSnapshot({
+      repositoryUrl: "https://github.com/example/rules",
+      fetchImpl: responses,
+      traversalLimits: traversalLimits({ maximumDepth: 1 }),
+    }),
+    (error) => error.errorClass === "GITHUB_TREE_TRAVERSAL_LIMIT" && /depth limit/.test(error.message),
+  );
+});
+
+test("fails closed when bounded traversal exhausts entry or cumulative byte limits", async () => {
+  const rootSha = "a".repeat(40);
+  const childSha = "b".repeat(40);
+  const fileSha = "c".repeat(40);
+  const metadata = { full_name: "example/rules", default_branch: "main", private: false };
+  const entryLimited = async (url) => {
+    if (url.endsWith("/repos/example/rules")) return jsonResponse(metadata);
+    if (url.endsWith("?recursive=1")) return jsonResponse({ sha: rootSha, truncated: true, tree: [] });
+    return jsonResponse({
+      sha: rootSha,
+      truncated: false,
+      tree: [
+        { path: "one.md", type: "blob", sha: fileSha },
+        { path: "two.md", type: "blob", sha: fileSha },
+      ],
+    });
+  };
+  await assert.rejects(
+    fetchGithubTreeSnapshot({
+      repositoryUrl: "https://github.com/example/rules",
+      fetchImpl: entryLimited,
+      traversalLimits: traversalLimits({ maximumEntries: 1 }),
+    }),
+    (error) => error.errorClass === "GITHUB_TREE_TRAVERSAL_LIMIT" && /entry limit/.test(error.message),
+  );
+
+  const byteLimited = async (url) => {
+    if (url.endsWith("/repos/example/rules")) return jsonResponse(metadata);
+    if (url.endsWith("?recursive=1")) return jsonResponse({ sha: rootSha, truncated: true, tree: [] });
+    if (url.endsWith("/main")) return jsonResponse({
+      sha: rootSha,
+      truncated: false,
+      padding: "x".repeat(40_000),
+      tree: [{ path: "child", type: "tree", sha: childSha }],
+    });
+    return jsonResponse({
+      sha: childSha,
+      truncated: false,
+      padding: "x".repeat(40_000),
+      tree: [{ path: "SKILL.md", type: "blob", sha: fileSha }],
+    });
+  };
+  await assert.rejects(
+    fetchGithubTreeSnapshot({
+      repositoryUrl: "https://github.com/example/rules",
+      fetchImpl: byteLimited,
+      traversalLimits: traversalLimits({ maximumBytes: 65_536 }),
+    }),
+    (error) => error.errorClass === "GITHUB_TREE_TRAVERSAL_LIMIT",
   );
 });
 
@@ -102,6 +221,23 @@ test("validates GitHub identity and API version inputs", () => {
   });
   assert.throws(() => githubRepositoryIdentity("https://gitlab.com/openai/plugins"));
   assert.throws(() => githubReadHeaders({ apiVersion: "latest" }), /version/);
+});
+
+test("rejects recursive artifact entries that cannot be anchored to a blob SHA", async () => {
+  await assert.rejects(
+    fetchGithubTreeSnapshot({
+      repositoryUrl: "https://github.com/example/rules",
+      fetchImpl: twoResponses(
+        { full_name: "example/rules", default_branch: "main", private: false },
+        {
+          sha: "a".repeat(40),
+          truncated: false,
+          tree: [{ path: "skills/testing/SKILL.md", type: "blob", sha: null }],
+        },
+      ),
+    }),
+    (error) => error.errorClass === "GITHUB_TREE_CONTRACT",
+  );
 });
 
 test("resolves a unique registry slug but preserves zero and multiple matches", async () => {
@@ -264,4 +400,14 @@ function jsonResponse(value) {
 function twoResponses(first, second) {
   let call = 0;
   return async () => jsonResponse(call++ === 0 ? first : second);
+}
+
+function traversalLimits(overrides = {}) {
+  return {
+    maximumRequests: 64,
+    maximumDepth: 8,
+    maximumEntries: 20_000,
+    maximumBytes: 1_048_576,
+    ...overrides,
+  };
 }
