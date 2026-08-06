@@ -1,15 +1,20 @@
 # Personal Radar Stage 3A: Hosted Multi-Agent Content Engine
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 ## Status And Decision
 
 Stage 3A architecture was approved to begin on 2026-08-03. Contract extraction,
 shadow persistence, source planning/collection fixtures, exact-artifact
-resolution, and deterministic candidate-pool materialization are now under
-implementation on the isolated shadow branch. No live cloud execution or
-production cutover has occurred. This document is the architecture, migration
-boundary, rollout, and acceptance contract for the first hosted engine.
+resolution, deterministic candidate-pool materialization, and immutable
+artifact evidence bundles are now under implementation on the isolated shadow
+branch. No live cloud execution or production cutover has occurred. This
+document is the architecture, migration boundary, rollout, and acceptance
+contract for the first hosted engine.
+
+The Stage 3A user problem, product hypotheses, decision trade-offs, evaluation
+metrics, and portfolio narrative are maintained separately in
+[`stage-3a-ai-product-case-study.md`](stage-3a-ai-product-case-study.md).
 
 The first release is a single-user, `skill-radar`-only, non-publishing cloud
 shadow. It must not update the public website, write production KV, call
