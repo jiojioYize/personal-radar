@@ -281,7 +281,15 @@ function githubSnapshot() {
       size: 120,
     }],
     repository: {
-      fullName: "example/rules", archived: false, disabled: false, pushedAt: now,
+      fullName: "example/rules",
+      htmlUrl: "https://github.com/example/rules",
+      description: "Reusable agent rules.",
+      archived: false,
+      disabled: false,
+      pushedAt: now,
+      updatedAt: now,
+      licenseSpdxId: "MIT",
+      licenseName: "MIT License",
     },
   };
 }

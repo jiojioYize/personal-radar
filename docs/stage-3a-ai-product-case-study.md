@@ -144,12 +144,41 @@ repository 内的 sibling skills 仍是不同 artifact。
 
 ### 8. 按角色选择模型，而不是全流程只选一个模型
 
-API 方向已确定为 OpenAI Responses，但具体模型分配是下一项产品决策：
-高频 primary 需要平衡成本和可靠性；低频 specialist/adjudicator 可以为更强
-推理付费；editor 需要同时满足证据纪律与表达质量。
+API 方向确定为 OpenAI Responses，首轮待验证策略为：
+
+| 角色 | 初始策略 | 产品理由 |
+| --- | --- | --- |
+| primary | `gpt-5.6-terra` / low | 每个 eligible artifact 都调用，优先平衡准确率和单位成本。 |
+| specialist | `gpt-5.6-terra` / medium | 只处理迁移、身份变化和仓库状态风险，允许增加推理。 |
+| adjudicator | `gpt-5.6-sol` / medium | 仅处理实质分歧；错误放行成本高于少量旗舰调用成本。 |
+| editor | `gpt-5.6-terra` / medium | 需要证据纪律、双语表达和 reader contract，但不默认支付旗舰溢价。 |
+
+候选提取仍以确定性 collector/parser 为主；Luna 只保留给未来经过评估的
+受限元数据修复，不把模型重新引入可以由代码稳定完成的筛选规则。
 
 产品取舍：模型选型是任务风险、调用频率、延迟与成本之间的组合配置，而不是
-一次模型榜单选择。
+一次模型榜单选择。全部使用 Sol 会让高频 primary 成本扩大；全部使用 Luna
+又会把身份 false positive 风险押在最低成本档。当前策略只是实验基线，不是
+验收结论。
+
+### 9. 把“证据未准备好”与“候选不合格”分开
+
+在实现 primary 请求时发现：精确 `SKILL.md` 已持久化，但仓库 archived、
+disabled、更新时间和 license 元数据没有进入验证包。系统已补齐这条证据链，
+并把超过 64 KiB 的模型输入标记为 `EVIDENCE_REQUIRES_REDUCTION`。
+
+产品取舍：缺字段、输入过大、请求合同错误属于系统准备或恢复问题，不能转写为
+`reject`、`defer` 或候选移除。这能防止严格代码护栏制造“正常内容被拒绝”的
+假象。
+
+### 10. 在发送前占用幂等调用槽
+
+primary 请求由不可变 evidence、prompt、Schema 和模型策略生成稳定 hash。
+D1 对同一 case/role/attempt 只允许一个调用槽，写入前重新计算 hash；Workflow
+恢复时可重放同一预留，但不同请求不能覆盖原槽位。
+
+产品取舍：这一步先解决“是否应该发出这次调用”，再解决真实网络发送。它减少
+重复扣费与难以解释的多版本证据，也为后续 ambiguous delivery 恢复提供边界。
 
 ## 当前待验证的用户旅程
 
@@ -204,10 +233,10 @@ Stage 3A 第一版中的任何一步都不执行发布。
 生产与影子的 exact item overlap 仅是诊断指标：两个系统可能发现不同但同样
 有效的 artifact。
 
-## 下一项产品实验：模型选型
+## 下一项产品实验：模型策略验证
 
-在真实日常影子前，使用固定 Harness v2 cases 比较 role-specific model
-policies。
+当前策略已完成 fixture 级请求合同测试，但还没有真实 API 观察证据。在真实
+日常影子前，使用固定 Harness v2 cases 比较 role-specific model policies。
 
 ### 需要回答的问题
 
@@ -227,6 +256,10 @@ policies。
 4. 任何更便宜的策略只要削弱硬质量护栏，就不进入下一阶段。
 5. 模型 ID 和 policy hash 作为版本化配置记录，不成为永久产品语义。
 6. 固定样例通过后再进行手动云端影子，定时计划仍保持关闭。
+
+证据状态：模型与价格依据为当前官方资料；请求结构、Schema、成本估算和预发送
+幂等为 `fixture-tested`；真实模型质量、延迟、token 与实际费用仍为 `planned`，
+不能写成 `shadow-observed` 或 `accepted`。
 
 ## 主要风险与控制
 

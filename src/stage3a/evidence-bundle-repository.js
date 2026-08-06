@@ -6,6 +6,7 @@ import { ShadowRunConflictError } from "./run-repository.js";
 
 const TASK_CONTRACT = "artifact-evidence-task-v1";
 const BUNDLE_CONTRACT = "artifact-evidence-bundle-v1";
+const PRIMARY_INPUT_CONTRACT = "primary-verifier-input-v1";
 
 export class EvidenceBundleRepository {
   constructor(database) {
@@ -137,6 +138,22 @@ export class EvidenceBundleRepository {
     return summary(stored, true);
   }
 
+  async preparePrimaryVerifierInputs({ runId }) {
+    assertRunId(runId);
+    await this.requireEvidenceStage(runId);
+    const rows = await all(this.database.prepare(`
+      SELECT c.id AS case_id, c.candidate_id, c.original_identity_json,
+        c.disposition, b.id AS bundle_id, b.repository_url, b.artifact_path,
+        b.blob_sha, b.api_url, b.observed_at, b.source_byte_count,
+        b.content_sha256, b.content_text, b.metadata_json, b.evidence_hash
+      FROM verification_cases c
+      JOIN evidence_bundles b ON b.id = c.evidence_bundle_id
+      WHERE c.run_id = ? AND c.disposition = 'pending'
+      ORDER BY c.candidate_id
+    `).bind(runId));
+    return Promise.all(rows.map((row) => primaryVerifierInput(row, runId)));
+  }
+
   async requireEvidenceStage(runId) {
     const row = await this.database.prepare(`
       SELECT r.id, r.mode, r.publication_state, r.source_collection_status,
@@ -180,7 +197,11 @@ export class EvidenceBundleRepository {
       || source.sourceEvidence?.repositoryUrl !== snapshot.canonicalRepositoryUrl
       || source.sourceEvidence?.artifactPath !== snapshot.artifactPath
       || !/^[a-f0-9]{40}$/i.test(source.sourceEvidence?.treeSha || "")
-      || !/^[a-f0-9]{40}$/i.test(source.sourceEvidence?.blobSha || "")) {
+      || !/^[a-f0-9]{40}$/i.test(source.sourceEvidence?.blobSha || "")
+      || !validRepositoryEvidence(
+        source.sourceEvidence?.repository,
+        snapshot.canonicalRepositoryUrl,
+      )) {
       throw new ShadowRunConflictError("candidate discovery evidence cannot create a task");
     }
     return {
@@ -195,6 +216,7 @@ export class EvidenceBundleRepository {
       primaryDiscoveryId: snapshot.primaryDiscoveryId,
       treeSha: source.sourceEvidence.treeSha.toLowerCase(),
       blobSha: source.sourceEvidence.blobSha.toLowerCase(),
+      repository: source.sourceEvidence.repository,
     };
   }
 
@@ -224,6 +246,61 @@ export class EvidenceBundleRepository {
       throw new ShadowRunConflictError("verification case identity has immutable drift");
     }
   }
+}
+
+async function primaryVerifierInput(row, runId) {
+  const identity = parseJson(row.original_identity_json, "verification case identity");
+  const metadata = parseJson(row.metadata_json, "artifact evidence metadata");
+  const repository = metadata.task?.repository;
+  const contentBytes = new TextEncoder().encode(row.content_text);
+  const contentSha256 = await sha256Bytes(contentBytes);
+  const evidenceHash = await sha256(stableJson({ metadata, contentText: row.content_text }));
+  if (identity.evidenceBundleId !== row.bundle_id || identity.candidateId !== row.candidate_id
+    || identity.repositoryUrl !== row.repository_url || identity.artifactPath !== row.artifact_path
+    || identity.blobSha !== row.blob_sha || metadata.contractVersion !== BUNDLE_CONTRACT
+    || metadata.task?.contractVersion !== TASK_CONTRACT
+    || metadata.task?.candidateId !== row.candidate_id
+    || metadata.source?.contentSha256 !== row.content_sha256
+    || Number(metadata.source?.byteCount) !== Number(row.source_byte_count)
+    || contentBytes.byteLength !== Number(row.source_byte_count)
+    || contentSha256 !== row.content_sha256 || evidenceHash !== row.evidence_hash
+    || !validRepositoryEvidence(repository, row.repository_url)) {
+    throw new ShadowRunConflictError("artifact evidence is not ready for primary verification");
+  }
+  return {
+    contractVersion: PRIMARY_INPUT_CONTRACT,
+    runId,
+    caseId: row.case_id,
+    candidateId: row.candidate_id,
+    identity,
+    repository,
+    source: {
+      evidenceBundleId: row.bundle_id,
+      repositoryUrl: row.repository_url,
+      artifactPath: row.artifact_path,
+      locatorUrl: metadata.task.locatorUrl,
+      blobSha: row.blob_sha,
+      apiUrl: row.api_url,
+      observedAt: row.observed_at,
+      byteCount: Number(row.source_byte_count),
+      contentSha256: row.content_sha256,
+      evidenceHash: row.evidence_hash,
+      contentText: row.content_text,
+      untrustedSourceContent: true,
+    },
+  };
+}
+
+function validRepositoryEvidence(repository, repositoryUrl) {
+  if (!repository || typeof repository !== "object"
+    || repository.htmlUrl !== repositoryUrl
+    || typeof repository.fullName !== "string" || !repository.fullName
+    || typeof repository.archived !== "boolean"
+    || typeof repository.disabled !== "boolean") return false;
+  for (const field of ["pushedAt", "updatedAt"]) {
+    if (repository[field] !== null && !Number.isFinite(Date.parse(repository[field]))) return false;
+  }
+  return true;
 }
 
 function assertPersistenceInputs({ task, evidence, now }) {

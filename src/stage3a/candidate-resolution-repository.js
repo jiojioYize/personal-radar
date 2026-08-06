@@ -275,7 +275,8 @@ async function resolvedSourceEvidence(signals, snapshots, filterPass) {
       || snapshot.defaultBranch.length > 255
       || !/^[a-f0-9]{40}$/i.test(snapshot.treeSha || "")
       || !["recursive", "bounded_traversal"].includes(snapshot.collectionMode)
-      || !validSnapshotAccounting(snapshot)) {
+      || !validSnapshotAccounting(snapshot)
+      || !validRepositoryEvidence(snapshot.repository, signal.repositoryUrl)) {
       throw new TypeError(`exact signal ${signal.signalId} lacks a valid GitHub tree snapshot`);
     }
     const entry = snapshot.entries?.find((item) =>
@@ -298,6 +299,7 @@ async function resolvedSourceEvidence(signals, snapshots, filterPass) {
       collectionMode: snapshot.collectionMode,
       treeRequests: snapshot.treeRequests,
       collectedTreeBytes: snapshot.collectedTreeBytes ?? null,
+      repository: snapshot.repository,
     };
     const candidateSnapshot = {
       contractVersion: "candidate-discovery-v1",
@@ -314,6 +316,7 @@ async function resolvedSourceEvidence(signals, snapshots, filterPass) {
         collectionMode: evidence.collectionMode,
         treeRequests: evidence.treeRequests,
         collectedTreeBytes: evidence.collectedTreeBytes,
+        repository: evidence.repository,
       },
     };
     evidence.candidateSnapshotJson = stableJson(candidateSnapshot);
@@ -323,6 +326,21 @@ async function resolvedSourceEvidence(signals, snapshots, filterPass) {
     evidence.evidenceHash = await sha256(evidence.candidateSnapshotJson);
     return evidence;
   }));
+}
+
+function validRepositoryEvidence(repository, repositoryUrl) {
+  if (!repository || typeof repository !== "object"
+    || typeof repository.fullName !== "string" || !repository.fullName
+    || repository.htmlUrl !== repositoryUrl
+    || typeof repository.archived !== "boolean"
+    || typeof repository.disabled !== "boolean") return false;
+  for (const field of ["pushedAt", "updatedAt"]) {
+    if (repository[field] !== null && !Number.isFinite(Date.parse(repository[field]))) return false;
+  }
+  for (const field of ["description", "licenseSpdxId", "licenseName"]) {
+    if (repository[field] !== null && typeof repository[field] !== "string") return false;
+  }
+  return true;
 }
 
 function validSnapshotAccounting(snapshot) {

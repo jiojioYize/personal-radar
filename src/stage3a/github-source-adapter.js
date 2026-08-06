@@ -234,9 +234,16 @@ function snapshot({
     entries,
     repository: {
       fullName: metadata.full_name,
+      htmlUrl: repository.repositoryUrl,
+      description: typeof metadata.description === "string" ? metadata.description : null,
       archived: Boolean(metadata.archived),
       disabled: Boolean(metadata.disabled),
       pushedAt: metadata.pushed_at || null,
+      updatedAt: metadata.updated_at || null,
+      licenseSpdxId: typeof metadata.license?.spdx_id === "string"
+        ? metadata.license.spdx_id : null,
+      licenseName: typeof metadata.license?.name === "string"
+        ? metadata.license.name : null,
     },
   };
 }

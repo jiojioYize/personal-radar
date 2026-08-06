@@ -11,6 +11,7 @@ const sourceMigrationPath = path.join(root, "migrations", "stage3a", "0002_sourc
 const resolutionMigrationPath = path.join(root, "migrations", "stage3a", "0003_candidate_resolution.sql");
 const poolMigrationPath = path.join(root, "migrations", "stage3a", "0004_candidate_pool.sql");
 const evidenceMigrationPath = path.join(root, "migrations", "stage3a", "0005_artifact_evidence.sql");
+const invocationMigrationPath = path.join(root, "migrations", "stage3a", "0006_model_invocation_slots.sql");
 
 test("creates the complete Stage 3A shadow persistence model and required indexes", async () => {
   const db = await migratedDatabase();
@@ -50,6 +51,7 @@ test("creates the complete Stage 3A shadow persistence model and required indexe
     assert.ok(indexes.has("idx_candidate_filter_events_run_disposition"));
     assert.ok(indexes.has("idx_evidence_bundles_run_candidate"));
     assert.ok(indexes.has("idx_verification_cases_evidence_bundle"));
+    assert.ok(indexes.has("idx_model_invocations_case_role_attempt"));
     const runColumns = new Set(db.prepare("PRAGMA table_info(engine_runs)").all()
       .map((column) => column.name));
     assert.ok(runColumns.has("source_collection_status"));
@@ -93,6 +95,8 @@ test("enforces idempotent workflow, model request, output, artifact, and compari
     ).run(now, now);
     insertInvocation(db, "invocation-1", "request-hash-1");
     assert.throws(() => insertInvocation(db, "invocation-2", "request-hash-1"),
+      /UNIQUE constraint failed/);
+    assert.throws(() => insertInvocation(db, "invocation-slot-conflict", "request-hash-other"),
       /UNIQUE constraint failed/);
 
     insertOutput(db, "output-1", "invocation-1");
@@ -152,6 +156,7 @@ async function migratedDatabase() {
   db.exec(await fs.readFile(resolutionMigrationPath, "utf8"));
   db.exec(await fs.readFile(poolMigrationPath, "utf8"));
   db.exec(await fs.readFile(evidenceMigrationPath, "utf8"));
+  db.exec(await fs.readFile(invocationMigrationPath, "utf8"));
   return db;
 }
 

@@ -36,10 +36,16 @@ test("prepares exact eligible tasks and atomically persists evidence plus verifi
     assert.equal(bundle.content_text, evidence.contentText);
     assert.equal(JSON.parse(bundle.metadata_json).contentPolicy.executable, false);
     const verificationCase = fixture.db.prepare(`
-      SELECT evidence_bundle_id, original_identity_json FROM verification_cases
+      SELECT id, evidence_bundle_id, original_identity_json FROM verification_cases
     `).get();
     assert.equal(verificationCase.evidence_bundle_id, first.id);
     assert.equal(JSON.parse(verificationCase.original_identity_json).blobSha, blobSha);
+    const [primaryInput] = await fixture.repository.preparePrimaryVerifierInputs({ runId: "run-1" });
+    assert.equal(primaryInput.contractVersion, "primary-verifier-input-v1");
+    assert.equal(primaryInput.caseId, verificationCase.id);
+    assert.equal(primaryInput.repository.licenseSpdxId, "MIT");
+    assert.equal(primaryInput.source.contentText, evidence.contentText);
+    assert.equal(primaryInput.source.untrustedSourceContent, true);
   } finally {
     fixture.db.close();
   }
@@ -109,6 +115,23 @@ test("detects stored evidence and verification-case drift on replay", async () =
     await assert.rejects(
       fixture.repository.persistEvidence({ task, evidence, now }),
       (error) => error instanceof ShadowRunConflictError && /not linked/.test(error.message),
+    );
+  } finally {
+    fixture.db.close();
+  }
+});
+
+test("revalidates stored evidence before preparing primary model input", async () => {
+  const fixture = await createFixture();
+  try {
+    const [task] = await fixture.repository.prepareTasks({ runId: "run-1" });
+    const evidence = await evidenceFor(task, "# Testing");
+    await fixture.repository.persistEvidence({ task, evidence, now });
+    fixture.db.prepare("UPDATE evidence_bundles SET content_text = '# Drifted'").run();
+    await assert.rejects(
+      fixture.repository.preparePrimaryVerifierInputs({ runId: "run-1" }),
+      (error) => error instanceof ShadowRunConflictError
+        && /not ready for primary verification/.test(error.message),
     );
   } finally {
     fixture.db.close();
@@ -222,6 +245,17 @@ function insertCandidate(db, suffix, eligible) {
       artifactPath,
       treeSha: "a".repeat(40),
       blobSha,
+      repository: {
+        fullName: "example/rules",
+        htmlUrl: repositoryUrl,
+        description: "Reusable agent rules.",
+        archived: false,
+        disabled: false,
+        pushedAt: now,
+        updatedAt: now,
+        licenseSpdxId: "MIT",
+        licenseName: "MIT License",
+      },
     },
   });
   db.prepare(`

@@ -7,10 +7,12 @@ Last updated: 2026-08-06
 Stage 3A architecture was approved to begin on 2026-08-03. Contract extraction,
 shadow persistence, source planning/collection fixtures, exact-artifact
 resolution, deterministic candidate-pool materialization, and immutable
-artifact evidence bundles are now under implementation on the isolated shadow
-branch. No live cloud execution or production cutover has occurred. This
-document is the architecture, migration boundary, rollout, and acceptance
-contract for the first hosted engine.
+artifact evidence bundles are now implemented as fixture-tested shadow
+components. A versioned model policy, primary-verifier request compiler, and
+pre-send D1 invocation reservation are also fixture-tested on the isolated
+shadow branch. No real model request, live cloud execution, or production
+cutover has occurred. This document is the architecture, migration boundary,
+rollout, and acceptance contract for the first hosted engine.
 
 The Stage 3A user problem, product hypotheses, decision trade-offs, evaluation
 metrics, and portfolio narrative are maintained separately in
@@ -239,7 +241,7 @@ Initial model policy:
 
 | Work | Model | Initial reasoning | Rationale |
 | --- | --- | --- | --- |
-| Candidate extraction and bounded metadata repair | `gpt-5.6-luna` | low | High-volume, constrained transformation with deterministic validation |
+| Bounded metadata repair, only if fixture evidence later justifies a model call | `gpt-5.6-luna` | low | Cost-sensitive constrained transformation with deterministic validation; candidate extraction itself stays code-owned |
 | Primary verifier | `gpt-5.6-terra` | low | Quality/cost balance for every eligible artifact |
 | Specialist verifier | `gpt-5.6-terra` | medium | Rare, higher-risk identity and repository-status review |
 | Adjudicator | `gpt-5.6-sol` | medium | Rare, material field dispute where false admission is costly |
@@ -871,17 +873,45 @@ adapter validates response SHA, Base64 encoding, declared and decoded size,
 UTF-8 text, absence of binary nulls, and a separately computed SHA-256. The
 application cap is 128 KiB and the JSON transport cap is 256 KiB, far below the
 provider limit. Source text is explicitly marked untrusted and never executed.
-This checkpoint stores the complete exact artifact only within that bound; the
-later verifier-request compiler must create a smaller role-specific evidence
-packet before model input rather than sending arbitrary repository pages.
+This checkpoint stores the complete exact artifact only within that bound.
+Repository status evidence now travels with it: canonical repository identity,
+description, archived/disabled flags, pushed/updated timestamps, and license
+metadata are retained from the same GitHub snapshot. This prevents the model
+from inventing Harness v2 repository-status, maintenance, or license fields
+from `SKILL.md` text alone.
 
 Bundle metadata excludes credentials and records the source API URL, fetch
 time, byte count, content hash, identity task, and non-execution policy. D1
 persists the bounded content, immutable bundle hash, and linked pending
 `verification_case` in one transaction. A forced case-insert failure rolls the
 bundle back; replay verifies content, metadata, identity, and case linkage.
-The hosted model connector is still absent and no evidence task is wired into
-the Workflow entrypoint.
+The first model-layer checkpoint is also fixture-tested. The versioned
+`stage3a-openai-gpt-5.6-v1` policy assigns Terra/low to primary verification,
+Terra/medium to specialist and editor work, and Sol/medium to adjudication. A
+dated price-book configuration calculates estimated token cost outside the
+business rules. The primary compiler creates one stateless Responses request
+per case with `store: false`, no `previous_response_id`,
+`reasoning.context: current_turn`, strict JSON Schema output, line-numbered
+untrusted source text, and stable request hashing. It exposes no tools and does
+not ask the primary verifier to make a recommendation decision.
+
+The model input cap is currently 64 KiB, smaller than the 128 KiB evidence
+storage cap. Exceeding it raises `EVIDENCE_REQUIRES_REDUCTION`, a system
+preparation state. It must not become `reject`, `defer`, or removal evidence.
+Deterministic content reduction is not implemented yet, so an oversized
+artifact cannot be sent until that recovery path exists.
+
+The `0006_model_invocation_slots.sql` migration makes
+`(verification_case_id, role, attempt_no)` unique. Reservation is allowed only
+for an evidence-backed pending case while its shadow run is in `verifying`.
+The repository recalculates the request hash before reserving and treats any
+different request in an occupied slot as immutable drift. This proves the
+pre-send idempotency boundary without contacting a provider.
+
+The hosted OpenAI connector, response persistence/semantic validation,
+contract repair, budget reservation, live API credential, and Workflow model
+step are still absent. No model request has been sent, no evidence task is
+wired into the Workflow entrypoint, and production remains unchanged.
 
 - Approve this plan.
 - Extract pure v3, identity, history, source-plan, and Harness v2 modules.
